@@ -1,0 +1,77 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "debug code",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/Release",
+                "--",
+                "-j24"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "调试代码"
+        },
+        {
+            "label": "编译",
+            "type": "shell",
+            "icon": {
+                "id": "build",
+                "tooltip": "编译Release版本"
+            },
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/release",
+                "--target",
+                "tos",
+                "-j",
+                "24"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "运行",
+            "type": "shell",
+            "icon": {
+                "id": "play",
+                "tooltip": "使用DAPLink烧录固件"
+            },
+            "command": "${workspaceFolder}\\scripts\\upload.bat",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "清理",
+            "type": "shell",
+            "icon": {
+                "id": "trash",
+                "tooltip": "清理编译文件"
+            },
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/release",
+                "--target",
+                "clean"
+            ],
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ]
+}
