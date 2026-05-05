@@ -5,7 +5,10 @@
 #include "demo/include/i2c_activity.hpp"
 #include "demo/include/jyro_activity.hpp"
 #include "demo/include/key_activity.hpp"
+#include "demo/include/pot_activity.hpp"
 #include "demo/include/sd_activity.hpp"
+#include "demo/include/sn74hc00n_activity.hpp"
+#include "demo/include/tcs3472_activity.hpp"
 #include "hardware/include/trtc.hpp"
 #include "include/esp8266_activity.hpp"
 #include "include/jy901s.hpp"
@@ -22,23 +25,27 @@ void (*SysUI::current_test_func)(void) = nullptr;
 
 // 菜单项定义 - 每页5项
 #define MENU_PAGE_ITEM 5
-#define MENUS_COUNT 8
+#define MENUS_COUNT 11
 
 static const char *menus[MENUS_COUNT] = {
     "01 Key Test",       "02 SD Card Test",  "03 I2C Scan",
     "04 JY901S Sensor",  "05 BMP180 Sensor", "06 Display Tests",
-    "07 3D Path Tracer", "08 ESP8266 Test"};
+    "07 3D Path Tracer", "08 ESP8266 Test",  "09 TCS3472 Test",
+    "10 SN74HC00N Test", "11 Pot Test"};
 
 // 对应的测试函数
 static void (*test_functions[MENUS_COUNT])(void) = {
-    key_test_activity,              // 0: Key Test
-    sd_card_activity,               // 1: SD Card Test
-    i2c_scan_activity,              // 2: I2C Scan
-    gyro_cube_activity_with_exit,   // 3: JY901S Sensor
-    bmp180_gui_activity,            // 4: BMP180 Sensor
-    display_test_menu_activity,     // 5: Display Tests
-    render_3dox_activity_with_exit, // 7: 3D Path Tracer
-    esp8266_test_activity,          // 8: ESP8266 Test
+    key_test_activity,              // 0:  Key Test
+    sd_card_activity,               // 1:  SD Card Test
+    i2c_scan_activity,              // 2:  I2C Scan
+    jyro_activity,                  // 3:  JY901S Sensor
+    bmp180_activity,                // 4:  BMP180 Sensor
+    display_test_menu_activity,     // 5:  Display Tests
+    render_3dox_activity_with_exit, // 7:  3D Path Tracer
+    esp8266_test_activity,          // 8:  ESP8266 Test
+    tcs3472_activity,               // 9:  TCS3472 Test
+    hc00n_activity,                 // 10: SN74HC00N Test
+    pot_activity,                   // 11: Pot Test
 };
 
 // 保存菜单状态
@@ -52,7 +59,6 @@ static int menus_page = (MENUS_COUNT % MENU_PAGE_ITEM == 0)
 static int menus_page_now = 0;
 
 void SysUI::init(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   last_tick = HAL_GetTick();
 
   menus_select = saved_menus_select;

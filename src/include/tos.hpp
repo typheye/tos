@@ -1,6 +1,7 @@
 #ifndef TOS_HPP
 #define TOS_HPP
 
+#include "include/bmp180.hpp"
 #include "include/buzzer.hpp"
 #include "include/esp8266.hpp"
 #include "include/jy901s.hpp"
@@ -11,10 +12,12 @@
 #include "include/libfs.h"
 #include "include/libpd.h"
 #include "include/libvan.h"
+#include "include/pot.hpp"
+#include "include/sn74hc00n.hpp"
 #include "include/sysui.hpp"
+#include "include/tcs3472.hpp"
 #include "include/trtc.hpp"
 #include "include/tsdio.hpp"
-#include "include/usart.hpp"
 #include <cstdint>
 
 extern "C" {

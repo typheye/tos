@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "dma.h"
 #include "fatfs.h"
 #include "i2c.h"
@@ -109,6 +110,7 @@ int main(void)
   MX_FATFS_Init();
   MX_I2C1_Init();
   MX_USART2_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   /* 启动 USART2 中断接收 - 必须调用！ */
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);

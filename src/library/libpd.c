@@ -1,5 +1,6 @@
 #include "include/libpd.h"
 #include "include/sysfonts.h"
+#include "include/syslogo.h"
 #include <math.h> // 添加：sin, cos, sqrt 等（如果需要）
 #include <stdio.h>
 #include <stdlib.h> // 添加：abs() 函数
@@ -270,3 +271,135 @@ uint16_t PD_GetCharHeight(void) {
              ? (*current_ascii_font)->Height
              : 0;
 }
+
+// ==================== 全局变量（文件开头添加）====================
+static volatile uint8_t splash_fade_out_requested = 0;
+static volatile uint8_t splash_in_progress = 0;
+static uint32_t splash_total_pixels = 0;
+static uint16_t *splash_logo_data = NULL;
+
+// ==================== 颜色混合函数 ====================
+static uint16_t blend_rgb565(uint16_t color1, uint16_t color2, float ratio) {
+  uint8_t r1 = (color1 >> 11) & 0x1F;
+  uint8_t g1 = (color1 >> 5) & 0x3F;
+  uint8_t b1 = color1 & 0x1F;
+
+  uint8_t r2 = (color2 >> 11) & 0x1F;
+  uint8_t g2 = (color2 >> 5) & 0x3F;
+  uint8_t b2 = color2 & 0x1F;
+
+  uint8_t r = (uint8_t)(r1 * (1.0f - ratio) + r2 * ratio);
+  uint8_t g = (uint8_t)(g1 * (1.0f - ratio) + g2 * ratio);
+  uint8_t b = (uint8_t)(b1 * (1.0f - ratio) + b2 * ratio);
+
+  return (r << 11) | (g << 5) | b;
+}
+
+// ==================== 淡入动画（不等待，立即返回）====================
+/**
+ * @brief 显示启动 Logo 淡入动画（非阻塞）
+ * @param fade_in_ms 淡入时长(毫秒)
+ * @note 调用后立即返回，动画在后台进行
+ */
+void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
+  PD_Init();
+
+  if (g_fb == NULL || logo_data == NULL) {
+    printf("[PD] Fade start failed: framebuffer or logo data is NULL\r\n");
+    return;
+  }
+
+  if (splash_in_progress) {
+    printf("[PD] Fade already in progress\r\n");
+    return;
+  }
+
+  splash_fade_out_requested = 0;
+  splash_in_progress = 1;
+  splash_total_pixels = LOGO_WIDTH * LOGO_HEIGHT;
+  splash_logo_data = (uint16_t *)logo_data;
+
+  printf("[PD] Starting fade in animation (%dms)\r\n", fade_in_ms);
+
+  uint32_t steps = 30;
+  uint32_t step_delay = fade_in_ms / steps;
+
+  // 淡入动画
+  for (uint32_t s = 0; s <= steps; s++) {
+    float t = (float)s / steps;
+    float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
+
+    for (uint32_t i = 0; i < splash_total_pixels; i++) {
+      g_fb[i] = blend_rgb565(0x0000, logo_data[i], ratio);
+    }
+
+    LCD_Flush();
+
+    // 检查是否被中断
+    if (splash_fade_out_requested) {
+      printf("[PD] Fade in interrupted by fade out request\r\n");
+      break;
+    }
+
+    if (step_delay > 0) {
+      HAL_Delay(step_delay);
+    }
+  }
+
+  // 确保完全显示
+  if (!splash_fade_out_requested) {
+    memcpy(g_fb, logo_data, splash_total_pixels * sizeof(uint16_t));
+    LCD_Flush();
+  }
+
+  printf("[PD] Fade in complete, waiting for finish signal\r\n");
+}
+
+// ==================== 主动结束并淡出 ====================
+/**
+ * @brief 结束启动画面，执行淡出动画
+ * @param fade_out_ms 淡出时长(毫秒)
+ */
+void PD_SplashFinish(uint32_t fade_out_ms) {
+  if (!splash_in_progress) {
+    printf("[PD] No splash animation in progress\r\n");
+    return;
+  }
+
+  printf("[PD] Finish requested, starting fade out (%dms)\r\n", fade_out_ms);
+
+  splash_fade_out_requested = 1;
+
+  uint32_t steps = 10;
+  uint32_t step_delay = fade_out_ms / steps;
+
+  // 淡出动画
+  for (uint32_t s = 0; s <= steps; s++) {
+    float t = (float)s / steps;
+    float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
+
+    for (uint32_t i = 0; i < splash_total_pixels; i++) {
+      g_fb[i] = blend_rgb565(logo_data[i], 0x0000, ratio);
+    }
+
+    LCD_Flush();
+
+    if (step_delay > 0) {
+      HAL_Delay(step_delay);
+    }
+  }
+
+  // 清屏
+  PD_FillScreen(LCD_COLOR_BLACK);
+  LCD_Flush();
+
+  splash_in_progress = 0;
+  printf("[PD] Fade out complete, splash finished\r\n");
+}
+
+// ==================== 检查是否正在显示 ====================
+/**
+ * @brief 检查启动画面是否正在显示
+ * @return 1 正在显示，0 未显示
+ */
+uint8_t PD_IsSplashActive(void) { return splash_in_progress; }

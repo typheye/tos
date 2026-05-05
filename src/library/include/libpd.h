@@ -48,6 +48,11 @@ uint16_t PD_GetStringWidth(const char *str);
 uint16_t PD_GetCharWidth(void);
 uint16_t PD_GetCharHeight(void);
 
+// ========== 新增：可控淡入淡出 ==========
+void PD_ShowSplashFadeStart(uint32_t fade_in_ms); // 开始淡入动画（非阻塞）
+void PD_SplashFinish(uint32_t fade_out_ms);       // 结束并淡出
+uint8_t PD_IsSplashActive(void);                  // 检查是否正在显示启动画面
+
 #ifdef __cplusplus
 }
 #endif

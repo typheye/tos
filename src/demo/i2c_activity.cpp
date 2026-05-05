@@ -24,10 +24,10 @@ typedef struct {
 } KnownDevice_t;
 
 static const KnownDevice_t known_devices[] = {
-    {0x50, 0xA0, "JY901S (Gyro)"}, {0x77, 0xEE, "BMP180 (Pressure)"},
+    {0x50, 0xA0, "JY901S"},        {0x77, 0xEE, "BMP180"},
     {0x68, 0xD0, "MPU6050"},       {0x3C, 0x78, "OLED SSD1306"},
     {0x57, 0xAE, "Camera OV2640"}, {0x1E, 0x3C, "HMC5883L"},
-    {0x68, 0xD0, "DS3231 RTC"}};
+    {0x68, 0xD0, "DS3231 RTC"},    {0x29, 0x52, "TCS3472"}};
 
 #define KNOWN_COUNT (sizeof(known_devices) / sizeof(known_devices[0]))
 
@@ -220,35 +220,6 @@ static void draw_scan_results(void) {
   }
 }
 
-// 绘制已知设备列表
-static void draw_known_devices(void) {
-  int y_offset = 175;
-
-  PD_SetColor(LCD_COLOR_WHITE);
-  PD_SetFont(FONT_ASCII_12);
-
-  // 已知设备标题
-  PD_SetColor(LCD_COLOR_YELLOW);
-  PD_DrawString(10, y_offset - 8, "Known I2C Addresses:");
-
-  // 显示前 4 个已知设备
-  y_offset += 4;
-  int max_display = (KNOWN_COUNT < 4) ? KNOWN_COUNT : 4;
-  for (int i = 0; i < max_display; i++) {
-    y_offset += 12;
-    char dbg[32];
-    sprintf(dbg, "0x%02X: %s", known_devices[i].addr_7bit,
-            known_devices[i].name);
-    PD_SetColor(LCD_COLOR_GRAY);
-    PD_DrawString(12, y_offset, dbg);
-  }
-
-  if (KNOWN_COUNT > 4) {
-    PD_SetColor(LCD_COLOR_GRAY);
-    PD_DrawString(12, y_offset + 12, "...");
-  }
-}
-
 // 绘制底部提示
 static void draw_bottom_bar(void) {
   // 底部栏背景
@@ -328,7 +299,6 @@ void i2c_scan_activity_gui(void) {
       draw_status_bar();
       draw_scan_status();
       draw_scan_results();
-      draw_known_devices();
       draw_bottom_bar();
 
       // 刷新屏幕

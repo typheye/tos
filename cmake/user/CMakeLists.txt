@@ -26,6 +26,9 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/jy901s.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/bmp180.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/esp8266.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/tcs3472.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sn74hc00n.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/pot.cpp
     
     # 库文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/lib3dox.c
@@ -44,6 +47,9 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/bmp_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/3dox_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/esp8266_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/tcs3472_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/sn74hc00n_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/pot_activity.cpp
     
     # GUI文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/sysui.cpp

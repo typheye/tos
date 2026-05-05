@@ -21,7 +21,8 @@
 #include "rtc.h"
 
 /* USER CODE BEGIN 0 */
-#define RTC_INITIALIZED_FLAG 0x5A5A
+#define RTC_INITIALIZED_FLAG1 0x5A5A
+#define RTC_INITIALIZED_FLAG2 0xA5A5
 /* USER CODE END 0 */
 
 RTC_HandleTypeDef hrtc;
@@ -62,7 +63,8 @@ void MX_RTC_Init(void)
   HAL_PWR_EnableBkUpAccess(); // 解锁备份域访问
 
   // 检查备份寄存器标志，避免每次上电重置时间
-  if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) != RTC_INITIALIZED_FLAG) {
+  if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) != RTC_INITIALIZED_FLAG1 ||
+      HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2) != RTC_INITIALIZED_FLAG2) {
   /* USER CODE END Check_RTC_BKUP */
 
   /** Initialize RTC and set the Time and Date
@@ -86,8 +88,9 @@ void MX_RTC_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
-    // 写入初始化完成标志
-    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, RTC_INITIALIZED_FLAG);
+  // 写入初始化完成标志
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, RTC_INITIALIZED_FLAG1);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR2, RTC_INITIALIZED_FLAG2);
   }
   /* USER CODE END RTC_Init 2 */
 

@@ -24,6 +24,9 @@ void TRTC::syncToHAL() { // ✅ 改名
 void TRTC::init() { // ✅ 改名
   if (initialized)
     return;
+
+  HAL_Delay(100);
+
   syncFromHAL();
   initialized = true;
 }
