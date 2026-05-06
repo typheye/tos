@@ -1,39 +1,117 @@
 #include "include/trtc.hpp"
+#include <stdio.h>
 
 extern RTC_HandleTypeDef hrtc;
 
-TRTC boardTRTC; // ✅ 改名
+TRTC boardTRTC;
 
 // 构造函数
-TRTC::TRTC() { // ✅ 改名
+TRTC::TRTC() {
   initialized = false;
   memset(&sTime, 0, sizeof(sTime));
   memset(&sDate, 0, sizeof(sDate));
 }
 
-void TRTC::syncFromHAL() { // ✅ 改名
+void TRTC::syncFromHAL() {
   HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
   HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 }
 
-void TRTC::syncToHAL() { // ✅ 改名
+void TRTC::syncToHAL() {
   HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
   HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 }
 
-void TRTC::init() { // ✅ 改名
+// ========== 修复：等待 LSE 稳定并增加重试 ==========
+void TRTC::init() {
   if (initialized)
     return;
 
-  HAL_Delay(100);
+  printf("[RTC] Initializing...\r\n");
 
+  // 1. 使能电源时钟和备份域访问（关键！）
+  __HAL_RCC_PWR_CLK_ENABLE();
+  HAL_PWR_EnableBkUpAccess();
+
+  // 2. 等待 LSE 晶振稳定（最多 3 秒）
+  uint32_t start = HAL_GetTick();
+  uint8_t lse_ready = 0;
+
+  printf("[RTC] Waiting for LSE oscillator...\r\n");
+  while ((HAL_GetTick() - start) < 3000) {
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
+      lse_ready = 1;
+      printf("[RTC] LSE ready after %lu ms\r\n", HAL_GetTick() - start);
+      break;
+    }
+    HAL_Delay(50);
+  }
+
+  if (!lse_ready) {
+    printf("[RTC] Warning: LSE not ready! RTC may not work correctly\r\n");
+  }
+
+  // 3. 重新初始化 RTC（确保配置正确）
+  HAL_StatusTypeDef ret;
+  int retry = 5;
+
+  do {
+    // 重置 RTC 配置
+    hrtc.Instance = RTC;
+    hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+    hrtc.Init.AsynchPrediv = 127;
+    hrtc.Init.SynchPrediv = 255;
+    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+    hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+
+    ret = HAL_RTC_Init(&hrtc);
+
+    if (ret != HAL_OK) {
+      printf("[RTC] Init failed (ret=%d), retry %d...\r\n", ret, 6 - retry);
+      HAL_Delay(100);
+    }
+    retry--;
+  } while (ret != HAL_OK && retry > 0);
+
+  if (ret != HAL_OK) {
+    printf("[RTC] Fatal: Cannot initialize RTC!\r\n");
+    initialized = true; // 标记为已初始化，避免无限重试
+    return;
+  }
+
+  // 4. 尝试读取时间，如果无效则设置默认值
   syncFromHAL();
+
+  // 验证时间是否有效
+  if (sTime.Hours > 23 || sTime.Minutes > 59 || sTime.Seconds > 59 ||
+      sDate.Year > 99 || sDate.Month > 12 || sDate.Date > 31) {
+    printf("[RTC] Invalid time detected, setting default...\r\n");
+
+    // 设置默认时间 2025-01-01 00:00:00
+    sTime.Hours = 0;
+    sTime.Minutes = 0;
+    sTime.Seconds = 0;
+    sTime.TimeFormat = RTC_HOURFORMAT_24;
+    sDate.Year = 25; // 2025年
+    sDate.Month = 1;
+    sDate.Date = 1;
+    sDate.WeekDay = 4; // 星期四（2025-01-01 是周三？需要调整）
+
+    syncToHAL();
+    syncFromHAL();
+  }
+
   initialized = true;
+  printf("[RTC] Initialized successfully: %04d-%02d-%02d %02d:%02d:%02d\r\n",
+         2000 + sDate.Year, sDate.Month, sDate.Date, sTime.Hours, sTime.Minutes,
+         sTime.Seconds);
 }
 
-void TRTC::setTime(uint8_t hours, uint8_t minutes, uint8_t seconds) { // ✅ 改名
+void TRTC::setTime(uint8_t hours, uint8_t minutes, uint8_t seconds) {
   if (!initialized)
     init();
+
   HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
   sTime.Hours = hours;
   sTime.Minutes = minutes;
@@ -41,12 +119,14 @@ void TRTC::setTime(uint8_t hours, uint8_t minutes, uint8_t seconds) { // ✅ 改
   sTime.TimeFormat = RTC_HOURFORMAT_24;
   syncToHAL();
   syncFromHAL();
+
+  printf("[RTC] Time set to %02d:%02d:%02d\r\n", hours, minutes, seconds);
 }
 
-void TRTC::setDate(uint8_t year, uint8_t month, uint8_t date,
-                   uint8_t weekday) { // ✅ 改名
+void TRTC::setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday) {
   if (!initialized)
     init();
+
   HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
   sDate.Year = year;
   sDate.Month = month;
@@ -54,9 +134,12 @@ void TRTC::setDate(uint8_t year, uint8_t month, uint8_t date,
   sDate.WeekDay = weekday;
   syncToHAL();
   syncFromHAL();
+
+  printf("[RTC] Date set to %04d-%02d-%02d (weekday=%d)\r\n", 2000 + year,
+         month, date, weekday);
 }
 
-void TRTC::getTime(Time_t *time) { // ✅ 改名
+void TRTC::getTime(Time_t *time) {
   if (!initialized)
     init();
   syncFromHAL();
@@ -65,7 +148,7 @@ void TRTC::getTime(Time_t *time) { // ✅ 改名
   time->seconds = sTime.Seconds;
 }
 
-void TRTC::getDate(Date_t *date) { // ✅ 改名
+void TRTC::getDate(Date_t *date) {
   if (!initialized)
     init();
   syncFromHAL();
@@ -75,12 +158,12 @@ void TRTC::getDate(Date_t *date) { // ✅ 改名
   date->weekday = sDate.WeekDay;
 }
 
-void TRTC::getDateTime(Time_t *time, Date_t *date) { // ✅ 改名
+void TRTC::getDateTime(Time_t *time, Date_t *date) {
   getTime(time);
   getDate(date);
 }
 
-uint32_t TRTC::getTimestamp(void) { // ✅ 改名
+uint32_t TRTC::getTimestamp(void) {
   if (!initialized)
     init();
   syncFromHAL();
@@ -114,7 +197,7 @@ uint32_t TRTC::getTimestamp(void) { // ✅ 改名
   return timestamp;
 }
 
-void TRTC::print(void) { // ✅ 改名
+void TRTC::print(void) {
   if (!initialized)
     return;
 

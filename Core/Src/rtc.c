@@ -21,6 +21,7 @@
 #include "rtc.h"
 
 /* USER CODE BEGIN 0 */
+#include <stdio.h>
 #define RTC_INITIALIZED_FLAG1 0x5A5A
 #define RTC_INITIALIZED_FLAG2 0xA5A5
 /* USER CODE END 0 */
@@ -32,7 +33,26 @@ void MX_RTC_Init(void)
 {
 
   /* USER CODE BEGIN RTC_Init 0 */
+  // ========== 关键修复：等待 LSE 晶振稳定 ==========
+  // 使能电源时钟和备份域访问
+  __HAL_RCC_PWR_CLK_ENABLE();
+  HAL_PWR_EnableBkUpAccess();
 
+  // 等待 LSE 就绪（最多等待 3 秒）
+  uint32_t start = HAL_GetTick();
+  printf("[RTC] Waiting for LSE oscillator...\r\n");
+  while ((HAL_GetTick() - start) < 3000) {
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
+      printf("[RTC] LSE ready after %lu ms\r\n", HAL_GetTick() - start);
+      break;
+    }
+    HAL_Delay(10);
+  }
+
+  if (!__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
+    printf("[RTC] Warning: LSE not ready after 3 seconds!\r\n");
+  }
+  // ========== 等待结束 ==========
   /* USER CODE END RTC_Init 0 */
 
   RTC_TimeTypeDef sTime = {0};
@@ -109,7 +129,7 @@ void HAL_RTC_MspInit(RTC_HandleTypeDef* rtcHandle)
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();

@@ -38,28 +38,29 @@ TOS::TOS() : initialized_(false), tick_count_(0) {}
 void TOS::init() {
   boardSerial.init();
 
-  // ========== 关键：LED 初始化 ==========
+  // LED 初始化
   boardLed.init();
   warnLed.init();
   errorLed.init();
 
   buzzer1.init();
-
   boardLCD.init();
   HAL_Delay(50);
 
   PD_ShowSplashFadeStart(500);
 
-  boardTRTC.init();
-  boardSDIO.init();
+  // ========== 关键：RTC 放在较前位置，但需要等待 LSE ==========
+  // RTC 会自己等待 LSE 稳定，不需要额外延时
+  boardTRTC.init(); // 已修复，内部会等待 LSE 并重试
+
+  // boardSDIO.init();
   keyManager.init();
   boardJY901S.init();
   boardBMP180.init();
-  boardTCS3472.init();
+  // boardTCS3472.init();
   boardHC00N.init();
   boardPot.init();
 
-  // 初始化 GUI 系统
   initialized_ = true;
   boardLed.off();
 
@@ -73,7 +74,6 @@ void TOS::init() {
   printf("TOS initialized!\r\n");
 
   ESP8266_Init();
-
   SysUI::init();
 }
 
