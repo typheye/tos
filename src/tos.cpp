@@ -53,11 +53,11 @@ void TOS::init() {
   // RTC 会自己等待 LSE 稳定，不需要额外延时
   boardTRTC.init(); // 已修复，内部会等待 LSE 并重试
 
-  // boardSDIO.init();
+  boardSDIO.init();
   keyManager.init();
   boardJY901S.init();
   boardBMP180.init();
-  // boardTCS3472.init();
+  boardTCS3472.init();
   boardHC00N.init();
   boardPot.init();
 
