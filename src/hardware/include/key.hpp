@@ -74,7 +74,7 @@ public:
   Switch sw13_B14{GPIOB, GPIO_PIN_14, false};
 
   // 组4 (逻辑相反)
-  Switch sw_sd_detect{GPIOG, GPIO_PIN_6, true};
+  Switch sw_sd_detect{GPIOG, GPIO_PIN_8, true};
   Switch sw_buzzer_en{GPIOG, GPIO_PIN_8, true};
 
   // 碰撞开关 (逻辑相反)

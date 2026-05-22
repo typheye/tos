@@ -96,7 +96,7 @@ static void draw_group4_labels(void) {
   PD_SetColor(LCD_COLOR_WHITE);
 
   PD_DrawString(10, 141, "SD Card:");
-  PD_DrawString(80, 141, "Buzzer:");
+  PD_DrawString(120, 141, "Buzzer:");
 }
 
 // 绘制碰撞开关标签
@@ -248,10 +248,10 @@ static void update_group4(void) {
     last_sd = sd;
   }
   if (buz != last_buz) {
-    clear_area(130, 141, 35, 12);
+    clear_area(170, 141, 35, 12);
     sprintf(dbg, "%-3s", buz ? "ON" : "OFF");
     PD_SetColor(buz ? LCD_COLOR_GREEN : LCD_COLOR_GRAY);
-    PD_DrawString(130, 141, dbg);
+    PD_DrawString(170, 141, dbg);
     last_buz = buz;
   }
 }
