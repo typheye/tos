@@ -1,5 +1,6 @@
 #include "include/settings.hpp"
 #include "demo/include/demo_activity.hpp"
+#include "settings/wlan_activity.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "include/libpd.h"
@@ -33,7 +34,7 @@ static void draw_menu(const char *title, const char **items, int count, int sel)
   for (int i = 0; i < visible; i++) {
     int idx = start + i;
     if (idx >= count) break;
-    int cy = 28 + i * 25;
+    int cy = 33 + i * 25;
     if (idx == sel) {
       PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
       PD_SetColor(TOS_TEXT);
@@ -66,6 +67,7 @@ void settings_run(void) {
   while (1) {
     int sel = menu_loop("SET", set_m, SET_N);
     if (sel == 0) return;
+    if (sel == 1) { wlan_activity_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
     if (sel == 9) {
       boardLCD.fillScreen(LCD_COLOR_BLACK);
       while (1) { int ds = menu_loop("DEBUG", dbg_m, DBG_N);

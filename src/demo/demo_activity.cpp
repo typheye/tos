@@ -56,7 +56,7 @@ static void draw_menu(const char *title, const char **items, int count, int sel)
   for (int i = 0; i < visible; i++) {
     int idx = start + i;
     if (idx >= count) break;
-    int cy = 28 + i * 25;
+    int cy = 33 + i * 25;
     if (idx == sel) {
       PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
       PD_SetColor(TOS_TEXT);

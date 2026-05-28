@@ -45,7 +45,7 @@ static void bbar(const char *l,const char *m,const char *r) {
 static void menu_cards(int sel) {
   PD_SetFont(FONT_ASCII_16);
   for(int i=0;i<BMP_MENU_ITEMS;i++){
-    int cy=28+i*25;
+    int cy=33+i*25;
     if(i==sel){PD_DrawAngledCard(14,cy,212,20,5,TOS_ACCENT);PD_SetColor(TOS_TEXT);}
     else{PD_DrawAngledCard(14,cy,212,20,5,TOS_CARD_BG);PD_SetColor(TOS_TEXT_SEC);}
     PD_DrawString(26,cy+2,bmp_menus[i]);

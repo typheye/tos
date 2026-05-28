@@ -98,6 +98,7 @@ public:
   bool scanNetworks(void);
   bool getIP(char *ip_buffer, uint16_t buffer_size);
   bool sendString(const char *str);
+  const char *getRxBuffer(void) const { return (const char *)_rx_buffer; }
 
   void processPendingData(void);
 

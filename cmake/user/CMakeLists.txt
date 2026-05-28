@@ -6,6 +6,7 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/
 )
 
 # 列出所有需要编译的自定义源文件
@@ -58,6 +59,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/sysui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/launcher.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/wlan_activity.cpp
 
 )
 

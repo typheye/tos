@@ -202,7 +202,7 @@ void display_test_menu_activity(void) {
 
       PD_SetFont(FONT_ASCII_16);
       for (int i = 0; i < DISPLAY_MENU_ITEMS; i++) {
-        int card_y = 28 + i * 25;
+        int card_y = 33 + i * 25;
         if (i == display_menu_select) {
           PD_DrawAngledCard(14, card_y, 212, 20, 5, TOS_ACCENT);
           PD_SetColor(TOS_TEXT);
