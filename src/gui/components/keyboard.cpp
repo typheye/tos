@@ -2,127 +2,120 @@
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "include/libpd.h"
+#include "include/pot.hpp"
 #include <cstdio>
 #include <cstring>
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
+extern Potentiometer boardPot;
 
-// Key layout — 5 rows, each rendered as 5~10 small cards per row.
-// UP/DOWN snakes through every slot in reading order.
-// Each slot has a display label and the actual char to append.
-struct KeySlot {
-  const char *label;  // display text (e.g. "Q" or "DEL" or "SP")
-  char append;        // 0 = special key, otherwise ASCII char to add
-  bool wide;          // true = take 2 slots width
+// ============ Key layout ============
+// lo/hi = display labels; app_lo/app_hi = char to append (0=special)
+struct KbKey { const char *lo, *hi; char app_lo, app_hi; };
+#define KL(lo,hi,lo_ch,hi_ch) {lo,hi,lo_ch,hi_ch}
+#define KS(lo,hi)             {lo,hi,0,0}
+
+static const KbKey row0[] = {
+  KL("q","Q",'q','Q'),KL("w","W",'w','W'),KL("e","E",'e','E'),
+  KL("r","R",'r','R'),KL("t","T",'t','T'),KL("y","Y",'y','Y'),
+  KL("u","U",'u','U'),KL("i","I",'i','I'),KL("o","O",'o','O'),KL("p","P",'p','P'),
+};
+static const KbKey row1[] = {
+  KL("a","A",'a','A'),KL("s","S",'s','S'),KL("d","D",'d','D'),
+  KL("f","F",'f','F'),KL("g","G",'g','G'),KL("h","H",'h','H'),
+  KL("j","J",'j','J'),KL("k","K",'k','K'),KL("l","L",'l','L'),
+};
+static const KbKey row2[] = {
+  KS("SF","SF"),KL("z","Z",'z','Z'),KL("x","X",'x','X'),
+  KL("c","C",'c','C'),KL("v","V",'v','V'),KL("b","B",'b','B'),
+  KL("n","N",'n','N'),KL("m","M",'m','M'),KS("<-","<-"),
+};
+static const KbKey row3[] = {
+  KL("1","!",'1','!'),KL("2","@",'2','@'),KL("3","#",'3','#'),
+  KL("4","$",'4','$'),KL("5","%",'5','%'),KL("6","^",'6','^'),
+  KL("7","&",'7','&'),KL("8","*",'8','*'),KL("9","(",'9','('),
+  KL("0",")",'0',')'),
+};
+static const KbKey row4[] = {
+  KL(".",".",'.','.'),KL("-","-",'-','-'),KL("_","_",'_','_'),
+  KL("/","/",'/','/'),KL("_","_",' ',' '),KS("EN","EN"),
 };
 
-// Row definitions
-static const KeySlot row0[] = {
-  {"Q",'Q'},{"W",'W'},{"E",'E'},{"R",'R'},{"T",'T'},{"Y",'Y'},{"U",'U'},{"I",'I'},{"O",'O'},{"P",'P'},
-};
-static const KeySlot row1[] = {
-  {"A",'A'},{"S",'S'},{"D",'D'},{"F",'F'},{"G",'G'},{"H",'H'},{"J",'J'},{"K",'K'},{"L",'L'},
-};
-static const KeySlot row2[] = {
-  {"@",'@'},{"Z",'Z'},{"X",'X'},{"C",'C'},{"V",'V'},{"B",'B'},{"N",'N'},{"M",'M'},{"!",'!'},
-};
-static const KeySlot row3[] = {
-  {"1",'1'},{"2",'2'},{"3",'3'},{"4",'4'},{"5",'5'},{"6",'6'},{"7",'7'},{"8",'8'},{"9",'9'},{"0",'0'},
-};
-static const KeySlot row4[] = {
-  {".",'.'},{"-",'-'},{"_",'_'},{"DEL",0},{"SP",' '},{"OK",0},
-};
-
-struct RowDef { const KeySlot *slots; int count; };
-static const RowDef rows[] = {
+struct KbRow { const KbKey *keys; int n; };
+static const KbRow rows[] = {
   {row0,10},{row1,9},{row2,9},{row3,10},{row4,6},
 };
-#define NUM_ROWS 5
+#define N_ROWS 5
 
-// Flattened slot index for UP/DOWN navigation
-static int flat_count(void) {
-  int n = 0;
-  for (int r = 0; r < NUM_ROWS; r++) n += rows[r].count;
-  return n;
-}
-
-static bool get_flat(int idx, KeySlot *out, int *out_row, int *out_col) {
-  int n = 0;
-  for (int r = 0; r < NUM_ROWS; r++) {
-    if (idx < n + rows[r].count) {
-      *out = rows[r].slots[idx - n];
-      *out_row = r;
-      *out_col = idx - n;
-      return true;
-    }
-    n += rows[r].count;
+static int flat_n(void) { int t=0; for(int r=0;r<N_ROWS;r++) t+=rows[r].n; return t; }
+static const KbKey *flat_key(int idx, int *ro, int *co) {
+  int off=0;
+  for(int r=0;r<N_ROWS;r++){
+    if(idx<off+rows[r].n){*ro=r;*co=idx-off;return &rows[r].keys[idx-off];}
+    off+=rows[r].n;
   }
-  return false;
+  return NULL;
 }
+static int iabs(int x) { return x<0?-x:x; }
 
 // ============ Draw ============
 
-static void draw_kb(const char *title, const char *pwd, int pwd_len, int sel) {
+static void draw_kb(const char *pwd, int len, int sel, bool shift) {
   PD_Init();
   PD_FillScreen(TOS_BG);
   PD_DrawFrame();
 
-  // Title
   PD_SetFont(FONT_ASCII_16);
   PD_SetColor(TOS_ACCENT);
   PD_DrawString(22, 5, "KEY");
 
-  // Password field (plain text)
-  PD_SetFont(FONT_ASCII_20);
+  // Password (16px font fits ~22 chars, show last 20)
+  PD_SetFont(FONT_ASCII_16);
   PD_SetColor(TOS_TEXT);
-  char disp[25];
-  strncpy(disp, pwd, pwd_len);
-  disp[pwd_len] = '\0';
-  PD_DrawString(22, 34, disp);
-  // Cursor
-  PD_SetColor(TOS_ACCENT);
-  PD_SetFont(FONT_ASCII_20);
-  PD_DrawString(22 + pwd_len * 12 + 2, 34, "_");
+  int start = len > 20 ? len - 20 : 0;
+  char disp[24];
+  strncpy(disp, pwd + start, len - start);
+  disp[len-start] = '\0';
+  PD_DrawString(18, 28, disp);
 
-  // Key rows — small cards
-  int base_y = 60;
-  int row_h = 28;
-  int row_gap = 30;
+  // Shift indicator
+  PD_SetFont(FONT_ASCII_12);
+  PD_SetColor(shift ? TOS_ACCENT : TOS_GREY);
+  PD_DrawString(215, 7, shift ? "ABC" : "abc");
 
+  // Key grid — symmetric margins
+  int base_y = 48, row_h = 28, margin = 8;
   int flat_idx = 0;
-  for (int r = 0; r < NUM_ROWS; r++) {
-    int n = rows[r].count;
-    // Evenly distribute across 224px usable width
-    int total_w = 224;
-    int slot_w = total_w / n;
-    int cy = base_y + r * row_gap;
+  for (int r = 0; r < N_ROWS; r++) {
+    int n = rows[r].n;
+    int grid_w = 240 - margin * 2;
+    int slot_w = grid_w / n;
+    int cy = base_y + r * row_h;
 
     for (int c = 0; c < n; c++) {
-      KeySlot ks = rows[r].slots[c];
-      int card_w = ks.wide ? slot_w * 2 - 2 : slot_w - 2;
-      int cx = 8 + c * slot_w + 1;
+      const KbKey *k = &rows[r].keys[c];
+      int card_w = slot_w - 2;
+      int cx = margin + c * slot_w + 1;
 
-      bool selected = (flat_idx == sel);
-      uint32_t bg = selected ? TOS_ACCENT : TOS_CARD_BG;
-      uint32_t fg = selected ? TOS_TEXT   : TOS_TEXT_SEC;
+      bool sel_k = (flat_idx == sel);
+      uint32_t bg = sel_k ? TOS_ACCENT : TOS_CARD_BG;
+      uint32_t fg = sel_k ? TOS_TEXT   : TOS_TEXT_SEC;
 
       PD_DrawAngledCard(cx, cy, card_w, 22, 4, bg);
       PD_SetColor(fg);
       PD_SetFont(FONT_ASCII_16);
 
-      // Centre text in card
-      uint16_t tw = PD_GetStringWidth(ks.label);
+      const char *label = shift ? k->hi : k->lo;
+      uint16_t tw = PD_GetStringWidth(label);
       uint16_t th = PD_GetCharHeight();
-      PD_DrawString(cx + (card_w - tw) / 2, cy + (22 - th) / 2 + 1, ks.label);
+      PD_DrawString(cx + (card_w - tw) / 2, cy + (22 - th) / 2 + 1, label);
 
       flat_idx++;
     }
   }
 
-  // Footer
   PD_DrawFooterCenter("ENTER", NULL, "SELECT");
-
   LCD_Flush();
 }
 
@@ -130,57 +123,66 @@ static void draw_kb(const char *title, const char *pwd, int pwd_len, int sel) {
 
 bool keyboard_open(const char *title, char *out, int max_len) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  int pwd_len = 0;
-  memset(out, 0, max_len + 1);
-  int total = flat_count();
-  int sel = 0;
-  uint8_t le = 0;
-  uint32_t lu = 0;
+  int len = 0; memset(out, 0, max_len + 1);
+  bool shift = true;  // start uppercase
+  int total = flat_n();
+  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  int last_pot = boardPot.readRaw();
 
   while (1) {
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
-      sel = (sel + 1) % total;
-      HAL_Delay(120);
+    // Pot fast navigation
+    int pot = boardPot.readRaw();
+    if (iabs(pot - last_pot) > 20) {
+      int pos = (total - 1) - (pot * total / 4096);
+      if (pos < 0) pos = 0;
+      if (pos >= total) pos = total - 1;
+      sel = pos;
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
-      sel = (sel - 1 + total) % total;
-      HAL_Delay(120);
-    }
+    last_pot = pot;
+
+    // UP/DOWN fine
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel=(sel+1)%total; HAL_Delay(100); }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel=(sel-1+total)%total; HAL_Delay(100); }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
-      KeySlot ks; int r, c;
-      if (get_flat(sel, &ks, &r, &c)) {
-        if (ks.append == 0 && strcmp(ks.label, "DEL") == 0) {
-          // Backspace
-          if (pwd_len > 0) pwd_len--;
-        } else if (ks.append == 0 && strcmp(ks.label, "OK") == 0) {
-          // Done
-          out[pwd_len] = '\0';
-          printf("[KB] Password entered: %s\r\n", out);
+      int r, c;
+      const KbKey *k = flat_key(sel, &r, &c);
+      if (k) {
+        const char *label = shift ? k->hi : k->lo;
+
+        if (strcmp(label, "EN") == 0) {
+          out[len] = '\0';
+          printf("[KB] Done: %s\r\n", out);
           return true;
-        } else if (ks.append != 0 && pwd_len < max_len) {
-          // Append character
-          out[pwd_len++] = ks.append;
-          out[pwd_len] = '\0';
+        }
+        else if (strcmp(label, "<-") == 0) {
+          if (len > 0) len--;
+        }
+        else if (strcmp(label, "SF") == 0) {
+          shift = !shift;
+        }
+        else if (len < max_len) {
+          char ch = shift ? k->app_hi : k->app_lo;
+          if (ch != 0) { out[len++] = ch; out[len] = '\0'; }
         }
       }
       HAL_Delay(150);
     }
     le = ce;
 
-    // Long-press UP+DOWN to cancel
+    // Long-press UP+DOWN cancel
     bool up = keyManager.collision_A8.isPressed(), down = keyManager.collision_D0.isPressed();
     static uint32_t et = 0; static bool ea = false;
     if (up && down && !ea) { et = HAL_GetTick(); ea = true; }
-    else if (up && down && ea) { if (HAL_GetTick() - et > 700) { out[0] = '\0'; return false; } }
+    else if (up && down && ea) { if (HAL_GetTick() - et > 700) { out[0]='\0'; return false; } }
     else if (!up && !down) { ea = false; }
 
-    if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick(); draw_kb(title, out, pwd_len, sel); }
-    HAL_Delay(20);
+    if (HAL_GetTick() - lu > 80) { lu = HAL_GetTick(); draw_kb(out, len, sel, shift); }
+    HAL_Delay(15);
   }
 }
