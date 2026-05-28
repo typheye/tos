@@ -48,8 +48,10 @@ static void draw_menu(const char *title, const char **items, int count, int sel)
   LCD_Flush();
 }
 
-static int menu_loop(const char *title, const char **items, int count) {
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+static int menu_loop(const char *title, const char **items, int count, int start_sel) {
+  int sel = start_sel;
+  if (sel >= count) sel = 0;
+  uint8_t le = 0; uint32_t lu = 0;
   while (1) {
     keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % count; HAL_Delay(150); }
@@ -64,13 +66,14 @@ static int menu_loop(const char *title, const char **items, int count) {
 
 void settings_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
+  static int sel = 0;
   while (1) {
-    int sel = menu_loop("SET", set_m, SET_N);
+    sel = menu_loop("SET", set_m, SET_N, sel);
     if (sel == 0) return;
     if (sel == 1) { wlan_activity_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
     if (sel == 9) {
       boardLCD.fillScreen(LCD_COLOR_BLACK);
-      while (1) { int ds = menu_loop("DEBUG", dbg_m, DBG_N);
+      while (1) { int ds = menu_loop("DEBUG", dbg_m, DBG_N, 0);
         if (ds == 0) break;
         if (ds == 1) { demo_list_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
       }

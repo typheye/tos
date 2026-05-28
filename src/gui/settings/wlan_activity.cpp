@@ -1,4 +1,5 @@
 #include "wlan_activity.hpp"
+#include "components/alert.hpp"
 #include "components/keyboard.hpp"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
@@ -24,19 +25,26 @@ static int  ap_rssi[MAX_APS];
 static int  ap_enc[MAX_APS];
 static int  ap_count = 0;
 
-static void do_scan(void) {
+static bool do_scan(void) {
   ap_count = 0;
   printf("[WLAN] Warming up ESP8266...\r\n");
-  ESP8266_SendCommand("AT", "OK", 1000);  // ensure module is responsive
+  ESP8266_SendCommand("AT", "OK", 1000);
   HAL_Delay(100);
   printf("[WLAN] Scanning with AT+CWLAP...\r\n");
   if (!esp8266.scanNetworks()) {
     printf("[WLAN] Scan failed, retrying once...\r\n");
-    HAL_Delay(200);
-    if (!esp8266.scanNetworks()) { printf("[WLAN] Scan failed\r\n"); return; }
+    HAL_Delay(300);
+    if (!esp8266.scanNetworks()) {
+      printf("[WLAN] Scan failed after retry\r\n");
+      alert_show("ALERT", "WiFi scan failed. Check module.");
+      return false;
+    }
   }
   const char *buf = esp8266.getRxBuffer();
-  if (!buf || !*buf) { printf("[WLAN] Empty buffer\r\n"); return; }
+  if (!buf || !*buf) {
+    alert_show("ALERT", "No WiFi data received.");
+    return false;
+  }
 
   printf("[WLAN] Raw %d bytes\r\n", (int)strlen(buf));
   const char *p = buf;
@@ -50,7 +58,6 @@ static void do_scan(void) {
     int si = 0;
     while (*p && *p != '"' && si < SSID_LEN - 1) ap_ssid[ap_count][si++] = *p++;
     ap_ssid[ap_count][si] = '\0';
-    // Empty or unparseable → "N/A"
     if (si == 0) strcpy(ap_ssid[ap_count], "N/A");
     if (*p == '"') p++;
     while (*p && *p != ',') p++; if (*p == ',') p++;
@@ -58,16 +65,26 @@ static void do_scan(void) {
     if (*p == '-') { neg = true; p++; }
     while (*p >= '0' && *p <= '9') { rssi = rssi * 10 + (*p - '0'); p++; }
     if (neg) rssi = -rssi;
-    // Skip N/A or empty SSIDs
     if (si == 0 || strcmp(ap_ssid[ap_count], "N/A") == 0) {
-      printf("[WLAN] Skipping empty/N/A SSID\r\n");
+      printf("[WLAN] Skip empty/N/A\r\n");
       continue;
     }
-    ap_enc[ap_count] = ecn; ap_rssi[ap_count] = rssi;
-    printf("[WLAN] %d: \"%s\" RSSI=%d enc=%d\r\n", ap_count, ap_ssid[ap_count], rssi, ecn);
-    ap_count++;
+    // Deduplicate: keep strongest RSSI
+    bool dup = false;
+    for (int d = 0; d < ap_count; d++) {
+      if (strcmp(ap_ssid[d], ap_ssid[ap_count]) == 0) {
+        if (rssi > ap_rssi[d]) { ap_rssi[d] = rssi; ap_enc[d] = ecn; }
+        dup = true; break;
+      }
+    }
+    if (!dup) {
+      ap_enc[ap_count] = ecn; ap_rssi[ap_count] = rssi;
+      printf("[WLAN] %d: \"%s\" RSSI=%d enc=%d\r\n", ap_count, ap_ssid[ap_count], rssi, ecn);
+      ap_count++;
+    }
   }
-  printf("[WLAN] %d networks found\r\n", ap_count);
+  printf("[WLAN] %d unique networks\r\n", ap_count);
+  return true;
 }
 
 // ============ Draw helpers ============
@@ -187,7 +204,8 @@ static void draw_wlan_main(int sel) {
 }
 
 static int wlan_main_loop(void) {
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  static int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  if (sel >= wlan_item_count()) sel = 0;
   wlan_edit = false;
 
   while (1) {
@@ -290,7 +308,9 @@ static void scaning_run(void) {
   LCD_Flush();
   do_scan();
 
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  static int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  int n0 = 2 + ap_count;
+  if (sel >= n0) sel = 0;  // clamp after re-scan
   while (1) {
     keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
     int n = 2 + ap_count;
@@ -314,21 +334,24 @@ static void scaning_run(void) {
         char pwd[32];
         if (keyboard_open(title, pwd, 31)) {
           printf("[WLAN] Connecting to %s with password...\r\n", ap_ssid[ap_idx]);
-          // Show connecting message
           boardLCD.fillScreen(LCD_COLOR_BLACK);
           draw_frame_title("WLAN");
           PD_SetColor(TOS_TEXT);
-          char msg[48]; snprintf(msg, sizeof(msg), "Connecting to %s...", ap_ssid[ap_idx]);
-          PD_DrawString(20, 100, msg);
+          PD_DrawString(20, 100, "Connecting...");
           LCD_Flush();
-          // Attempt connection
-          if (ESP8266_ConnectWiFi(ap_ssid[ap_idx], pwd)) {
-            wlan_connected = true;
-            printf("[WLAN] Connected!\r\n");
-          } else {
-            printf("[WLAN] Connection failed\r\n");
-          }
+
+          bool ok = ESP8266_ConnectWiFi(ap_ssid[ap_idx], pwd);
           HAL_Delay(500);
+          // Verify connection state from module, not just return value
+          if (ok && ESP8266_IsConnected()) {
+            wlan_connected = true;
+            printf("[WLAN] Connected confirmed!\r\n");
+            alert_show("ALERT", "WiFi connected successfully!");
+          } else {
+            wlan_connected = false;
+            printf("[WLAN] Connection failed or not confirmed\r\n");
+            alert_show("ALERT", "Connection failed. Check password.");
+          }
         }
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         draw_frame_title("WLAN");

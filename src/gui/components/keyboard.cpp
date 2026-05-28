@@ -71,22 +71,22 @@ static void draw_kb(const char *title, const char *pwd, int pwd_len, int sel) {
   // Title
   PD_SetFont(FONT_ASCII_16);
   PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
+  PD_DrawString(22, 5, "KEY");
 
-  // Password field (masked)
+  // Password field (plain text)
   PD_SetFont(FONT_ASCII_20);
   PD_SetColor(TOS_TEXT);
-  char mask[25];
-  for (int i = 0; i < pwd_len; i++) mask[i] = '*';
-  mask[pwd_len] = '\0';
-  PD_DrawString(22, 28, mask);
+  char disp[25];
+  strncpy(disp, pwd, pwd_len);
+  disp[pwd_len] = '\0';
+  PD_DrawString(22, 34, disp);
   // Cursor
   PD_SetColor(TOS_ACCENT);
   PD_SetFont(FONT_ASCII_20);
-  PD_DrawString(22 + pwd_len * 12 + 2, 28, "_");
+  PD_DrawString(22 + pwd_len * 12 + 2, 34, "_");
 
   // Key rows — small cards
-  int base_y = 56;
+  int base_y = 60;
   int row_h = 28;
   int row_gap = 30;
 
@@ -121,10 +121,7 @@ static void draw_kb(const char *title, const char *pwd, int pwd_len, int sel) {
   }
 
   // Footer
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_GREY);
-  PD_DrawString(8, 220, "UP/DOWN: move");
-  PD_DrawString(130, 220, "ENTER: select");
+  PD_DrawFooterCenter("ENTER", NULL, "SELECT");
 
   LCD_Flush();
 }
