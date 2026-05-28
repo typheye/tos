@@ -128,8 +128,8 @@ static void draw_eye(int16_t cx, int16_t cy, float blink, float lx, float ly) {
       EMO_FillRect(cx - r - 2, cy - r - 1, r * 2 + 4, cover_h, EMO_BLACK);
     }
   } else {
-    // Fully closed: thin arc at bottom
-    EMO_DrawThickArc(cx, cy + r, r, 160.0f, 200.0f, 2, EMO_WHITE);
+    // Fully closed: thin horizontal line spanning eye width
+    EMO_DrawHLine(cx - r, cy + r, r * 2, 2, EMO_WHITE);
   }
 }
 
@@ -147,21 +147,22 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
 
   EMO_FillScreen(EMO_BLACK);
 
-  // --- Eyebrows ---
-  int16_t brow_r = 20;
-  int16_t brow_thick = 3;
-  int16_t base_brow_y = EMO_LEFT_EYE_Y - EMO_EYE_R - 6;
-  int16_t brow_dy = (int16_t)(brow_y * 5.0f); // raise/lower
+  // --- Eyebrows (shallow upward arcs) ---
+  // Arc centre sits below eye; large radius produces a gentle curve above the eye.
+  int16_t brow_arc_r   = 55;                        // large radius → shallow curve
+  int16_t brow_thick   = 3;
+  int16_t brow_base_cy = EMO_LEFT_EYE_Y + 30;       // arc centre below eye
+  int16_t brow_dy = (int16_t)(-brow_y * 6.0f);      // raise = shift centre up (lower y)
 
-  // Left brow: arcs slightly upward at inner end, sits above left eye
+  // Left brow: arc through top of circle (70°→110°), centred above left eye
   {
-    int16_t by = base_brow_y + brow_dy;
-    EMO_DrawThickArc(EMO_LEFT_EYE_X + 4, by, brow_r, 170.0f, 195.0f, brow_thick, EMO_WHITE);
+    int16_t cy = brow_base_cy + brow_dy;
+    EMO_DrawThickArc(EMO_LEFT_EYE_X, cy, brow_arc_r, 70.0f, 110.0f, brow_thick, EMO_BROW);
   }
-  // Right brow: mirror of left
+  // Right brow: same arc, centred above right eye
   {
-    int16_t by = base_brow_y + brow_dy;
-    EMO_DrawThickArc(EMO_RIGHT_EYE_X - 4, by, brow_r, 345.0f, 10.0f, brow_thick, EMO_WHITE);
+    int16_t cy = brow_base_cy + brow_dy;
+    EMO_DrawThickArc(EMO_RIGHT_EYE_X, cy, brow_arc_r, 70.0f, 110.0f, brow_thick, EMO_BROW);
   }
 
   // --- Eyes ---
@@ -188,19 +189,24 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
   int16_t mr  = EMO_MOUTH_R;
 
   if (mouth_open < 0.15f) {
-    // Neutral smile arc
-    EMO_DrawThickArc(mcx, mcy, mr, 205.0f, 335.0f, 4, EMO_WHITE);
+    // Neutral: thin clean arc smile
+    EMO_DrawThickArc(mcx, mcy, mr, 208.0f, 332.0f, 3, EMO_MOUTH);
   } else if (mouth_open < 0.5f) {
-    // Wide / happy smile
+    // Happy: wider arc, smoothly transitioning
     float t = (mouth_open - 0.15f) / 0.35f;
-    int16_t adj_r = mr - (int16_t)(t * 6.0f);
-    float half_span = 65.0f - t * 15.0f;
-    EMO_DrawThickArc(mcx, mcy, adj_r, 270.0f - half_span, 270.0f + half_span, 4, EMO_WHITE);
+    int16_t adj_r = mr - (int16_t)(t * 5.0f);
+    float half_span = 64.0f - t * 16.0f;
+    EMO_DrawThickArc(mcx, mcy, adj_r, 270.0f - half_span, 270.0f + half_span, 3, EMO_MOUTH);
   } else {
-    // Round open mouth (surprised)
+    // Surprised: tall pill shape (vertical rounded rect)
     float t = (mouth_open - 0.5f) / 0.5f;
-    int16_t or_r = 8 + (int16_t)(t * 10.0f);
-    int16_t or_y = mcy + mr - 12 + (int16_t)(t * 5.0f);
-    EMO_FillCircle(mcx, or_y, or_r, EMO_WHITE);
+    int16_t om_w = 14 + (int16_t)(t * 6.0f);   // width 14~20
+    int16_t om_h = 20 + (int16_t)(t * 10.0f);  // height 20~30 (taller than wide)
+    int16_t om_y = mcy + mr - 16;
+    int16_t om_x = mcx - om_w / 2;
+    int16_t om_r = om_w / 2;                   // end-cap radius
+    EMO_FillCircle(om_x + om_r, om_y + om_r, om_r, EMO_MOUTH);
+    EMO_FillCircle(om_x + om_r, om_y + om_h - om_r, om_r, EMO_MOUTH);
+    EMO_FillRect(om_x, om_y + om_r, om_w, om_h - om_r * 2, EMO_MOUTH);
   }
 }

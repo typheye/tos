@@ -7,9 +7,11 @@
 extern "C" {
 #endif
 
-#define EMO_WHITE 0xFFFFFF
-#define EMO_BLACK 0x000000
-#define EMO_GREY  0x444444
+#define EMO_WHITE   0xFFFFFF
+#define EMO_BLACK   0x000000
+#define EMO_GREY    0x444444
+#define EMO_BROW    0x666666  // darker grey for eyebrows
+#define EMO_MOUTH   0xCCDDFF  // soft white-blue for mouth
 
 // Face layout
 #define EMO_EYE_R        20
