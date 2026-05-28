@@ -1,4 +1,5 @@
 #include "wlan_activity.hpp"
+#include "components/keyboard.hpp"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -57,6 +58,11 @@ static void do_scan(void) {
     if (*p == '-') { neg = true; p++; }
     while (*p >= '0' && *p <= '9') { rssi = rssi * 10 + (*p - '0'); p++; }
     if (neg) rssi = -rssi;
+    // Skip N/A or empty SSIDs
+    if (si == 0 || strcmp(ap_ssid[ap_count], "N/A") == 0) {
+      printf("[WLAN] Skipping empty/N/A SSID\r\n");
+      continue;
+    }
     ap_enc[ap_count] = ecn; ap_rssi[ap_count] = rssi;
     printf("[WLAN] %d: \"%s\" RSSI=%d enc=%d\r\n", ap_count, ap_ssid[ap_count], rssi, ecn);
     ap_count++;
@@ -296,6 +302,34 @@ static void scaning_run(void) {
     if (ce && !le) {
       if (sel == 0) return;
       if (sel == 1) {
+        boardLCD.fillScreen(LCD_COLOR_BLACK);
+        draw_frame_title("WLAN");
+        PD_SetColor(TOS_TEXT); PD_DrawString(40, 100, "Scanning WiFi...");
+        LCD_Flush();
+        do_scan(); sel = 0;
+      } else if (sel >= 2) {
+        // WiFi AP selected → open keyboard for password
+        int ap_idx = sel - 2;
+        char title[40]; snprintf(title, sizeof(title), "Password for %s", ap_ssid[ap_idx]);
+        char pwd[32];
+        if (keyboard_open(title, pwd, 31)) {
+          printf("[WLAN] Connecting to %s with password...\r\n", ap_ssid[ap_idx]);
+          // Show connecting message
+          boardLCD.fillScreen(LCD_COLOR_BLACK);
+          draw_frame_title("WLAN");
+          PD_SetColor(TOS_TEXT);
+          char msg[48]; snprintf(msg, sizeof(msg), "Connecting to %s...", ap_ssid[ap_idx]);
+          PD_DrawString(20, 100, msg);
+          LCD_Flush();
+          // Attempt connection
+          if (ESP8266_ConnectWiFi(ap_ssid[ap_idx], pwd)) {
+            wlan_connected = true;
+            printf("[WLAN] Connected!\r\n");
+          } else {
+            printf("[WLAN] Connection failed\r\n");
+          }
+          HAL_Delay(500);
+        }
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         draw_frame_title("WLAN");
         PD_SetColor(TOS_TEXT); PD_DrawString(40, 100, "Scanning WiFi...");
