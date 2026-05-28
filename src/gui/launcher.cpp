@@ -52,11 +52,11 @@ static CCMRAM int  prev_pet_state      = ANIM_IDLE;
 #define SENSOR_MAX_HOLD  8000    // force back to idle after 8s
 #define SENSOR_REST_MS   18000   // rest period before sensor can re-trigger
 
-// Long-press UP+DOWN to exit
-static CCMRAM uint32_t exit_held_tm  = 0;
-static CCMRAM bool     exit_armed    = false;
+// Triple-press ENTER to exit
+static CCMRAM uint32_t enter_tm[3]  = {0};
+static CCMRAM int      enter_idx    = 0;
 
-#define LONG_PRESS_MS   700
+#define TRIPLE_WINDOW   800   // 3 presses within 800ms
 #define BLINK_DUR_MS    420
 #define WINK_DUR_MS     380
 #define DBLINK_DUR_MS   700
@@ -409,8 +409,8 @@ void pet_launcher_run(void) {
   mood_timer    = HAL_GetTick() + 8000 + rnd(5000);
   sensor_timer  = 0;
   sensor_start  = 0;
-  exit_armed    = false;
-  exit_held_tm  = 0;
+  enter_idx    = 0;
+  enter_tm[0] = enter_tm[1] = enter_tm[2] = 0;
 
   pet_blink_l = 0.0f; pet_blink_r = 0.0f;
   pet_mouth   = 0.0f; pet_cheek   = 0.0f;
@@ -418,7 +418,7 @@ void pet_launcher_run(void) {
   pet_brow_y  = 0.0f;
   pet_state   = ANIM_IDLE;
 
-  printf("[Pet] Launcher started — hold UP+DOWN %dms to exit\r\n", LONG_PRESS_MS);
+  printf("[Pet] Launcher started — triple-press ENTER to exit\r\n");
 
   uint32_t heartbeat = 0;
   while (1) {
@@ -428,30 +428,22 @@ void pet_launcher_run(void) {
       printf("[Pet] alive @ %lums, state=%d, expr=%d\r\n", now, pet_state, EHW_GetExpr());
     }
 
-    // --- Input: long-press UP+DOWN to exit ---
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    bool up   = keyManager.collision_A8.isPressed();
-    bool down = keyManager.collision_D0.isPressed();
-    bool both = up && down;
-
-    if (both && !exit_armed) {
-      exit_held_tm = now;
-      exit_armed = true;
-    } else if (both && exit_armed) {
-      if (now - exit_held_tm >= LONG_PRESS_MS) {
-        printf("[Pet] UP+DOWN long press — returning to menu\r\n");
-        for (int f = 0; f < 15; f++) {
-          float b = (float)f / 14.0f;
-          EMO_DrawFace(b, b, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    // --- Input: triple-press ENTER to exit ---
+    keyManager.btn_enter.tick();
+    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+      enter_tm[enter_idx % 3] = now;
+      enter_idx++;
+      // Check if last 3 presses within TRIPLE_WINDOW
+      if (enter_idx >= 3) {
+        uint32_t t0 = enter_tm[(enter_idx - 3) % 3];
+        uint32_t t2 = enter_tm[(enter_idx - 1) % 3];
+        if (t2 - t0 < TRIPLE_WINDOW) {
+          printf("[Pet] Triple ENTER — returning to menu\r\n");
+          EMO_FillScreen(EMO_BLACK);
           LCD_Flush();
-          HAL_Delay(20);
+          return;
         }
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
-        return;
       }
-    } else if (!both) {
-      exit_armed = false;
     }
 
     // --- Update & Draw ---

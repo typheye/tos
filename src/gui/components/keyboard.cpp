@@ -39,7 +39,7 @@ static const KbKey row3[] = {
 };
 static const KbKey row4[] = {
   KL(".",".",'.','.'),KL("-","-",'-','-'),KL("_","_",'_','_'),
-  KL("/","/",'/','/'),KL("_","_",' ',' '),KS("EN","EN"),
+  KL("/","/",'/','/'),KL(" "," ",' ',' '),KS("EN","EN"),
 };
 
 struct KbRow { const KbKey *keys; int n; };
@@ -85,7 +85,7 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
   PD_DrawString(215, 7, shift ? "ABC" : "abc");
 
   // Key grid — symmetric margins
-  int base_y = 48, row_h = 28, margin = 8;
+  int base_y = 53, row_h = 28, margin = 8;
   int flat_idx = 0;
   for (int r = 0; r < N_ROWS; r++) {
     int n = rows[r].n;

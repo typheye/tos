@@ -12,18 +12,18 @@ extern KeyManager keyManager;
 extern LCD boardLCD;
 extern ESP8266 esp8266;
 
-static bool wlan_on        = false;
+static bool wlan_on = false;
 static bool wlan_connected = false;
-static bool wlan_edit      = false;
+static bool wlan_edit = false;
 
 // ============ WiFi scan results ============
 
-#define MAX_APS  20
+#define MAX_APS 20
 #define SSID_LEN 24
 static char ap_ssid[MAX_APS][SSID_LEN];
-static int  ap_rssi[MAX_APS];
-static int  ap_enc[MAX_APS];
-static int  ap_count = 0;
+static int ap_rssi[MAX_APS];
+static int ap_enc[MAX_APS];
+static int ap_count = 0;
 
 static bool do_scan(void) {
   ap_count = 0;
@@ -50,21 +50,43 @@ static bool do_scan(void) {
   const char *p = buf;
   while (p && *p && ap_count < MAX_APS) {
     p = strstr(p, "+CWLAP:");
-    if (!p) break; p += 7;
+    if (!p)
+      break;
+    p += 7;
     int ecn = 0;
-    if (*p == '(') p++; ecn = (int)(*p - '0');
-    while (*p && *p != ',') p++; if (*p == ',') p++;
-    if (*p == '"') p++;
+    if (*p == '(')
+      p++;
+    ecn = (int)(*p - '0');
+    while (*p && *p != ',')
+      p++;
+    if (*p == ',')
+      p++;
+    if (*p == '"')
+      p++;
     int si = 0;
-    while (*p && *p != '"' && si < SSID_LEN - 1) ap_ssid[ap_count][si++] = *p++;
+    while (*p && *p != '"' && si < SSID_LEN - 1)
+      ap_ssid[ap_count][si++] = *p++;
     ap_ssid[ap_count][si] = '\0';
-    if (si == 0) strcpy(ap_ssid[ap_count], "N/A");
-    if (*p == '"') p++;
-    while (*p && *p != ',') p++; if (*p == ',') p++;
-    int rssi = 0; bool neg = false;
-    if (*p == '-') { neg = true; p++; }
-    while (*p >= '0' && *p <= '9') { rssi = rssi * 10 + (*p - '0'); p++; }
-    if (neg) rssi = -rssi;
+    if (si == 0)
+      strcpy(ap_ssid[ap_count], "N/A");
+    if (*p == '"')
+      p++;
+    while (*p && *p != ',')
+      p++;
+    if (*p == ',')
+      p++;
+    int rssi = 0;
+    bool neg = false;
+    if (*p == '-') {
+      neg = true;
+      p++;
+    }
+    while (*p >= '0' && *p <= '9') {
+      rssi = rssi * 10 + (*p - '0');
+      p++;
+    }
+    if (neg)
+      rssi = -rssi;
     if (si == 0 || strcmp(ap_ssid[ap_count], "N/A") == 0) {
       printf("[WLAN] Skip empty/N/A\r\n");
       continue;
@@ -73,13 +95,19 @@ static bool do_scan(void) {
     bool dup = false;
     for (int d = 0; d < ap_count; d++) {
       if (strcmp(ap_ssid[d], ap_ssid[ap_count]) == 0) {
-        if (rssi > ap_rssi[d]) { ap_rssi[d] = rssi; ap_enc[d] = ecn; }
-        dup = true; break;
+        if (rssi > ap_rssi[d]) {
+          ap_rssi[d] = rssi;
+          ap_enc[d] = ecn;
+        }
+        dup = true;
+        break;
       }
     }
     if (!dup) {
-      ap_enc[ap_count] = ecn; ap_rssi[ap_count] = rssi;
-      printf("[WLAN] %d: \"%s\" RSSI=%d enc=%d\r\n", ap_count, ap_ssid[ap_count], rssi, ecn);
+      ap_enc[ap_count] = ecn;
+      ap_rssi[ap_count] = rssi;
+      printf("[WLAN] %d: \"%s\" RSSI=%d enc=%d\r\n", ap_count,
+             ap_ssid[ap_count], rssi, ecn);
       ap_count++;
     }
   }
@@ -98,21 +126,25 @@ static void draw_frame_title(const char *title) {
   PD_DrawString(22, 5, title);
 }
 
-static void draw_card(int idx, int sel, int cy, const char *text, bool editing) {
+static void draw_card(int idx, int sel, int cy, const char *text,
+                      bool editing) {
   bool selected = (idx == sel);
   uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-  uint32_t txt_c  = selected ? TOS_TEXT   : TOS_TEXT_SEC;
-  if (editing && selected && (HAL_GetTick() / 300) % 2) card_c = TOS_CARD_BG;
+  uint32_t txt_c = selected ? TOS_TEXT : TOS_TEXT_SEC;
+  if (editing && selected && (HAL_GetTick() / 300) % 2)
+    card_c = TOS_CARD_BG;
   PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
   PD_SetColor(txt_c);
   PD_DrawString(26, cy + 2, text);
 }
 
-static void draw_card_r(int idx, int sel, int cy, const char *label, const char *value, bool editing) {
+static void draw_card_r(int idx, int sel, int cy, const char *label,
+                        const char *value, bool editing) {
   bool selected = (idx == sel);
   uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-  uint32_t txt_c  = selected ? TOS_TEXT   : TOS_TEXT_SEC;
-  if (editing && selected && (HAL_GetTick() / 300) % 2) card_c = TOS_CARD_BG;
+  uint32_t txt_c = selected ? TOS_TEXT : TOS_TEXT_SEC;
+  if (editing && selected && (HAL_GetTick() / 300) % 2)
+    card_c = TOS_CARD_BG;
   PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
   PD_SetColor(txt_c);
   PD_DrawString(26, cy + 2, label);
@@ -122,17 +154,23 @@ static void draw_card_r(int idx, int sel, int cy, const char *label, const char 
 
 // Signal bars: vertical centre, pushed right, dark grey background for missing
 static void draw_signal_bars(int x, int y, int card_h, int rssi) {
-  int bars = (rssi >= -50) ? 4 : (rssi >= -60) ? 3 : (rssi >= -70) ? 2 : (rssi >= -80) ? 1 : 0;
-  uint32_t active = (bars >= 3) ? TOS_GREEN : (bars >= 1) ? TOS_YELLOW : TOS_RED;
+  int bars = (rssi >= -50)   ? 4
+             : (rssi >= -60) ? 3
+             : (rssi >= -70) ? 2
+             : (rssi >= -80) ? 1
+                             : 0;
+  uint32_t active = (bars >= 3)   ? TOS_GREEN
+                    : (bars >= 1) ? TOS_YELLOW
+                                  : TOS_RED;
   int bar_w = 4, gap = 1;
-  int total_w = 4 * bar_w + 3 * gap;  // ~19px
+  int total_w = 4 * bar_w + 3 * gap; // ~19px
   int bx = x - total_w;
-  int max_h = card_h - 6;              // tallest bar ~14px
+  int max_h = card_h - 6; // tallest bar ~14px
   int base_y = y + card_h / 2 + max_h / 2;
 
   PD_SetFill(true);
   for (int b = 0; b < 4; b++) {
-    int bh = 3 + b * 3;  // bar heights: 3,6,9,12
+    int bh = 3 + b * 3; // bar heights: 3,6,9,12
     int px = bx + b * (bar_w + gap);
     PD_SetColor(TOS_GREY);
     PD_DrawRect(px, base_y - bh, bar_w, bh);
@@ -147,11 +185,12 @@ static void draw_signal_bars(int x, int y, int card_h, int rssi) {
 // ============ Main WLAN menu ============
 
 static int wlan_item_count(void) {
-  int n = 2;  // Return + WLAN toggle
+  int n = 2; // Return + WLAN toggle
   if (wlan_on) {
-    n++;  // Scaning
-    n++;  // Status
-    if (wlan_connected) n++;  // Disconnect (only when connected)
+    n++; // Scaning
+    n++; // Status
+    if (wlan_connected)
+      n++; // Disconnect (only when connected)
   }
   return n;
 }
@@ -163,20 +202,26 @@ static void draw_wlan_main(int sel) {
   int n = wlan_item_count();
   int visible = n < 7 ? n : 7;
   int start = sel - visible / 2;
-  if (start < 0) start = 0;
-  if (start + visible > n) start = n - visible;
+  if (start < 0)
+    start = 0;
+  if (start + visible > n)
+    start = n - visible;
 
   for (int i = 0; i < visible; i++) {
     int idx = start + i;
-    if (idx >= n) break;
+    if (idx >= n)
+      break;
     int cy = 33 + i * 25;
 
     // Map logical index → item type
     int item = idx;
     if (idx >= 2 && wlan_on) {
-      if (idx == 2) item = 2;       // Scaning
-      else if (idx == 3) item = 3;  // Status
-      else if (idx == 4) item = 4;  // Disconnect
+      if (idx == 2)
+        item = 2; // Scaning
+      else if (idx == 3)
+        item = 3; // Status
+      else if (idx == 4)
+        item = 4; // Disconnect
     }
 
     switch (item) {
@@ -184,7 +229,8 @@ static void draw_wlan_main(int sel) {
       draw_card(idx, sel, cy, "00 Return", false);
       break;
     case 1: {
-      char buf[32]; snprintf(buf, sizeof(buf), "01 WLAN");
+      char buf[32];
+      snprintf(buf, sizeof(buf), "01 WLAN");
       draw_card_r(idx, sel, cy, buf, wlan_on ? "ON" : "OFF", wlan_edit);
       break;
     }
@@ -204,21 +250,32 @@ static void draw_wlan_main(int sel) {
 }
 
 static int wlan_main_loop(void) {
-  static int sel = 0; uint8_t le = 0; uint32_t lu = 0;
-  if (sel >= wlan_item_count()) sel = 0;
+  static int sel = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0;
+  if (sel >= wlan_item_count())
+    sel = wlan_item_count() - 1;
   wlan_edit = false;
 
   while (1) {
-    keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
+    keyManager.btn_enter.tick();
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
-      if (wlan_edit) { wlan_on = !wlan_on; }
-      else { sel = (sel + 1) % wlan_item_count(); }
+      if (wlan_edit) {
+        wlan_on = !wlan_on;
+      } else {
+        sel = (sel + 1) % wlan_item_count();
+      }
       HAL_Delay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
-      if (wlan_edit) { wlan_on = !wlan_on; }
-      else { sel = (sel - 1 + wlan_item_count()) % wlan_item_count(); }
+      if (wlan_edit) {
+        wlan_on = !wlan_on;
+      } else {
+        sel = (sel - 1 + wlan_item_count()) % wlan_item_count();
+      }
       HAL_Delay(150);
     }
 
@@ -236,9 +293,11 @@ static int wlan_main_loop(void) {
         int n = wlan_item_count();
         if (wlan_on && sel >= 2) {
           int sub = sel - 2;
-          if (sub == 0) return 2;                          // Scaning
-          if (sub == 1) return 3;                          // Status
-          if (sub == 2 && wlan_connected) {                // Disconnect
+          if (sub == 0)
+            return 2; // Scaning
+          if (sub == 1)
+            return 3;                       // Status
+          if (sub == 2 && wlan_connected) { // Disconnect
             ESP8266_SendCommand("AT+CWQAP", "OK", 3000);
             wlan_connected = false;
             sel = 0;
@@ -248,7 +307,10 @@ static int wlan_main_loop(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick(); draw_wlan_main(sel); }
+    if (HAL_GetTick() - lu > 100) {
+      lu = HAL_GetTick();
+      draw_wlan_main(sel);
+    }
     HAL_Delay(20);
   }
 }
@@ -261,14 +323,18 @@ static void draw_scaning(int sel) {
   int n = 2 + ap_count;
   int visible = n < 7 ? n : 7;
   int start = sel - visible / 2;
-  if (start < 0) start = 0;
-  if (start + visible > n) start = n - visible;
-  if (start < 0) start = 0;
+  if (start < 0)
+    start = 0;
+  if (start + visible > n)
+    start = n - visible;
+  if (start < 0)
+    start = 0;
 
   PD_SetFont(FONT_ASCII_16);
   for (int i = 0; i < visible; i++) {
     int idx = start + i;
-    if (idx >= n) break;
+    if (idx >= n)
+      break;
     int cy = 33 + i * 25;
 
     if (idx == 0) {
@@ -279,15 +345,24 @@ static void draw_scaning(int sel) {
       int ap_idx = idx - 2;
       bool selected = (idx == sel);
       uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-      uint32_t txt_c  = selected ? TOS_TEXT   : (ap_rssi[ap_idx] >= -60 ? TOS_TEXT : TOS_TEXT_SEC);
+      uint32_t txt_c = selected
+                           ? TOS_TEXT
+                           : (ap_rssi[ap_idx] >= -60 ? TOS_TEXT : TOS_TEXT_SEC);
       PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
 
       // Security + space + SSID
       char sec = (ap_enc[ap_idx] == 0) ? 'O' : 'L';
-      char disp[28]; int sl = strlen(ap_ssid[ap_idx]);
-      if (sl > 16) { memcpy(disp, ap_ssid[ap_idx], 13); disp[13]='.';disp[14]='.';disp[15]='\0'; }
-      else strcpy(disp, ap_ssid[ap_idx]);
-      char line[32]; snprintf(line, sizeof(line), " %c %s", sec, disp);
+      char disp[28];
+      int sl = strlen(ap_ssid[ap_idx]);
+      if (sl > 16) {
+        memcpy(disp, ap_ssid[ap_idx], 13);
+        disp[13] = '.';
+        disp[14] = '.';
+        disp[15] = '\0';
+      } else
+        strcpy(disp, ap_ssid[ap_idx]);
+      char line[32];
+      snprintf(line, sizeof(line), " %c %s", sec, disp);
 
       PD_SetColor(txt_c);
       PD_DrawString(26, cy + 2, line);
@@ -308,32 +383,48 @@ static void scaning_run(void) {
   LCD_Flush();
   do_scan();
 
-  static int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  static int sel = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0; // default to Refresh
   int n0 = 2 + ap_count;
-  if (sel >= n0) sel = 0;  // clamp after re-scan
+  if (sel >= n0)
+    sel = n0 - 1; // clamp to last item
   while (1) {
-    keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
+    keyManager.btn_enter.tick();
     int n = 2 + ap_count;
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % n; HAL_Delay(150); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + n) % n; HAL_Delay(150); }
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+      sel = (sel + 1) % n;
+      HAL_Delay(150);
+    }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+      sel = (sel - 1 + n) % n;
+      HAL_Delay(150);
+    }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
-      if (sel == 0) return;
+      if (sel == 0)
+        return;
       if (sel == 1) {
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         draw_frame_title("WLAN");
-        PD_SetColor(TOS_TEXT); PD_DrawString(40, 100, "Scanning WiFi...");
+        PD_SetColor(TOS_TEXT);
+        PD_DrawString(40, 100, "Scanning WiFi...");
         LCD_Flush();
-        do_scan(); sel = 0;
+        do_scan();
+        // sel stays at 1 (Refresh)
       } else if (sel >= 2) {
         // WiFi AP selected → open keyboard for password
         int ap_idx = sel - 2;
-        char title[40]; snprintf(title, sizeof(title), "Password for %s", ap_ssid[ap_idx]);
+        char title[40];
+        snprintf(title, sizeof(title), "Password for %s", ap_ssid[ap_idx]);
         char pwd[32];
         if (keyboard_open(title, pwd, 31)) {
-          printf("[WLAN] Connecting to %s with password...\r\n", ap_ssid[ap_idx]);
+          printf("[WLAN] Connecting to %s with password...\r\n",
+                 ap_ssid[ap_idx]);
           boardLCD.fillScreen(LCD_COLOR_BLACK);
           draw_frame_title("WLAN");
           PD_SetColor(TOS_TEXT);
@@ -355,20 +446,32 @@ static void scaning_run(void) {
         }
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         draw_frame_title("WLAN");
-        PD_SetColor(TOS_TEXT); PD_DrawString(40, 100, "Scanning WiFi...");
+        PD_SetColor(TOS_TEXT);
+        PD_DrawString(40, 100, "Scanning WiFi...");
         LCD_Flush();
-        do_scan(); sel = 0;
+        do_scan(); // keep sel position
       }
     }
     le = ce;
 
-    bool up = keyManager.collision_A8.isPressed(), down = keyManager.collision_D0.isPressed();
-    static uint32_t et = 0; static bool ea = false;
-    if (up && down && !ea) { et = HAL_GetTick(); ea = true; }
-    else if (up && down && ea) { if (HAL_GetTick() - et > 700) return; }
-    else if (!up && !down) { ea = false; }
+    bool up = keyManager.collision_A8.isPressed(),
+         down = keyManager.collision_D0.isPressed();
+    static uint32_t et = 0;
+    static bool ea = false;
+    if (up && down && !ea) {
+      et = HAL_GetTick();
+      ea = true;
+    } else if (up && down && ea) {
+      if (HAL_GetTick() - et > 700)
+        return;
+    } else if (!up && !down) {
+      ea = false;
+    }
 
-    if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick(); draw_scaning(sel); }
+    if (HAL_GetTick() - lu > 100) {
+      lu = HAL_GetTick();
+      draw_scaning(sel);
+    }
     HAL_Delay(20);
   }
 }
@@ -377,12 +480,17 @@ static void scaning_run(void) {
 
 static void status_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  int sel = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0;
 
   while (1) {
-    keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
+    keyManager.btn_enter.tick();
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
-    if (ce && !le && sel == 0) return;
+    if (ce && !le && sel == 0)
+      return;
     le = ce;
 
     if (HAL_GetTick() - lu > 100) {
@@ -405,8 +513,15 @@ void wlan_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   while (1) {
     int act = wlan_main_loop();
-    if (act == 0) return;
-    if (act == 2) { scaning_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
-    if (act == 3) { status_run();  boardLCD.fillScreen(LCD_COLOR_BLACK); }
+    if (act == 0)
+      return;
+    if (act == 2) {
+      scaning_run();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
+    if (act == 3) {
+      status_run();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
   }
 }
