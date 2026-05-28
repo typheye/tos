@@ -25,20 +25,18 @@ void alert_show(const char *title, const char *msg) {
       PD_SetColor(TOS_ACCENT);
       PD_DrawString(22, 5, title);
 
-      // Message — auto-wrap at 28 chars
-      int msg_y = 80;
+      // Message — same top margin as first menu card (y=33)
+      int msg_y = 33;
       PD_SetColor(TOS_TEXT);
       int len = strlen(msg);
-      int max_chars = 28;
+      int max_chars = 22; // fits 240px screen at x=16 with 16px font
       if (len <= max_chars) {
         PD_DrawString(16, msg_y, msg);
       } else {
-        // Draw first line
         char line[32];
         strncpy(line, msg, max_chars);
         line[max_chars] = '\0';
         PD_DrawString(16, msg_y, line);
-        // Draw second line (skip leading space if any)
         const char *rest = msg + max_chars;
         if (*rest == ' ') rest++;
         PD_DrawString(16, msg_y + 22, rest);

@@ -4,6 +4,7 @@
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include <cstdio>
 #include <cstring>
@@ -12,14 +13,16 @@ extern KeyManager keyManager;
 extern LCD boardLCD;
 extern ESP8266 esp8266;
 
+#define MAX_APS 20
+#define SSID_LEN 24
+
 static bool wlan_on = false;
 static bool wlan_connected = false;
 static bool wlan_edit = false;
+static char wlan_ssid[SSID_LEN] = "";
+static char wlan_pwd[32] = "";
 
 // ============ WiFi scan results ============
-
-#define MAX_APS 20
-#define SSID_LEN 24
 static char ap_ssid[MAX_APS][SSID_LEN];
 static int ap_rssi[MAX_APS];
 static int ap_enc[MAX_APS];
@@ -120,6 +123,18 @@ static bool do_scan(void) {
 static void draw_frame_title(const char *title) {
   PD_Init();
   PD_FillScreen(TOS_BG);
+  // Refresh header time (RTC read ~every 30s throttle in PD_DrawFrame)
+  extern TRTC boardTRTC;
+  static uint32_t last_tm = 0;
+  if (HAL_GetTick() - last_tm > 30000) {
+    last_tm = HAL_GetTick();
+    Time_t t;
+    Date_t d;
+    boardTRTC.getDateTime(&t, &d);
+    char ts[6];
+    sprintf(ts, "%02d:%02d", t.hours, t.minutes);
+    PD_SetHeaderTime(ts);
+  }
   PD_DrawFrame();
   PD_SetFont(FONT_ASCII_16);
   PD_SetColor(TOS_ACCENT);
@@ -187,7 +202,7 @@ static void draw_signal_bars(int x, int y, int card_h, int rssi) {
 static int wlan_item_count(void) {
   int n = 2; // Return + WLAN toggle
   if (wlan_on) {
-    n++; // Scaning
+    n++; // Scanning
     n++; // Status
     if (wlan_connected)
       n++; // Disconnect (only when connected)
@@ -217,7 +232,7 @@ static void draw_wlan_main(int sel) {
     int item = idx;
     if (idx >= 2 && wlan_on) {
       if (idx == 2)
-        item = 2; // Scaning
+        item = 2; // Scanning
       else if (idx == 3)
         item = 3; // Status
       else if (idx == 4)
@@ -235,7 +250,7 @@ static void draw_wlan_main(int sel) {
       break;
     }
     case 2:
-      draw_card(idx, sel, cy, "02 Scaning", false);
+      draw_card(idx, sel, cy, "02 Scanning", false);
       break;
     case 3:
       draw_card(idx, sel, cy, "03 Status", false);
@@ -293,8 +308,13 @@ static int wlan_main_loop(void) {
         int n = wlan_item_count();
         if (wlan_on && sel >= 2) {
           int sub = sel - 2;
-          if (sub == 0)
-            return 2; // Scaning
+          if (sub == 0) {
+            if (wlan_connected) {
+              alert_show("ALERT", "Please disconnect first");
+            } else {
+              return 2; // Scanning
+            }
+          }
           if (sub == 1)
             return 3;                       // Status
           if (sub == 2 && wlan_connected) { // Disconnect
@@ -315,7 +335,7 @@ static int wlan_main_loop(void) {
   }
 }
 
-// ============ Scaning sub-page ============
+// ============ Scanning sub-page ============
 
 static void draw_scaning(int sel) {
   draw_frame_title("WLAN");
@@ -379,21 +399,20 @@ static void scaning_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   draw_frame_title("WLAN");
   PD_SetColor(TOS_TEXT);
-  PD_DrawString(40, 100, "Scanning WiFi...");
+  PD_DrawString(26, 33, "Scanning WiFi...");
   LCD_Flush();
   do_scan();
 
-  static int sel = 0;
+  static int sel = 1; // default to Refresh
   uint8_t le = 0;
-  uint32_t lu = 0; // default to Refresh
-  int n0 = 2 + ap_count;
-  if (sel >= n0)
-    sel = n0 - 1; // clamp to last item
+  uint32_t lu = 0;
   while (1) {
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
     int n = 2 + ap_count;
+    if (sel >= n)
+      sel = n - 1;
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
@@ -412,10 +431,11 @@ static void scaning_run(void) {
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         draw_frame_title("WLAN");
         PD_SetColor(TOS_TEXT);
-        PD_DrawString(40, 100, "Scanning WiFi...");
+        PD_DrawString(26, 33, "Scanning WiFi...");
         LCD_Flush();
         do_scan();
-        // sel stays at 1 (Refresh)
+        sel = 1; // default to Refresh
+        lu = 0;  // force immediate redraw
       } else if (sel >= 2) {
         // WiFi AP selected → open keyboard for password
         int ap_idx = sel - 2;
@@ -428,7 +448,7 @@ static void scaning_run(void) {
           boardLCD.fillScreen(LCD_COLOR_BLACK);
           draw_frame_title("WLAN");
           PD_SetColor(TOS_TEXT);
-          PD_DrawString(20, 100, "Connecting...");
+          PD_DrawString(26, 33, "Connecting...");
           LCD_Flush();
 
           bool ok = ESP8266_ConnectWiFi(ap_ssid[ap_idx], pwd);
@@ -436,20 +456,23 @@ static void scaning_run(void) {
           // Verify connection state from module, not just return value
           if (ok && ESP8266_IsConnected()) {
             wlan_connected = true;
-            printf("[WLAN] Connected confirmed!\r\n");
+            strncpy(wlan_ssid, ap_ssid[ap_idx], SSID_LEN - 1);
+            strncpy(wlan_pwd, pwd, 31);
+            printf("[WLAN] Connected to %s\r\n", wlan_ssid);
             alert_show("ALERT", "WiFi connected successfully!");
+            return; // back to WLAN main page
           } else {
             wlan_connected = false;
-            printf("[WLAN] Connection failed or not confirmed\r\n");
+            printf("[WLAN] Connection failed\r\n");
             alert_show("ALERT", "Connection failed. Check password.");
           }
         }
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         draw_frame_title("WLAN");
         PD_SetColor(TOS_TEXT);
-        PD_DrawString(40, 100, "Scanning WiFi...");
+        PD_DrawString(26, 33, "Scanning WiFi...");
         LCD_Flush();
-        do_scan(); // keep sel position
+        do_scan();
       }
     }
     le = ce;
@@ -497,9 +520,23 @@ static void status_run(void) {
       lu = HAL_GetTick();
       draw_frame_title("WLAN");
       PD_SetFont(FONT_ASCII_16);
-      draw_card(0, 0, 28, "00 Return", false);
-      PD_SetColor(TOS_TEXT_SEC);
-      PD_DrawString(26, 58, "Status: Not connected");
+      draw_card(0, 0, 33, "00 Return", false);
+      if (wlan_connected) {
+        PD_SetColor(TOS_GREEN);
+        char buf[48];
+        snprintf(buf, sizeof(buf), "SSID: %s", wlan_ssid);
+        PD_DrawString(26, 60, buf);
+        if (wlan_pwd[0] != '\0') {
+          PD_SetColor(TOS_TEXT_SEC);
+          PD_SetFont(FONT_ASCII_12);
+          snprintf(buf, sizeof(buf), "PWD: %s", wlan_pwd);
+          PD_DrawString(26, 80, buf);
+        }
+        PD_SetFont(FONT_ASCII_16);
+      } else {
+        PD_SetColor(TOS_TEXT_SEC);
+        PD_DrawString(26, 60, "Status: Not connected");
+      }
       PD_DrawFooterCenter("ENTER", NULL, NULL);
       LCD_Flush();
     }

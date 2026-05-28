@@ -3,6 +3,7 @@
 #include "settings/wlan_activity.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include <cstdio>
 
@@ -20,6 +21,15 @@ static const char *dbg_m[DBG_N] = {"00 Return", "01 Run Demo"};
 static void draw_menu(const char *title, const char **items, int count, int sel) {
   PD_Init();
   PD_FillScreen(TOS_BG);
+  extern TRTC boardTRTC;
+  static uint32_t last_tm = 0;
+  if (HAL_GetTick() - last_tm > 30000) {
+    last_tm = HAL_GetTick();
+    Time_t t; Date_t d;
+    boardTRTC.getDateTime(&t, &d);
+    char ts[6]; sprintf(ts, "%02d:%02d", t.hours, t.minutes);
+    PD_SetHeaderTime(ts);
+  }
   PD_DrawFrame();
 
   PD_SetFont(FONT_ASCII_16);

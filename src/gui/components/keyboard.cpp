@@ -39,7 +39,7 @@ static const KbKey row3[] = {
 };
 static const KbKey row4[] = {
   KL(".",".",'.','.'),KL("-","-",'-','-'),KL("_","_",'_','_'),
-  KL("/","/",'/','/'),KL(" "," ",' ',' '),KS("EN","EN"),
+  KL("/","/",'/','/'),KL(" "," ",' ',' '),KS("OK","OK"),
 };
 
 struct KbRow { const KbKey *keys; int n; };
@@ -70,22 +70,25 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
   PD_SetColor(TOS_ACCENT);
   PD_DrawString(22, 5, "KEY");
 
-  // Password (16px font fits ~22 chars, show last 20)
+  // Password (16px font, right margin = left*1.5)
   PD_SetFont(FONT_ASCII_16);
   PD_SetColor(TOS_TEXT);
-  int start = len > 20 ? len - 20 : 0;
+  int lmargin = 18, rmargin = 27;
+  int max_chars = (240 - lmargin - rmargin) / 10; // ~19 chars
+  int start = len > max_chars ? len - max_chars : 0;
   char disp[24];
   strncpy(disp, pwd + start, len - start);
   disp[len-start] = '\0';
-  PD_DrawString(18, 28, disp);
+  PD_DrawString(lmargin, 33, disp);
 
-  // Shift indicator
-  PD_SetFont(FONT_ASCII_12);
-  PD_SetColor(shift ? TOS_ACCENT : TOS_GREY);
-  PD_DrawString(215, 7, shift ? "ABC" : "abc");
+  // Blue underline beneath text
+  PD_SetColor(TOS_ACCENT);
+  PD_SetFill(true);
+  PD_DrawRect(lmargin, 50, 240 - lmargin - rmargin, 2);
+  PD_SetFill(false);
 
   // Key grid — symmetric margins
-  int base_y = 53, row_h = 28, margin = 8;
+  int base_y = 56, row_h = 28, margin = 8;
   int flat_idx = 0;
   for (int r = 0; r < N_ROWS; r++) {
     int n = rows[r].n;
@@ -124,10 +127,15 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
 bool keyboard_open(const char *title, char *out, int max_len) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   int len = 0; memset(out, 0, max_len + 1);
-  bool shift = true;  // start uppercase
+  bool shift = true;
   int total = flat_n();
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
-  int last_pot = boardPot.readRaw();
+  // Init sel from pot to avoid double-highlight on first frame
+  int pot0 = boardPot.readRaw();
+  int sel = (total - 1) - (pot0 * total / 4096);
+  if (sel < 0) sel = 0;
+  if (sel >= total) sel = total - 1;
+  uint8_t le = 0; uint32_t lu = 0;
+  int last_pot = pot0;
 
   while (1) {
     keyManager.collision_A8.tick();
@@ -155,7 +163,7 @@ bool keyboard_open(const char *title, char *out, int max_len) {
       if (k) {
         const char *label = shift ? k->hi : k->lo;
 
-        if (strcmp(label, "EN") == 0) {
+        if (strcmp(label, "OK") == 0) {
           out[len] = '\0';
           printf("[KB] Done: %s\r\n", out);
           return true;
