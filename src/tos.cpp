@@ -47,7 +47,7 @@ void TOS::init() {
   boardLCD.init();
   HAL_Delay(50);
 
-  PD_ShowSplashFadeStart(500);
+  // PD_ShowSplashFadeStart(500);
 
   // ========== 关键：RTC 放在较前位置，但需要等待 LSE ==========
   // RTC 会自己等待 LSE 稳定，不需要额外延时
@@ -89,12 +89,12 @@ void TOS::start() {
   boardLed.off();
   HAL_Delay(50);
 
-  PD_SplashFinish(100);
+  // PD_SplashFinish(100);
 
   boardLCD.fillScreen(LCD_COLOR_BLACK);
 
   // 设置默认界面为启动器
-  SysUI::setActivity(UI_DASHBOARD);
+  SysUI::setActivity(UI_PET);
 
   // 主循环
   while (1) {

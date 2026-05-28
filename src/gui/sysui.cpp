@@ -13,6 +13,7 @@
 #include "hardware/include/trtc.hpp"
 #include "include/esp8266_activity.hpp"
 #include "include/jy901s.hpp"
+#include "include/launcher.hpp"
 #include "include/lib3dgyro.h"
 #include "include/libpd.h"
 
@@ -75,6 +76,10 @@ void SysUI::loop(void) {
     drawLauncher();
   } else if (now_activity == UI_RUNNING_TEST) {
     runCurrentTest();
+  } else if (now_activity == UI_PET) {
+    pet_launcher_run();
+    now_activity = UI_DASHBOARD;
+    boardLCD.fillScreen(LCD_COLOR_BLACK);
   }
 }
 

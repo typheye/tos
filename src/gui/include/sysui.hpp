@@ -11,6 +11,7 @@
 #define UI_DASHBOARD    0
 #define UI_LAUNCHER     1
 #define UI_RUNNING_TEST 2
+#define UI_PET          3
 
 class SysUI {
 public:

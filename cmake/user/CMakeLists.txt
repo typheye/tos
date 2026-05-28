@@ -37,6 +37,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libdly.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libvan.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libpd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libemo.c
     
     # Demo 活动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/jyro_activity.cpp
@@ -53,6 +54,7 @@ set(USER_Application_Src
     
     # GUI文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/sysui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/launcher.cpp
 
 )
 
