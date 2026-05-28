@@ -52,10 +52,12 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/tcs3472_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/sn74hc00n_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/pot_activity.cpp
-    
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/demo_activity.cpp
+
     # GUI文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/sysui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/launcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings.cpp
 
 )
 
