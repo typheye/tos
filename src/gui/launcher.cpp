@@ -40,9 +40,9 @@ static uint32_t enter_held_tm  = 0;
 static bool     enter_was_down = false;
 
 #define LONG_PRESS_MS   700
-#define BLINK_DUR_MS    250
-#define WINK_DUR_MS     240
-#define DBLINK_DUR_MS   500
+#define BLINK_DUR_MS    420
+#define WINK_DUR_MS     380
+#define DBLINK_DUR_MS   700
 
 static uint32_t rnd(uint32_t max) {
   static uint32_t seed = 0xBEEF;
@@ -52,7 +52,6 @@ static uint32_t rnd(uint32_t max) {
 
 // ============ Easing ============
 
-static float ease_in(float t)  { return t * t; }
 static float ease_out(float t) { return 1.0f - (1.0f - t) * (1.0f - t); }
 static float ease_inout(float t) {
   return t < 0.5f ? 2*t*t : 1 - (-2*t+2)*(-2*t+2)/2;
@@ -129,22 +128,20 @@ static void update_animation(void) {
       int half = BLINK_DUR_MS / 2;
 
       if (blink_phase == 0) {
-        // Closing: ease-in (accelerates like real eyelid)
         if (elapsed < half) {
           float t = (float)elapsed / half;
-          pet_blink_l = ease_in(t);
-          pet_blink_r = ease_in(t);
+          pet_blink_l = ease_inout(t);
+          pet_blink_r = ease_inout(t);
         } else {
           pet_blink_l = 1.0f; pet_blink_r = 1.0f;
           blink_phase = 1;
         }
       } else {
-        // Opening: ease-out (decelerates naturally)
         int t2 = elapsed - half;
         if (t2 < half) {
           float t = (float)t2 / half;
-          pet_blink_l = 1.0f - ease_out(t);
-          pet_blink_r = 1.0f - ease_out(t);
+          pet_blink_l = 1.0f - ease_inout(t);
+          pet_blink_r = 1.0f - ease_inout(t);
         } else {
           pet_blink_l = 0.0f; pet_blink_r = 0.0f;
           pet_state = ANIM_IDLE;
@@ -162,7 +159,7 @@ static void update_animation(void) {
       if (blink_phase == 0) {
         if (elapsed < half) {
           float t = (float)elapsed / half;
-          pet_blink_l = ease_in(t);
+          pet_blink_l = ease_inout(t);
           pet_blink_r = 0.0f;
         } else {
           pet_blink_l = 1.0f;
@@ -172,7 +169,7 @@ static void update_animation(void) {
         int t2 = elapsed - half;
         if (t2 < half) {
           float t = (float)t2 / half;
-          pet_blink_l = 1.0f - ease_out(t);
+          pet_blink_l = 1.0f - ease_inout(t);
         } else {
           pet_blink_l = 0.0f; pet_blink_r = 0.0f;
           pet_state = ANIM_IDLE;
@@ -187,22 +184,18 @@ static void update_animation(void) {
       int elapsed = (int)(now - anim_start_tm);
       int seg = DBLINK_DUR_MS / 4;
 
-      // close-1 (ease-in)
       if (elapsed < seg) {
         float t = (float)elapsed / seg;
-        pet_blink_l = ease_in(t); pet_blink_r = ease_in(t);
-      // open-1 (ease-out)
+        pet_blink_l = ease_inout(t); pet_blink_r = ease_inout(t);
       } else if (elapsed < seg * 2) {
         float t = (float)(elapsed - seg) / seg;
-        pet_blink_l = 1.0f - ease_out(t); pet_blink_r = 1.0f - ease_out(t);
-      // close-2 (ease-in)
+        pet_blink_l = 1.0f - ease_inout(t); pet_blink_r = 1.0f - ease_inout(t);
       } else if (elapsed < seg * 3) {
         float t = (float)(elapsed - seg * 2) / seg;
-        pet_blink_l = ease_in(t); pet_blink_r = ease_in(t);
-      // open-2 (ease-out)
+        pet_blink_l = ease_inout(t); pet_blink_r = ease_inout(t);
       } else if (elapsed < seg * 4) {
         float t = (float)(elapsed - seg * 3) / seg;
-        pet_blink_l = 1.0f - ease_out(t); pet_blink_r = 1.0f - ease_out(t);
+        pet_blink_l = 1.0f - ease_inout(t); pet_blink_r = 1.0f - ease_inout(t);
       } else {
         pet_blink_l = 0.0f; pet_blink_r = 0.0f;
         pet_state = ANIM_IDLE;
@@ -338,6 +331,6 @@ void pet_launcher_run(void) {
     EMO_DrawFace(pet_blink_l, pet_blink_r, pet_mouth,
                  pet_look_x, pet_look_y, pet_cheek, pet_brow_y);
     LCD_Flush();
-    HAL_Delay(16);
+    HAL_Delay(10);  // ~100fps target to keep blink frames visible
   }
 }

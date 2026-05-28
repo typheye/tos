@@ -176,7 +176,7 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
     uint8_t bb = (uint8_t)(( blush        & 0xFF) * cheek * 0.5f);
     uint32_t bc = ((uint32_t)rr << 16) | ((uint32_t)gg << 8) | bb;
     int16_t cr = 8 + (int16_t)(cheek * 5.0f);
-    int16_t cheek_y = EMO_LEFT_EYE_Y + EMO_EYE_R + 4;
+    int16_t cheek_y = EMO_LEFT_EYE_Y + EMO_EYE_R + 14;
     // Outer side of each eye
     EMO_FillCircle(EMO_LEFT_EYE_X  - EMO_EYE_R - 6, cheek_y, cr, bc);
     EMO_FillCircle(EMO_RIGHT_EYE_X + EMO_EYE_R + 6, cheek_y, cr, bc);
