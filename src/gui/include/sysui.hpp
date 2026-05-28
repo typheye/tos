@@ -29,9 +29,7 @@ private:
   static void (*current_test_func)(void);
   static int cpu_usage;
 
-  static void drawDashboard(void);
   static void drawLauncher(void);
-  static void handleDashboardInput(void);
   static void handleLauncherInput(void);
   static void runCurrentTest(void);
 };

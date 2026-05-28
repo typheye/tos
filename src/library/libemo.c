@@ -7,9 +7,13 @@
 #define M_PI 3.14159265358979323846f
 #endif
 
-static uint16_t *g_fb = NULL;
-static uint16_t g_w = 0;
-static uint16_t g_h = 0;
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
+static CCMRAM uint16_t *g_fb = NULL;
+static CCMRAM uint16_t g_w = 0;
+static CCMRAM uint16_t g_h = 0;
 
 static uint16_t rgb565(uint32_t c) {
   return (uint16_t)(((c >> 19) << 11) | (((c >> 10) & 0x3F) << 5) | ((c >> 3) & 0x1F));

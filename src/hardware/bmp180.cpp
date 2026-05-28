@@ -132,55 +132,26 @@ uint32_t BMP180::readRawPressure(BMP180_Mode_t mode) {
   // 修复：右移 (8 - oss) 位
   up = up >> (8 - oss);
 
-  // 调试输出 - 只输出整数，不需要 float_to_str
-  char dbg[128];
-  sprintf(dbg, "[DEBUG] mode=%d, raw=0x%02X%02X%02X, up=%lu\r\n", mode,
-          buffer[0], buffer[1], buffer[2], up);
-  printf(dbg);
-
   return up;
 }
 
 // 读取补偿后的温度
 // 修复后的 readTemperature 函数（添加调试输出）
 float BMP180::readTemperature(void) {
-  char dbg[128];
-  char float_str[32];
-
   int16_t UT = readRawTemp();
   if (UT == 0)
     return 0;
 
-  // 打印原始值
-  sprintf(dbg, "[DEBUG] UT=%d\r\n", UT);
-  printf(dbg);
-
-  // 计算 B5
   int32_t X1 = (UT - (int32_t)_calib.AC6) * ((int32_t)_calib.AC5) >> 15;
   int32_t X2 = ((int32_t)_calib.MC << 11) / (X1 + (int32_t)_calib.MD);
   int32_t B5 = X1 + X2;
-
-  // 打印中间值
-  sprintf(dbg, "[DEBUG] X1=%ld, X2=%ld, B5=%ld\r\n", X1, X2, B5);
-  printf(dbg);
-
-  // 温度 = (B5 + 8) / 160.0
   float temp = (B5 + 8) / 160.0f;
-
-  // 使用 float_to_str 打印最终温度
-  float_to_str(temp, float_str);
-  sprintf(dbg, "[DEBUG] Calculated temperature: %s C\r\n", float_str);
-  printf(dbg);
 
   return temp;
 }
 
 // 读取补偿后的压力
 float BMP180::readPressure(BMP180_Mode_t mode) {
-  char dbg[128];
-  char float_str1[32];
-  // char float_str2[32];
-  // char float_str3[32];
 
   // 先读取温度 (需要 B5)
   int16_t UT = readRawTemp();
@@ -236,46 +207,16 @@ float BMP180::readPressure(BMP180_Mode_t mode) {
   // 转换为 hPa (帕斯卡 / 100)
   float pressure = p / 100.0f;
 
-  // 调试输出 - 使用 float_to_str
-  printf("[DEBUG] Pressure result: ");
-  float_to_str(pressure, float_str1);
-  printf(float_str1);
-  printf(" hPa (mode=");
-  sprintf(dbg, "%d", mode);
-  printf(dbg);
-  printf(")\r\n");
-
   return pressure;
 }
 
 // 一次性读取温度和压力
 BMP180_Data_t BMP180::readData(BMP180_Mode_t mode) {
   BMP180_Data_t data;
-  // char dbg[128];
-  char float_str[32];
-
   memset(&data, 0, sizeof(data));
-
-  printf("[DEBUG] Reading temperature...\r\n");
   data.temperature = readTemperature();
-
-  printf("[DEBUG] Reading pressure...\r\n");
-  data.pressure = readPressure(mode);
-
-  printf("[DEBUG] Calculating altitude...\r\n");
-  data.altitude = calcAltitude(data.pressure);
-
-  // 使用 float_to_str 输出最终结果
-  printf("[DEBUG] Final results: Temp=");
-  float_to_str(data.temperature, float_str);
-  printf(float_str);
-  printf(" C, Press=");
-  float_to_str(data.pressure, float_str);
-  printf(float_str);
-  printf(" hPa, Alt=");
-  float_to_str(data.altitude, float_str);
-  printf(float_str);
-  printf(" m\r\n");
+  data.pressure    = readPressure(mode);
+  data.altitude    = calcAltitude(data.pressure);
 
   return data;
 }

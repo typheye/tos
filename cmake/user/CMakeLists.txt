@@ -38,6 +38,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libvan.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libpd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libemo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libehw.cpp
     
     # Demo 活动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/jyro_activity.cpp

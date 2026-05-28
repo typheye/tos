@@ -1,48 +1,66 @@
 #include "include/launcher.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
+#include "library/include/libehw.h"
 #include "library/include/libemo.h"
 #include <cmath>
 #include <cstdio>
 
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-// ============ Animation state ============
-static float pet_blink_l  = 0.0f;
-static float pet_blink_r  = 0.0f;
-static float pet_mouth    = 0.0f;
-static float pet_look_x   = 0.0f;
-static float pet_look_y   = 0.0f;
-static float pet_cheek    = 0.0f;
-static float pet_brow_y   = 0.0f;
-static float pet_bob      = 0.0f;
+// ============ Animation state (CCMRAM to save main RAM) ============
+static CCMRAM float pet_blink_l  = 0.0f;
+static CCMRAM float pet_blink_r  = 0.0f;
+static CCMRAM float pet_mouth    = 0.0f;
+static CCMRAM float pet_look_x   = 0.0f;
+static CCMRAM float pet_look_y   = 0.0f;
+static CCMRAM float pet_cheek    = 0.0f;
+static CCMRAM float pet_brow_y   = 0.0f;
 
 enum PetAnim {
   ANIM_IDLE = 0,
   ANIM_BLINK,
   ANIM_WINK,
-  ANIM_DBLINK,    // double blink (rapid)
+  ANIM_DBLINK,
   ANIM_HAPPY,
   ANIM_SURPRISED,
-  ANIM_CURIOUS,   // raised brows, slight smile
+  ANIM_CURIOUS,
+  // Sensor-driven expressions
+  ANIM_DIZZY,
+  ANIM_PETTED,
+  ANIM_COLD,
+  ANIM_COMFY,
+  ANIM_HOT,
+  ANIM_DARK,
+  ANIM_BRIGHT,
 };
-static int  pet_state    = ANIM_IDLE;
-static int  blink_phase  = 0;
-static int  anim_frame   = 0;
+static CCMRAM int  pet_state    = ANIM_IDLE;
+static CCMRAM int  blink_phase  = 0;
 
-static uint32_t next_blink_tm  = 0;
-static uint32_t anim_start_tm  = 0;
-static uint32_t mood_timer     = 0;
+static CCMRAM uint32_t next_blink_tm  = 0;
+static CCMRAM uint32_t anim_start_tm  = 0;
+static CCMRAM uint32_t mood_timer     = 0;
+static CCMRAM uint32_t sensor_timer    = 0;
+static CCMRAM uint32_t sensor_start    = 0;  // when current sensor expr began
+static CCMRAM int  prev_pet_state      = ANIM_IDLE;
 
-// Long-press
-static uint32_t enter_held_tm  = 0;
-static bool     enter_was_down = false;
+#define SENSOR_MAX_HOLD  8000    // force back to idle after 8s
+#define SENSOR_REST_MS   18000   // rest period before sensor can re-trigger
+
+// Long-press UP+DOWN to exit
+static CCMRAM uint32_t exit_held_tm  = 0;
+static CCMRAM bool     exit_armed    = false;
 
 #define LONG_PRESS_MS   700
 #define BLINK_DUR_MS    420
 #define WINK_DUR_MS     380
 #define DBLINK_DUR_MS   700
+#define SENSOR_POLL_MS  500
 
 static uint32_t rnd(uint32_t max) {
   static uint32_t seed = 0xBEEF;
@@ -52,20 +70,29 @@ static uint32_t rnd(uint32_t max) {
 
 // ============ Easing ============
 
-static float ease_out(float t) { return 1.0f - (1.0f - t) * (1.0f - t); }
 static float ease_inout(float t) {
   return t < 0.5f ? 2*t*t : 1 - (-2*t+2)*(-2*t+2)/2;
+}
+
+// ============ Sensor → expression mapping ============
+
+static int expr_to_anim(EHW_Expr_t e) {
+  switch (e) {
+  case EHW_EXPR_DIZZY:  return ANIM_DIZZY;
+  case EHW_EXPR_PETTED: return ANIM_PETTED;
+  case EHW_EXPR_COLD:   return ANIM_COLD;
+  case EHW_EXPR_COMFY:  return ANIM_COMFY;
+  case EHW_EXPR_HOT:    return ANIM_HOT;
+  case EHW_EXPR_DARK:   return ANIM_DARK;
+  case EHW_EXPR_BRIGHT: return ANIM_BRIGHT;
+  default:              return -1;
+  }
 }
 
 // ============ Per-frame update ============
 
 static void update_idle_motion(void) {
   uint32_t now = HAL_GetTick();
-  // Bob always runs (gentle breathing)
-  float bt = (float)(now % 3200) / 3200.0f;
-  pet_bob = sinf(bt * 2.0f * 3.14159f) * 1.5f;
-
-  // Eye wander + brow only in idle (other states control their own)
   if (pet_state != ANIM_IDLE) return;
 
   float lt = (float)(now % 4500) / 4500.0f;
@@ -75,10 +102,53 @@ static void update_idle_motion(void) {
   pet_brow_y = sinf(phase * 0.7f) * 0.2f;
 }
 
+static void update_sensor(void) {
+  uint32_t now = HAL_GetTick();
+  if (now - sensor_timer < SENSOR_POLL_MS) return;
+  sensor_timer = now;
+
+  // Timeout: force sensor expression to release after too long
+  if (pet_state >= ANIM_DIZZY && pet_state <= ANIM_BRIGHT) {
+    if (now - sensor_start > SENSOR_MAX_HOLD) {
+      pet_state = ANIM_IDLE;
+      prev_pet_state = ANIM_IDLE;
+      sensor_start = now + SENSOR_REST_MS;  // block sensor for rest period
+      pet_mouth = 0.0f; pet_cheek = 0.0f;
+      pet_blink_l = 0.0f; pet_blink_r = 0.0f;
+      pet_brow_y = 0.0f; pet_look_x = 0.0f; pet_look_y = 0.0f;
+      return;
+    }
+  }
+
+  // Don't poll sensors during rest period
+  if (now < sensor_start) return;
+
+  EHW_Expr_t e = EHW_Update();
+  int anim = expr_to_anim(e);
+  if (anim < 0) {
+    if (pet_state >= ANIM_DIZZY && pet_state <= ANIM_BRIGHT) {
+      pet_state = prev_pet_state;
+      prev_pet_state = ANIM_IDLE;
+      sensor_start = now + SENSOR_REST_MS;  // rest before re-trigger
+      pet_mouth = 0.0f; pet_cheek = 0.0f;
+      pet_blink_l = 0.0f; pet_blink_r = 0.0f;
+      pet_brow_y = 0.0f; pet_look_x = 0.0f; pet_look_y = 0.0f;
+    }
+    return;
+  }
+
+  if (pet_state != anim) {
+    if (pet_state < ANIM_DIZZY) prev_pet_state = pet_state;
+    pet_state = anim;
+    sensor_start = now;
+  }
+}
+
 static void update_animation(void) {
   uint32_t now = HAL_GetTick();
 
   update_idle_motion();
+  update_sensor();
 
   switch (pet_state) {
 
@@ -90,35 +160,18 @@ static void update_animation(void) {
 
     if (now >= next_blink_tm) {
       int r = rnd(10);
-      if (r < 2) {
-        pet_state = ANIM_WINK;
-        anim_start_tm = now;
-        blink_phase = 0;
-      } else if (r < 4) {
-        pet_state = ANIM_DBLINK;
-        anim_start_tm = now;
-        blink_phase = 0;
-      } else {
-        pet_state = ANIM_BLINK;
-        anim_start_tm = now;
-        blink_phase = 0;
-      }
+      if (r < 2)      { pet_state = ANIM_WINK; anim_start_tm = now; blink_phase = 0; }
+      else if (r < 4) { pet_state = ANIM_DBLINK; anim_start_tm = now; blink_phase = 0; }
+      else            { pet_state = ANIM_BLINK; anim_start_tm = now; blink_phase = 0; }
     }
 
-    // Periodic mood change
     if (now - mood_timer > 8000 + rnd(7000)) {
       mood_timer = now;
       int r = rnd(10);
-      if (r < 2) {
-        pet_state = ANIM_SURPRISED;
-        anim_start_tm = now;
-      } else if (r < 5) {
-        pet_state = ANIM_HAPPY;
-        anim_start_tm = now;
-      } else {
-        pet_state = ANIM_CURIOUS;
-        anim_start_tm = now;
-      }
+      if (r < 2)      pet_state = ANIM_SURPRISED;
+      else if (r < 5) pet_state = ANIM_HAPPY;
+      else            pet_state = ANIM_CURIOUS;
+      anim_start_tm = now;
     }
     break;
 
@@ -126,26 +179,19 @@ static void update_animation(void) {
     {
       int elapsed = (int)(now - anim_start_tm);
       int half = BLINK_DUR_MS / 2;
-
       if (blink_phase == 0) {
         if (elapsed < half) {
           float t = (float)elapsed / half;
-          pet_blink_l = ease_inout(t);
-          pet_blink_r = ease_inout(t);
-        } else {
-          pet_blink_l = 1.0f; pet_blink_r = 1.0f;
-          blink_phase = 1;
-        }
+          pet_blink_l = ease_inout(t); pet_blink_r = ease_inout(t);
+        } else { pet_blink_l = 1.0f; pet_blink_r = 1.0f; blink_phase = 1; }
       } else {
         int t2 = elapsed - half;
         if (t2 < half) {
           float t = (float)t2 / half;
-          pet_blink_l = 1.0f - ease_inout(t);
-          pet_blink_r = 1.0f - ease_inout(t);
+          pet_blink_l = 1.0f - ease_inout(t); pet_blink_r = 1.0f - ease_inout(t);
         } else {
           pet_blink_l = 0.0f; pet_blink_r = 0.0f;
-          pet_state = ANIM_IDLE;
-          next_blink_tm = now + 2500 + rnd(3500);
+          pet_state = ANIM_IDLE; next_blink_tm = now + 2500 + rnd(3500);
         }
       }
     }
@@ -155,16 +201,11 @@ static void update_animation(void) {
     {
       int elapsed = (int)(now - anim_start_tm);
       int half = WINK_DUR_MS / 2;
-
       if (blink_phase == 0) {
         if (elapsed < half) {
           float t = (float)elapsed / half;
-          pet_blink_l = ease_inout(t);
-          pet_blink_r = 0.0f;
-        } else {
-          pet_blink_l = 1.0f;
-          blink_phase = 1;
-        }
+          pet_blink_l = ease_inout(t); pet_blink_r = 0.0f;
+        } else { pet_blink_l = 1.0f; blink_phase = 1; }
       } else {
         int t2 = elapsed - half;
         if (t2 < half) {
@@ -172,8 +213,7 @@ static void update_animation(void) {
           pet_blink_l = 1.0f - ease_inout(t);
         } else {
           pet_blink_l = 0.0f; pet_blink_r = 0.0f;
-          pet_state = ANIM_IDLE;
-          next_blink_tm = now + 2500 + rnd(3000);
+          pet_state = ANIM_IDLE; next_blink_tm = now + 2500 + rnd(3000);
         }
       }
     }
@@ -183,7 +223,6 @@ static void update_animation(void) {
     {
       int elapsed = (int)(now - anim_start_tm);
       int seg = DBLINK_DUR_MS / 4;
-
       if (elapsed < seg) {
         float t = (float)elapsed / seg;
         pet_blink_l = ease_inout(t); pet_blink_r = ease_inout(t);
@@ -198,8 +237,7 @@ static void update_animation(void) {
         pet_blink_l = 1.0f - ease_inout(t); pet_blink_r = 1.0f - ease_inout(t);
       } else {
         pet_blink_l = 0.0f; pet_blink_r = 0.0f;
-        pet_state = ANIM_IDLE;
-        next_blink_tm = now + 2500 + rnd(3000);
+        pet_state = ANIM_IDLE; next_blink_tm = now + 2500 + rnd(3000);
       }
     }
     break;
@@ -207,21 +245,14 @@ static void update_animation(void) {
   case ANIM_HAPPY:
     {
       int elapsed = (int)(now - anim_start_tm);
-      // Fade in cheek + widen mouth
       if (elapsed < 300) {
         float t = (float)elapsed / 300.0f;
-        pet_mouth = t * 0.35f;
-        pet_cheek = t;
-        pet_brow_y = t * 0.4f;
+        pet_mouth = t * 0.35f; pet_cheek = t; pet_brow_y = t * 0.4f;
       } else if (elapsed < 1800) {
-        pet_mouth = 0.35f;
-        pet_cheek = 1.0f;
-        pet_brow_y = 0.4f;
+        pet_mouth = 0.35f; pet_cheek = 1.0f; pet_brow_y = 0.4f;
       } else if (elapsed < 2200) {
         float t = (float)(elapsed - 1800) / 400.0f;
-        pet_mouth = 0.35f * (1.0f - t);
-        pet_cheek = 1.0f - t;
-        pet_brow_y = 0.4f * (1.0f - t);
+        pet_mouth = 0.35f * (1.0f - t); pet_cheek = 1.0f - t; pet_brow_y = 0.4f * (1.0f - t);
       } else {
         pet_mouth = 0.0f; pet_cheek = 0.0f; pet_brow_y = 0.0f;
         pet_state = ANIM_IDLE;
@@ -234,15 +265,12 @@ static void update_animation(void) {
       int elapsed = (int)(now - anim_start_tm);
       if (elapsed < 180) {
         float t = (float)elapsed / 180.0f;
-        pet_mouth = 0.5f + t * 0.5f;
-        pet_brow_y = t * 1.0f;
+        pet_mouth = 0.5f + t * 0.5f; pet_brow_y = t * 1.0f;
       } else if (elapsed < 1200) {
-        pet_mouth = 1.0f;
-        pet_brow_y = 1.0f;
+        pet_mouth = 1.0f; pet_brow_y = 1.0f;
       } else if (elapsed < 1500) {
         float t = (float)(elapsed - 1200) / 300.0f;
-        pet_mouth = 1.0f * (1.0f - t);
-        pet_brow_y = 1.0f * (1.0f - t);
+        pet_mouth = 1.0f * (1.0f - t); pet_brow_y = 1.0f * (1.0f - t);
       } else {
         pet_mouth = 0.0f; pet_brow_y = 0.0f;
         pet_state = ANIM_IDLE;
@@ -253,32 +281,120 @@ static void update_animation(void) {
   case ANIM_CURIOUS:
     {
       int elapsed = (int)(now - anim_start_tm);
-      // Slightly raised brow, subtle smile, slight head tilt look
       if (elapsed < 400) {
         float t = (float)elapsed / 400.0f;
-        pet_brow_y = t * 0.55f;
-        pet_mouth = t * 0.18f;
-        pet_look_x = t * 0.7f;
+        pet_brow_y = t * 0.55f; pet_mouth = t * 0.18f; pet_look_x = t * 0.7f;
       } else if (elapsed < 2000) {
-        pet_brow_y = 0.55f;
-        pet_mouth = 0.18f;
-        pet_look_x = 0.7f;
+        pet_brow_y = 0.55f; pet_mouth = 0.18f; pet_look_x = 0.7f;
       } else if (elapsed < 2600) {
         float t = (float)(elapsed - 2000) / 600.0f;
-        pet_brow_y = 0.55f * (1.0f - t);
-        pet_mouth = 0.18f * (1.0f - t);
-        pet_look_x = 0.7f * (1.0f - t);
+        pet_brow_y = 0.55f * (1.0f - t); pet_mouth = 0.18f * (1.0f - t); pet_look_x = 0.7f * (1.0f - t);
       } else {
         pet_brow_y = 0.0f; pet_mouth = 0.0f; pet_look_x = 0.0f;
         pet_state = ANIM_IDLE;
       }
     }
     break;
+
+  // --- Sensor-driven expressions (hold while sensor active) ---
+
+  case ANIM_DIZZY:
+    // Cross-eyed, wavy mouth — slow oscillation
+    {
+      float t = (float)(now % 800) / 800.0f;
+      pet_mouth   = 0.6f + sinf(t * 6.28f * 1.2f) * 0.12f;
+      pet_blink_l = (sinf(t * 6.28f * 2.0f) > 0.2f) ? 0.0f : 0.5f;
+      pet_blink_r = (sinf(t * 6.28f * 2.0f + 1.5f) > 0.2f) ? 0.0f : 0.5f;
+      pet_look_x  = sinf(t * 6.28f * 1.3f) * 0.7f;
+      pet_look_y  = cosf(t * 6.28f * 1.6f) * 0.5f;
+      pet_brow_y  = -0.2f + sinf(t * 6.28f * 1.0f) * 0.4f;
+      pet_cheek   = 0.0f;
+    }
+    break;
+
+  case ANIM_PETTED:
+    {
+      float br = (float)(now % 4200) / 4200.0f * 6.28f;
+      pet_blink_l = 0.25f + sinf(br * 1.3f) * 0.08f;
+      pet_blink_r = 0.25f + sinf(br * 1.5f) * 0.08f;
+      pet_mouth   = 0.30f;
+      pet_cheek   = 0.9f;
+      pet_brow_y  = 0.5f + sinf(br * 0.7f) * 0.15f;
+      pet_look_x  = sinf(br * 0.7f) * 0.5f;
+      pet_look_y  = -0.2f + cosf(br * 0.9f) * 0.25f;
+    }
+    break;
+
+  case ANIM_COLD:
+    {
+      float shiver = sinf((float)(now % 500) / 500.0f * 6.28f * 2.2f);
+      pet_blink_l = 0.08f + shiver * 0.15f;
+      pet_blink_r = 0.08f + shiver * 0.15f;
+      pet_mouth   = 0.0f;
+      pet_cheek   = 0.0f;
+      pet_brow_y  = -0.5f + shiver * 0.15f;
+      pet_look_x  = shiver * 0.3f;
+      pet_look_y  = 0.05f;
+    }
+    break;
+
+  case ANIM_COMFY:
+    {
+      float br = (float)(now % 5000) / 5000.0f * 6.28f;
+      pet_blink_l = 0.12f + sinf(br * 1.3f) * 0.06f;
+      pet_blink_r = 0.12f + sinf(br * 1.5f) * 0.06f;
+      pet_mouth   = 0.18f;
+      pet_cheek   = 0.6f;
+      pet_brow_y  = 0.3f + sinf(br * 0.7f) * 0.15f;
+      pet_look_x  = sinf(br * 0.5f) * 0.45f;
+      pet_look_y  = cosf(br * 0.7f) * 0.25f;
+    }
+    break;
+
+  case ANIM_HOT:
+    {
+      float br = (float)(now % 3500) / 3500.0f * 6.28f;
+      float pant = sinf((float)(now % 350) / 350.0f * 6.28f);
+      pet_blink_l = 0.35f + sinf(br * 1.2f) * 0.05f;
+      pet_blink_r = 0.35f + sinf(br * 1.4f) * 0.05f;
+      pet_mouth   = 0.55f + pant * 0.15f;
+      pet_cheek   = 0.3f;
+      pet_brow_y  = 0.4f;
+      pet_look_x  = sinf(br * 0.5f) * 0.3f;
+      pet_look_y  = 0.3f + cosf(br * 0.6f) * 0.15f;
+    }
+    break;
+
+  case ANIM_DARK:
+    {
+      float br = (float)(now % 3800) / 3800.0f * 6.28f;
+      pet_blink_l = sinf(br * 1.4f) * 0.06f;
+      pet_blink_r = sinf(br * 1.3f) * 0.06f;
+      pet_mouth   = 0.05f;
+      pet_cheek   = 0.0f;
+      pet_brow_y  = 0.7f + sinf(br * 0.5f) * 0.12f;
+      pet_look_x  = sinf(br * 0.6f) * 0.55f;
+      pet_look_y  = 0.1f + cosf(br * 0.7f) * 0.25f;
+    }
+    break;
+
+  case ANIM_BRIGHT:
+    {
+      float br = (float)(now % 4500) / 4500.0f * 6.28f;
+      pet_blink_l = 0.45f + sinf(br * 1.2f) * 0.06f;
+      pet_blink_r = 0.45f + sinf(br * 1.4f) * 0.06f;
+      pet_mouth   = 0.0f;
+      pet_cheek   = 0.0f;
+      pet_brow_y  = -0.5f + sinf(br * 0.5f) * 0.1f;
+      pet_look_x  = sinf(br * 0.4f) * 0.3f;
+      pet_look_y  = 0.15f + cosf(br * 0.5f) * 0.1f;
+    }
+    break;
   }
 
-  // Smooth cheek decay (for quick transitions)
-  if (pet_state != ANIM_HAPPY && pet_cheek > 0.0f) {
-    pet_cheek -= 0.02f;
+  if (pet_state != ANIM_HAPPY && pet_state != ANIM_PETTED && pet_state != ANIM_COMFY
+      && pet_cheek > 0.0f) {
+    pet_cheek -= 0.03f;
     if (pet_cheek < 0.0f) pet_cheek = 0.0f;
   }
 }
@@ -287,33 +403,44 @@ static void update_animation(void) {
 
 void pet_launcher_run(void) {
   EMO_Init();
+  EHW_Init();
 
   next_blink_tm = HAL_GetTick() + 2500 + rnd(3000);
   mood_timer    = HAL_GetTick() + 8000 + rnd(5000);
-  enter_was_down = false;
-  enter_held_tm  = 0;
+  sensor_timer  = 0;
+  sensor_start  = 0;
+  exit_armed    = false;
+  exit_held_tm  = 0;
 
   pet_blink_l = 0.0f; pet_blink_r = 0.0f;
   pet_mouth   = 0.0f; pet_cheek   = 0.0f;
   pet_look_x  = 0.0f; pet_look_y  = 0.0f;
-  pet_brow_y  = 0.0f; pet_bob     = 0.0f;
+  pet_brow_y  = 0.0f;
   pet_state   = ANIM_IDLE;
 
-  printf("[Pet] Launcher started — hold ENTER %dms to exit\r\n", LONG_PRESS_MS);
+  printf("[Pet] Launcher started — hold UP+DOWN %dms to exit\r\n", LONG_PRESS_MS);
 
+  uint32_t heartbeat = 0;
   while (1) {
     uint32_t now = HAL_GetTick();
+    if (now - heartbeat > 5000) {
+      heartbeat = now;
+      printf("[Pet] alive @ %lums, state=%d, expr=%d\r\n", now, pet_state, EHW_GetExpr());
+    }
 
-    // --- Input ---
-    keyManager.btn_enter.tick();
-    bool pressed = keyManager.btn_enter.isPressed();
+    // --- Input: long-press UP+DOWN to exit ---
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
+    bool up   = keyManager.collision_A8.isPressed();
+    bool down = keyManager.collision_D0.isPressed();
+    bool both = up && down;
 
-    if (pressed && !enter_was_down) {
-      enter_held_tm = now;
-    } else if (pressed && enter_was_down) {
-      if (now - enter_held_tm >= LONG_PRESS_MS) {
-        printf("[Pet] Long press — returning to menu\r\n");
-        // Blink-out exit animation
+    if (both && !exit_armed) {
+      exit_held_tm = now;
+      exit_armed = true;
+    } else if (both && exit_armed) {
+      if (now - exit_held_tm >= LONG_PRESS_MS) {
+        printf("[Pet] UP+DOWN long press — returning to menu\r\n");
         for (int f = 0; f < 15; f++) {
           float b = (float)f / 14.0f;
           EMO_DrawFace(b, b, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
@@ -323,14 +450,15 @@ void pet_launcher_run(void) {
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         return;
       }
+    } else if (!both) {
+      exit_armed = false;
     }
-    enter_was_down = pressed;
 
     // --- Update & Draw ---
     update_animation();
     EMO_DrawFace(pet_blink_l, pet_blink_r, pet_mouth,
                  pet_look_x, pet_look_y, pet_cheek, pet_brow_y);
     LCD_Flush();
-    HAL_Delay(10);  // ~100fps target to keep blink frames visible
+    HAL_Delay(10);
   }
 }
