@@ -2,6 +2,10 @@
 #include "include/libpd.h"
 #include <math.h>
 
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
 static const float cube_vertices[8][3] = {
     {-50, -50, -50}, {50, -50, -50}, {50, -50, 50}, {-50, -50, 50},
     {-50, 50, -50},  {50, 50, -50},  {50, 50, 50},  {-50, 50, 50}};
@@ -10,15 +14,15 @@ static const uint8_t cube_edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0},
                                           {4, 5}, {5, 6}, {6, 7}, {7, 4},
                                           {0, 4}, {1, 5}, {2, 6}, {3, 7}};
 
-static int16_t g_center_x = 120;
-static int16_t g_center_y = 120;
-static int16_t g_cube_size = 80;
+static CCMRAM int16_t g_center_x = 120;
+static CCMRAM int16_t g_center_y = 120;
+static CCMRAM int16_t g_cube_size = 80;
 
 // 保存上一帧的投影坐标
-static int16_t last_proj_x[8] = {0};
-static int16_t last_proj_y[8] = {0};
-static int16_t last_edges[12][4] = {0};
-static uint8_t first_frame = 1;
+static CCMRAM int16_t last_proj_x[8] = {0};
+static CCMRAM int16_t last_proj_y[8] = {0};
+static CCMRAM int16_t last_edges[12][4] = {0};
+static CCMRAM uint8_t first_frame = 1;
 
 static void rotate_point(float *x, float *y, float *z, float roll, float pitch,
                          float yaw) {

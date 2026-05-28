@@ -4,17 +4,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
 // FATFS 对象
-static FATFS fs;
+static CCMRAM FATFS fs;
 
 // 当前工作目录
-static char current_dir[256] = "0:";
+static CCMRAM char current_dir[256] = "0:";
 
 // 最近错误码
-static FS_Status_t last_error = FS_OK;
+static CCMRAM FS_Status_t last_error = FS_OK;
 
 // 文件系统是否已挂载
-static bool is_mounted = false;
+static CCMRAM bool is_mounted = false;
 
 // 将 FATFS 错误码转换为 FS_Status_t
 static FS_Status_t fatfs_error_to_fs(FRESULT res) {

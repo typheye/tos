@@ -18,9 +18,13 @@ static const char *pot_menus[POT_MENU_ITEMS] = {
 
 static int menu_select = 0;
 
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
 #define CHART_WIDTH 240
-static uint16_t chart_data[CHART_WIDTH] = {0};
-static int chart_index = 0;
+static CCMRAM uint16_t chart_data[CHART_WIDTH] = {0};
+static CCMRAM int chart_index = 0;
 
 static void bar(const char *t) {
   PD_DrawFrame();

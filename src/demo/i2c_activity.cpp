@@ -30,16 +30,20 @@ static const KnownDevice_t known_devices[] = {
 
 #define KNOWN_COUNT (sizeof(known_devices) / sizeof(known_devices[0]))
 
-static struct {
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
+static CCMRAM struct {
   uint8_t addr_7bit;
   uint8_t addr_8bit;
   int found;
   const char *known_name;
 } scan_results[112];
-static uint32_t result_count = 0;
-static int scan_in_progress = 0;
-static int scan_complete = 0;
-static int current_scan_addr = 0x08;
+static CCMRAM uint32_t result_count = 0;
+static CCMRAM int scan_in_progress = 0;
+static CCMRAM int scan_complete = 0;
+static CCMRAM int current_scan_addr = 0x08;
 
 static const char *get_known_device_name(uint8_t addr_7bit) {
   for (uint32_t i = 0; i < KNOWN_COUNT; i++) {

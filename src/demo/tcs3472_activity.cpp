@@ -19,12 +19,16 @@ static const char *menus[TCS3472_MENU_ITEMS] = {
 
 static int menu_select = 0;
 
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram")))
+#endif
+
 #define CHART_HISTORY 240
-static uint16_t chart_r[CHART_HISTORY] = {0};
-static uint16_t chart_g[CHART_HISTORY] = {0};
-static uint16_t chart_b[CHART_HISTORY] = {0};
-static int chart_index = 0;
-static uint16_t chart_max_value = 65535;
+static CCMRAM uint16_t chart_r[CHART_HISTORY] = {0};
+static CCMRAM uint16_t chart_g[CHART_HISTORY] = {0};
+static CCMRAM uint16_t chart_b[CHART_HISTORY] = {0};
+static CCMRAM int chart_index = 0;
+static CCMRAM uint16_t chart_max_value = 65535;
 
 static void bar(const char *t) {
   PD_DrawFrame();
