@@ -94,11 +94,14 @@ void TOS::start() {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
 
   // 设置默认界面为启动器
-  SysUI::setActivity(UI_LAUNCHER);
+  SysUI::setActivity(UI_DASHBOARD);
 
   // 主循环
   while (1) {
+    uint32_t t0 = HAL_GetTick();
     SysUI::loop();
+    uint32_t elapsed = HAL_GetTick() - t0;
+    SysUI::updateCpuUsage(elapsed);
     HAL_Delay(10); // 10ms 轮询间隔
   }
 }

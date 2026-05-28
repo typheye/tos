@@ -8,9 +8,9 @@
 #include <cstdio>
 #include <cstring>
 
-// 界面ID定义
-#define UI_LAUNCHER 0
-#define UI_RUNNING_TEST 1
+#define UI_DASHBOARD    0
+#define UI_LAUNCHER     1
+#define UI_RUNNING_TEST 2
 
 class SysUI {
 public:
@@ -19,15 +19,19 @@ public:
   static void setActivity(int activity);
   static int getActivity(void);
   static void setCurrentTest(void (*test_func)(void));
-  static void resetMenuPosition(void); // 新增：重置菜单位置
+  static void resetMenuPosition(void);
+  static void updateCpuUsage(uint32_t work_ms);
 
 private:
   static int now_activity;
   static uint32_t last_tick;
   static void (*current_test_func)(void);
+  static int cpu_usage;
 
+  static void drawDashboard(void);
   static void drawLauncher(void);
-  static void handleInput(void);
+  static void handleDashboardInput(void);
+  static void handleLauncherInput(void);
   static void runCurrentTest(void);
 };
 
