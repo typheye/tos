@@ -74,8 +74,8 @@ public:
   Switch sw13_B14{GPIOB, GPIO_PIN_14, false};
 
   // 组4 (逻辑相反)
-  Switch sw_sd_detect{GPIOG, GPIO_PIN_8, true};
-  Switch sw_buzzer_en{GPIOG, GPIO_PIN_8, true};
+  Switch sw_sd_detect{GPIOG, GPIO_PIN_6, true};   // G6  = SD card detect
+  Switch sw_mute{GPIOG, GPIO_PIN_8, true};        // G8  = mute switch
 
   // 碰撞开关 (逻辑相反)
   Key collision_A8{GPIOA, GPIO_PIN_8, true};
@@ -89,7 +89,7 @@ public:
   uint8_t getGroup2Config(void);
   uint8_t getGroup3Config(void);
   bool isSdCardInserted(void);
-  bool isBuzzerEnabled(void);
+  bool isMuted(void);
   bool isAnyCollision(void);
 };
 

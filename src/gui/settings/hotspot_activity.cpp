@@ -94,7 +94,7 @@ static void hs_stop(void) {
 
 static int hs_item_count(void) {
   int n = 2; // Return + toggle
-  if (hs_on) { n++; n++; } // SSID&PWD + Connect Device
+  if (hs_on) n++; // SSID & Password
   return n;
 }
 
@@ -115,7 +115,6 @@ static void draw_hs_main(int sel) {
     case 1: { char b[32]; snprintf(b, sizeof(b), "01 Hotspot");
               draw_card_r(idx, sel, cy, b, hs_on ? "ON" : "OFF", hs_edit); break; }
     case 2: draw_card(idx, sel, cy, "02 SSID & Password", false); break;
-    case 3: draw_card(idx, sel, cy, "03 Connect Device", false); break;
     }
   }
   PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -151,10 +150,8 @@ static int hs_main_loop(void) {
         return 0;
       } else if (sel == 1) {
         hs_edit = true;
-      } else if (hs_on && sel >= 2) {
-        int sub = sel - 2;
-        if (sub == 0) return 2; // SSID & Password
-        if (sub == 1) return 3; // Connect Device
+      } else if (hs_on && sel == 2) {
+        return 2; // SSID & Password
       }
     }
     le = ce;
@@ -194,50 +191,20 @@ static void ssidpwd_run(void) {
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (sel == 0) return;
-      if (sel == 1) { keyboard_open("SSID", hs_ssid, 23); if (hs_on) hs_start(); }
-      if (sel == 2) { keyboard_open("Password", hs_pwd, 31); if (hs_on) hs_start(); }
+      if (sel == 1) {
+        keyboard_open("SSID", hs_ssid, 23);
+        if (hs_ssid[0] == '\0') strcpy(hs_ssid, "TOS-Hotspot");
+        if (hs_on) hs_start();
+      }
+      if (sel == 2) {
+        keyboard_open("Password", hs_pwd, 31);
+        if (hs_pwd[0] == '\0') strcpy(hs_pwd, "12345678");
+        if (hs_on) hs_start();
+      }
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     le = ce;
     if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick(); draw_ssidpwd(sel); }
-    HAL_Delay(20);
-  }
-}
-
-// ============ Connect Device page ============
-
-static void device_run(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
-
-  while (1) {
-    keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % 2; HAL_Delay(150); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + 2) % 2; HAL_Delay(150); }
-
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
-    if (ce && !le && sel == 0) return;
-    le = ce;
-
-    if (HAL_GetTick() - lu > 100) {
-      lu = HAL_GetTick();
-      draw_frame_title("HOTS");
-      PD_SetFont(FONT_ASCII_16);
-      draw_card(0, sel, 33, "00 Return", false);
-
-      PD_SetColor(TOS_ACCENT);
-      char buf[48];
-      snprintf(buf, sizeof(buf), "SSID: %s", hs_ssid); PD_DrawString(26, 66, buf);
-      PD_SetColor(TOS_TEXT_SEC);
-      PD_SetFont(FONT_ASCII_12);
-      snprintf(buf, sizeof(buf), "PWD: %s", hs_pwd);  PD_DrawString(26, 84, buf);
-      snprintf(buf, sizeof(buf), "IP: %s", ap_ip);    PD_DrawString(26, 100, buf);
-      snprintf(buf, sizeof(buf), "Security: WPA2");    PD_DrawString(26, 116, buf);
-      PD_SetFont(FONT_ASCII_16);
-
-      PD_DrawFooterCenter("ENTER", NULL, NULL);
-      LCD_Flush();
-    }
     HAL_Delay(20);
   }
 }
@@ -250,6 +217,5 @@ void hotspot_activity_run(void) {
     int act = hs_main_loop();
     if (act == 0) return;
     if (act == 2) { ssidpwd_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
-    if (act == 3) { device_run();  boardLCD.fillScreen(LCD_COLOR_BLACK); }
   }
 }

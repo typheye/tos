@@ -108,7 +108,7 @@ void KeyManager::init(void) {
   sw12_B12.init();
   sw13_B14.init();
   sw_sd_detect.init();
-  sw_buzzer_en.init();
+  sw_mute.init();
 
   // 初始化按键
   collision_A8.init();
@@ -164,7 +164,7 @@ uint8_t KeyManager::getGroup3Config(void) {
 }
 
 bool KeyManager::isSdCardInserted(void) { return sw_sd_detect.isOn(); }
-bool KeyManager::isBuzzerEnabled(void) { return sw_buzzer_en.isOn(); }
+bool KeyManager::isMuted(void) { return sw_mute.isOn(); }
 bool KeyManager::isAnyCollision(void) {
   return collision_A8.isPressed() || collision_D0.isPressed();
 }
