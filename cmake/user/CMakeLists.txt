@@ -62,6 +62,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/wlan_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/hotspot_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/storage_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/keyboard.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/alert.cpp
 
