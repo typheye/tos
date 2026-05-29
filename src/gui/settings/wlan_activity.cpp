@@ -298,6 +298,12 @@ static int wlan_main_loop(void) {
     if (ce && !le) {
       if (wlan_edit) {
         wlan_edit = false;
+        if (!wlan_on && wlan_connected) {
+          ESP8266_SendCommand("AT+CWQAP", "OK", 3000);
+          wlan_connected = false;
+          wlan_ssid[0] = '\0';
+          wlan_pwd[0] = '\0';
+        }
         printf("[WLAN] Set %s\r\n", wlan_on ? "ON" : "OFF");
       } else if (sel == 0) {
         return 0;
