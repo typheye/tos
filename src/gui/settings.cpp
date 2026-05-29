@@ -1,6 +1,7 @@
 #include "include/settings.hpp"
 #include "demo/include/demo_activity.hpp"
 #include "settings/wlan_activity.hpp"
+#include "settings/hotspot_activity.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/trtc.hpp"
@@ -12,7 +13,7 @@ extern LCD boardLCD;
 
 #define SET_N 10
 static const char *set_m[SET_N] = {
-  "00 Return", "01 WLAN", "02 Bluetooth", "03 Storage", "04 Display",
+  "00 Return", "01 WLAN", "02 Hotspot", "03 Storage", "04 Display",
   "05 Sound",  "06 Apps", "07 About",     "08 Restore", "09 Debugs",
 };
 #define DBG_N 2
@@ -81,6 +82,7 @@ void settings_run(void) {
     sel = menu_loop("SET", set_m, SET_N, sel);
     if (sel == 0) return;
     if (sel == 1) { wlan_activity_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
+    if (sel == 2) { hotspot_activity_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
     if (sel == 9) {
       boardLCD.fillScreen(LCD_COLOR_BLACK);
       while (1) { int ds = menu_loop("DEBUG", dbg_m, DBG_N, 0);
