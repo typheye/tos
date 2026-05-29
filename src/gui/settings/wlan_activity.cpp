@@ -30,9 +30,9 @@ static int ap_count = 0;
 
 static bool do_scan(void) {
   ap_count = 0;
-  printf("[WLAN] Warming up ESP8266...\r\n");
-  ESP8266_SendCommand("AT", "OK", 1000);
-  HAL_Delay(100);
+  printf("[WLAN] Setting STA mode and scanning...\r\n");
+  ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000);  // ensure station mode
+  HAL_Delay(200);
   printf("[WLAN] Scanning with AT+CWLAP...\r\n");
   if (!esp8266.scanNetworks()) {
     printf("[WLAN] Scan failed, retrying once...\r\n");

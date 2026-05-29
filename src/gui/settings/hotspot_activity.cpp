@@ -63,8 +63,6 @@ static void draw_card_r(int idx, int sel, int cy, const char *label, const char 
 
 static void hs_start(void) {
   printf("[HOTS] Starting hotspot: %s\r\n", hs_ssid);
-  ESP8266_SendCommand("AT+RST", "OK", 3000);         // reset first
-  HAL_Delay(1000);
   ESP8266_SendCommand("AT+CWMODE=2", "OK", 3000);    // softAP mode
   char cmd[96];
   snprintf(cmd, sizeof(cmd), "AT+CWSAP=\"%s\",\"%s\",6,3", hs_ssid, hs_pwd);
@@ -80,9 +78,7 @@ static void hs_stop(void) {
   printf("[HOTS] Stopping hotspot\r\n");
   ESP8266_SendCommand("AT+CIPSERVER=0", "OK", 2000);
   ESP8266_SendCommand("AT+CIPMUX=0", "OK", 2000);
-  ESP8266_SendCommand("AT+RST", "OK", 3000);         // reset
-  HAL_Delay(1000);
-  ESP8266_Init();  // re-init module in station mode
+  ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000);    // back to STA mode
   ap_ip[0] = '\0';
   printf("[HOTS] Hotspot stopped\r\n");
 }
