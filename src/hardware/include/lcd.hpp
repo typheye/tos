@@ -33,6 +33,9 @@ public:
   // 背光控制 (0-1000 PWM)
   void setBrightness(uint16_t val);
   uint16_t getBrightness(void) const { return _brightness_pwm; }
+  void setAutoBrightness(bool on) { _auto_brightness = on; }
+  bool getAutoBrightness(void) const { return _auto_brightness; }
+  void updateAutoBrightness(void);  // read TCS3472 and adjust PWM
   uint8_t getRotation(void) const { return _rotation; }
 
   // 获取屏幕尺寸
@@ -58,6 +61,7 @@ private:
   uint16_t current_color_565;
   uint16_t _rotation;
   uint16_t _brightness_pwm;
+  bool _auto_brightness;
   uint16_t *_framebuffer;
   bool _use_framebuffer;
 

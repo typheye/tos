@@ -1,4 +1,5 @@
 #include "include/lcd.hpp"
+#include "include/tcs3472.hpp"
 #include "tim.h"
 #include <stdio.h>
 
@@ -17,6 +18,7 @@ extern "C" {
 #endif
 
 void LCD_Init(void) { boardLCD.init(); }
+void LCD_UpdateAutoBrightness(void) { boardLCD.updateAutoBrightness(); }
 
 void LCD_FillScreen(uint32_t color) { boardLCD.fillScreen(color); }
 
@@ -59,6 +61,7 @@ uint16_t LCD_GetHeight(void) { return LCD_HEIGHT; }
 LCD::LCD() {
   initialized = false;
   current_color_565 = 0xFFFF;
+  _auto_brightness = false;
 }
 
 // RGB888 转 RGB565
@@ -291,6 +294,7 @@ void LCD::init() {
   LCD_BL_ON;
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   setBrightness(1000); // default full brightness
+  setAutoBrightness(true); // auto-brightness on by default
 
   initialized = true;
 }
@@ -376,6 +380,29 @@ void LCD::setBrightness(uint16_t val) {
     val = 1000;
   _brightness_pwm = val;
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, val);
+}
+
+// 自动亮度: 读取 TCS3472 环境光, 映射到 PWM
+void LCD::updateAutoBrightness(void) {
+  if (!_auto_brightness) return;
+  static uint32_t last = 0;
+  if (HAL_GetTick() - last < 2000) return;
+  last = HAL_GetTick();
+
+  extern TCS3472 boardTCS3472;
+  if (!boardTCS3472.isInitialized()) return;
+
+  float lux = boardTCS3472.getLux();
+  uint16_t pwm;
+  if (lux < 1)       pwm = 50;
+  else if (lux < 10)  pwm = 100;
+  else if (lux < 50)  pwm = 200;
+  else if (lux < 200) pwm = 350;
+  else if (lux < 500) pwm = 550;
+  else if (lux < 1000) pwm = 750;
+  else                pwm = 1000;
+
+  if (pwm != _brightness_pwm) setBrightness(pwm);
 }
 
 // 获取帧缓冲区

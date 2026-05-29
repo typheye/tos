@@ -447,6 +447,7 @@ void pet_launcher_run(void) {
     }
 
     // --- Update & Draw ---
+    boardLCD.updateAutoBrightness();
     update_animation();
     EMO_DrawFace(pet_blink_l, pet_blink_r, pet_mouth,
                  pet_look_x, pet_look_y, pet_cheek, pet_brow_y);

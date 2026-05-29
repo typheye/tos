@@ -68,6 +68,7 @@ void LCD_SetFrameBuffer(uint16_t *fb);
 void LCD_ClearFrameBuffer(uint32_t color);
 
 // 工具函数
+void LCD_UpdateAutoBrightness(void);
 uint16_t LCD_RGB888ToRGB565(uint32_t rgb888);
 uint16_t LCD_GetWidth(void);
 uint16_t LCD_GetHeight(void);

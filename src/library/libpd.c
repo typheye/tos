@@ -625,6 +625,7 @@ void PD_DrawEthIcon(int16_t x, int16_t y, bool connected) {
 
 // 全屏装饰边框 (斜角科技风)
 void PD_DrawFrame(void) {
+  LCD_UpdateAutoBrightness(); // global auto-brightness hook
   const int16_t line_w = 2;
 
   // 外框 (填充为主色调)

@@ -240,3 +240,8 @@ void TCS3472::disable(void) {
   writeReg(TCS3472_ENABLE, 0x00);
   ledOff();
 }
+
+float TCS3472::getLux(void) {
+  TCS3472_ColorData_t c = readColor();
+  return c.lux;
+}

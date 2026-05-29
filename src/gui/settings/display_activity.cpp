@@ -113,7 +113,8 @@ static void draw_disp(int sel) {
 void display_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   if (!disp_inited) {
-    disp_auto = false; disp_bright = 10; disp_dir = 0;
+    disp_auto = true; disp_bright = 10; disp_dir = 0;
+    boardLCD.setAutoBrightness(true);
     apply();
     disp_inited = true;
   }
@@ -150,6 +151,7 @@ void display_activity_run(void) {
     if (ce && !le) {
       if (disp_edit) {
         disp_edit = false; edit_field = 0;
+        boardLCD.setAutoBrightness(disp_auto);
         if (!disp_auto) apply();
       } else {
         if (sel == 0) return;

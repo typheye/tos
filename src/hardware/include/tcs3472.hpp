@@ -96,6 +96,7 @@ public:
 
   // 读取处理后的数据（色温、照度等）
   TCS3472_ColorData_t readColor(void);
+  float getLux(void);  // quick ambient light reading
 
   // LED 补光灯控制
   void ledOn(void);
