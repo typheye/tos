@@ -1,6 +1,8 @@
 #include "include/lcd.hpp"
-
+#include "tim.h"
 #include <stdio.h>
+
+extern TIM_HandleTypeDef htim4;
 LCD boardLCD;
 
 extern SPI_HandleTypeDef hspi1;
@@ -287,6 +289,8 @@ void LCD::init() {
 
   // 4. 最后开背光
   LCD_BL_ON;
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  setBrightness(1000); // default full brightness
 
   initialized = true;
 }
@@ -366,14 +370,12 @@ void LCD::wakeup(void) {
   HAL_Delay(120);
 }
 
-// 背光控制
-void LCD::setBacklight(uint8_t brightness) {
-  _brightness = brightness;
-  if (brightness > 0) {
-    LCD_BL_ON;
-  } else {
-    LCD_BL_OFF;
-  }
+// 背光控制 (PWM TIM4 CH2, 0-1000)
+void LCD::setBrightness(uint16_t val) {
+  if (val > 1000)
+    val = 1000;
+  _brightness_pwm = val;
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, val);
 }
 
 // 获取帧缓冲区

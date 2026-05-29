@@ -30,8 +30,10 @@ public:
   void sleep(void);
   void wakeup(void);
 
-  // 背光控制
-  void setBacklight(uint8_t brightness);
+  // 背光控制 (0-1000 PWM)
+  void setBrightness(uint16_t val);
+  uint16_t getBrightness(void) const { return _brightness_pwm; }
+  uint8_t getRotation(void) const { return _rotation; }
 
   // 获取屏幕尺寸
   uint16_t getWidth(void) const { return LCD_WIDTH; }
@@ -55,7 +57,7 @@ private:
   bool initialized;
   uint16_t current_color_565;
   uint16_t _rotation;
-  uint8_t _brightness;
+  uint16_t _brightness_pwm;
   uint16_t *_framebuffer;
   bool _use_framebuffer;
 
