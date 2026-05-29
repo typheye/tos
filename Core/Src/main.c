@@ -25,6 +25,7 @@
 #include "rtc.h"
 #include "sdio.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -111,11 +112,12 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   MX_ADC1_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   /* 启动 USART2 中断接收 - 必须调用！ */
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
   printf("UART2 interrupt started, RX count: %lu\r\n", uart2_rx_count);
-
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   start_tos();
   /* USER CODE END 2 */
 
