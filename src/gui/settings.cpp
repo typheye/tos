@@ -8,6 +8,7 @@
 #include "settings/include/wlan_activity.hpp"
 #include "settings/include/storage_activity.hpp"
 #include "settings/include/display_activity.hpp"
+#include "settings/include/sound_activity.hpp"
 #include <cstdio>
 
 extern KeyManager keyManager;
@@ -121,6 +122,10 @@ void settings_run(void) {
     }
     if (sel == 4) {
       display_activity_run();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
+    if (sel == 5) {
+      sound_activity_run();
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     if (sel == 9) {

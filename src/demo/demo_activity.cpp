@@ -1,4 +1,8 @@
 #include "include/demo_activity.hpp"
+#include "gui/include/settings.hpp"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
 #include "include/3dox_activity.hpp"
 #include "include/bmp_activity.hpp"
 #include "include/display_activity.hpp"
@@ -6,41 +10,47 @@
 #include "include/i2c_activity.hpp"
 #include "include/jyro_activity.hpp"
 #include "include/key_activity.hpp"
+#include "include/libpd.h"
 #include "include/pot_activity.hpp"
 #include "include/sd_activity.hpp"
 #include "include/sn74hc00n_activity.hpp"
 #include "include/tcs3472_activity.hpp"
-#include "gui/include/settings.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
 #include <cstdio>
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-// Menu arrays in REGULAR RAM (NOT CCMRAM — PD access from menu context crashes CCMRAM)
+// Menu arrays in REGULAR RAM (NOT CCMRAM — PD access from menu context crashes
+// CCMRAM)
 #define TOS_ITEMS 2
-static const char *tos_m[TOS_ITEMS] = {"00 Return Launcher", "01 System Settings"};
+static const char *tos_m[TOS_ITEMS] = {"00 Return", "01 Settings"};
 
 #define DEMO_ITEMS 12
 static const char *demo_m[DEMO_ITEMS] = {
-  "00 Return",          "01 Key Test",       "02 SD Card Test",
-  "03 I2C Scan",        "04 JY901S Sensor",  "05 BMP180 Sensor",
-  "06 Display Tests",   "07 3D Path Tracer", "08 ESP8266 Test",
-  "09 TCS3472 Test",    "10 SN74HC00N Test", "11 Pot Test",
+    "00 Return",        "01 Key Test",       "02 SD Card Test",
+    "03 I2C Scan",      "04 JY901S Sensor",  "05 BMP180 Sensor",
+    "06 Display Tests", "07 3D Path Tracer", "08 ESP8266 Test",
+    "09 TCS3472 Test",  "10 SN74HC00N Test", "11 Pot Test",
 };
 static void (*demo_f[DEMO_ITEMS])(void) = {
-  NULL, key_test_activity, sd_card_activity, i2c_scan_activity,
-  jyro_activity, bmp180_activity, display_test_menu_activity,
-  render_3dox_activity_with_exit, esp8266_test_activity,
-  tcs3472_activity, hc00n_activity, pot_activity,
+    NULL,
+    key_test_activity,
+    sd_card_activity,
+    i2c_scan_activity,
+    jyro_activity,
+    bmp180_activity,
+    display_test_menu_activity,
+    render_3dox_activity_with_exit,
+    esp8266_test_activity,
+    tcs3472_activity,
+    hc00n_activity,
+    pot_activity,
 };
 
 // ============ Original TOS-style menu ============
 
-static void draw_menu(const char *title, const char **items, int count, int sel) {
+static void draw_menu(const char *title, const char **items, int count,
+                      int sel) {
   PD_Init();
   PD_FillScreen(TOS_BG);
   // Refresh header time
@@ -48,9 +58,11 @@ static void draw_menu(const char *title, const char **items, int count, int sel)
   static uint32_t last_tm = 0;
   if (HAL_GetTick() - last_tm > 30000) {
     last_tm = HAL_GetTick();
-    Time_t t; Date_t d;
+    Time_t t;
+    Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[6]; sprintf(ts, "%02d:%02d", t.hours, t.minutes);
+    char ts[6];
+    sprintf(ts, "%02d:%02d", t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
   PD_DrawFrame();
@@ -61,12 +73,15 @@ static void draw_menu(const char *title, const char **items, int count, int sel)
 
   int visible = count < 7 ? count : 7;
   int start = sel - visible / 2;
-  if (start < 0) start = 0;
-  if (start + visible > count) start = count - visible;
+  if (start < 0)
+    start = 0;
+  if (start + visible > count)
+    start = count - visible;
 
   for (int i = 0; i < visible; i++) {
     int idx = start + i;
-    if (idx >= count) break;
+    if (idx >= count)
+      break;
     int cy = 33 + i * 25;
     if (idx == sel) {
       PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
@@ -81,18 +96,35 @@ static void draw_menu(const char *title, const char **items, int count, int sel)
   LCD_Flush();
 }
 
-static int menu_loop(const char *title, const char **items, int count, int start_sel) {
+static int menu_loop(const char *title, const char **items, int count,
+                     int start_sel) {
   int sel = start_sel;
-  if (sel >= count) sel = 0;
-  uint8_t le = 0; uint32_t lu = 0;
+  if (sel >= count)
+    sel = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0;
   while (1) {
-    keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % count; HAL_Delay(150); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + count) % count; HAL_Delay(150); }
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
+    keyManager.btn_enter.tick();
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+      sel = (sel + 1) % count;
+      HAL_Delay(150);
+    }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+      sel = (sel - 1 + count) % count;
+      HAL_Delay(150);
+    }
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
-    if (ce && !le) { le = ce; return sel; }
+    if (ce && !le) {
+      le = ce;
+      return sel;
+    }
     le = ce;
-    if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick(); draw_menu(title, items, count, sel); }
+    if (HAL_GetTick() - lu > 100) {
+      lu = HAL_GetTick();
+      draw_menu(title, items, count, sel);
+    }
     HAL_Delay(20);
   }
 }
@@ -101,8 +133,12 @@ int demo_activity_run(void) {
   static int sel = 0;
   while (1) {
     sel = menu_loop("TOS", tos_m, TOS_ITEMS, sel);
-    if (sel == 0) return 1;
-    if (sel == 1) { settings_run(); boardLCD.fillScreen(LCD_COLOR_BLACK); }
+    if (sel == 0)
+      return 1;
+    if (sel == 1) {
+      settings_run();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
   }
 }
 
@@ -111,7 +147,12 @@ void demo_list_run(void) {
   static int sel = 0;
   while (1) {
     sel = menu_loop("TOS", demo_m, DEMO_ITEMS, sel);
-    if (sel == 0) return;
-    if (demo_f[sel]) { boardLCD.fillScreen(LCD_COLOR_BLACK); demo_f[sel](); boardLCD.fillScreen(LCD_COLOR_BLACK); }
+    if (sel == 0)
+      return;
+    if (demo_f[sel]) {
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+      demo_f[sel]();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
   }
 }

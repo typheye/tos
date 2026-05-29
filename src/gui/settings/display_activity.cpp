@@ -88,10 +88,17 @@ static void draw_disp(int sel) {
     }
     case 2: {
       char buf[32]; snprintf(buf, sizeof(buf), "   Brightness");
-      char val[8];
-      if (disp_auto) val[0] = '\0';
-      else snprintf(val, sizeof(val), "%d%%", disp_bright * 10);
-      draw_card_r(idx, sel, cy, buf, val, disp_edit && edit_field == 2);
+      if (disp_auto) {
+        // Greyed out when Auto is ON
+        bool s = (idx == sel);
+        uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+        PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
+        PD_SetColor(TOS_GREY);
+        PD_DrawString(26, cy + 2, buf);
+      } else {
+        char val[8]; snprintf(val, sizeof(val), "%d%%", disp_bright * 10);
+        draw_card_r(idx, sel, cy, buf, val, disp_edit && edit_field == 2);
+      }
       break;
     }
     case 3: {

@@ -205,7 +205,7 @@ static int wlan_item_count(void) {
     n++; // Scanning
     n++; // Status
     if (wlan_connected)
-      n++; // Disconnect (only when connected)
+      n++; // Disconnect
   }
   return n;
 }
@@ -217,47 +217,29 @@ static void draw_wlan_main(int sel) {
   int n = wlan_item_count();
   int visible = n < 7 ? n : 7;
   int start = sel - visible / 2;
-  if (start < 0)
-    start = 0;
-  if (start + visible > n)
-    start = n - visible;
+  if (start < 0) start = 0;
+  if (start + visible > n) start = n - visible;
 
   for (int i = 0; i < visible; i++) {
-    int idx = start + i;
-    if (idx >= n)
-      break;
+    int idx = start + i; if (idx >= n) break;
     int cy = 33 + i * 25;
 
-    // Map logical index → item type
-    int item = idx;
-    if (idx >= 2 && wlan_on) {
-      if (idx == 2)
-        item = 2; // Scanning
-      else if (idx == 3)
-        item = 3; // Status
-      else if (idx == 4)
-        item = 4; // Disconnect
-    }
-
-    switch (item) {
-    case 0:
+    if (idx == 0) {
       draw_card(idx, sel, cy, "00 Return", false);
-      break;
-    case 1: {
-      char buf[32];
-      snprintf(buf, sizeof(buf), "01 WLAN");
+    } else if (idx == 1) {
+      char buf[32]; snprintf(buf, sizeof(buf), "01 WLAN");
       draw_card_r(idx, sel, cy, buf, wlan_on ? "ON" : "OFF", wlan_edit);
-      break;
-    }
-    case 2:
-      draw_card(idx, sel, cy, "02 Scanning", false);
-      break;
-    case 3:
-      draw_card(idx, sel, cy, "03 Status", false);
-      break;
-    case 4:
-      draw_card(idx, sel, cy, "04 Disconnct", false);
-      break;
+    } else if (idx == 2 && wlan_on) {
+      bool grey = wlan_connected;
+      bool s = (idx == sel);
+      uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+      PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
+      PD_SetColor(grey ? TOS_GREY : (s ? TOS_TEXT : TOS_TEXT_SEC));
+      PD_DrawString(26, cy + 2, "   Scanning");
+    } else if (idx == 3 && wlan_on) {
+      draw_card(idx, sel, cy, "02 Status", false);
+    } else if (idx == 4 && wlan_on && wlan_connected) {
+      draw_card(idx, sel, cy, "03 Disconnct", false);
     }
   }
   PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
