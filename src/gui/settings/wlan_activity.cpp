@@ -1,6 +1,6 @@
-#include "wlan_activity.hpp"
-#include "components/alert.hpp"
-#include "components/keyboard.hpp"
+#include "include/wlan_activity.hpp"
+#include "components/include/alert.hpp"
+#include "components/include/keyboard.hpp"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -31,7 +31,7 @@ static int ap_count = 0;
 static bool do_scan(void) {
   ap_count = 0;
   printf("[WLAN] Setting STA mode and scanning...\r\n");
-  ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000);  // ensure station mode
+  ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000); // ensure station mode
   HAL_Delay(200);
   printf("[WLAN] Scanning with AT+CWLAP...\r\n");
   if (!esp8266.scanNetworks()) {
