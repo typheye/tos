@@ -130,6 +130,8 @@ static bool do_scan(void) {
       }
     }
     if (!dup) {
+      /* Filter out already-saved SSIDs */
+      if (SM_Saved_Find(ap_ssid[ap_count])) continue;
       ap_enc[ap_count] = ecn;
       ap_rssi[ap_count] = rssi;
       LOG_D("WLAN", "%d: \"%s\" RSSI=%d enc=%d", ap_count, ap_ssid[ap_count], rssi, ecn);
@@ -391,7 +393,10 @@ static void saved_net_action(int idx) {
         break;
       }
       case 2:
-        if (is_current) { alert_show("WLAN", "Already connected to this WiFi"); break; }
+        if (is_current) { alert_show("WLAN", "Already connected"); break; }
+        /* Show connecting screen */
+        boardLCD.fillScreen(LCD_COLOR_BLACK); draw_frame_title("WLAN");
+        PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Connecting..."); LCD_Flush();
         if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
           HAL_Delay(500);
           if (ESP8266_IsConnected()) {
@@ -499,7 +504,7 @@ static void draw_wlan_main(int sel) {
       bool s = (idx == sel);
       uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
       PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-      PD_SetColor(TOS_TEXT);
+      PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
       PD_DrawString(26, cy+2, wlan_connected ? "   Connected" : "   Scanning");
     } else if (idx == 3 && wlan_on) {
       char buf[32]; snprintf(buf, sizeof(buf), "02 Auto Connect");
