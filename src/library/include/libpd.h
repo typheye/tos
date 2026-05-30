@@ -109,6 +109,7 @@ void PD_DrawAngledCard(int16_t x, int16_t y, int16_t w, int16_t h,
 // ========== 新增：状态图标 ==========
 void PD_DrawWifiIcon(int16_t x, int16_t y, bool connected);
 void PD_DrawEthIcon(int16_t x, int16_t y, bool connected);
+void PD_DrawSignalIcon(int16_t x, int16_t y, int signal);
 
 // ========== 新增：可控淡入淡出 ==========
 void PD_ShowSplashFadeStart(uint32_t fade_in_ms);

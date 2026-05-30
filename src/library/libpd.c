@@ -624,6 +624,39 @@ void PD_DrawEthIcon(int16_t x, int16_t y, bool connected) {
   PD_DrawLine(x + 11, y + 5,  x + 16, y + 11);
 }
 
+void PD_DrawSignalIcon(int16_t x, int16_t y, int signal) {
+  /* 2x scale of Python (10x8 → 20x16) */
+  uint32_t c = signal > 0 ? TOS_ACCENT : TOS_CARD_BG;
+  int16_t h = 16;
+
+  /* Antenna triangle (left portion) */
+  int16_t tx_w = 8;
+  int16_t tx_h = h;
+  int16_t tri[14] = {
+    x,           y,
+    x + tx_w,    y,
+    x + tx_w/2,  y + tx_h/2,
+    x,           y,
+    x + tx_w/2,  y,
+    x + tx_w/2,  y + tx_h,
+    x + tx_w/2,  y,
+  };
+  PD_DrawPolygon(tri, 7, c);
+
+  /* 5 signal bars (right side) — 2px wide, 1px gap */
+  int bars_on = signal > 0 ? ((signal - 1) / 20 + 1) : 0;
+  if (bars_on > 5) bars_on = 5;
+  PD_SetFill(true);
+  for (int f = 0; f < 5; f++) {
+    int bh = 3 + f * 3;  /* 3,6,9,12,15 */
+    int bx = x + tx_w + 2 + f * 3;
+    int by = y + h - bh;
+    PD_SetColor(f < bars_on ? c : TOS_CARD_BG);
+    PD_FillRect(bx, by, 2, bh, f < bars_on ? c : TOS_CARD_BG);
+  }
+  PD_SetFill(false);
+}
+
 // 全屏装饰边框 (斜角科技风)
 void PD_DrawFrame(void) {
   LCD_UpdateAutoBrightness(); // global auto-brightness hook
@@ -661,22 +694,9 @@ void PD_DrawFrame(void) {
     PD_DrawPolygon(d3, 3, TOS_ACCENT);
   }
 
-  // 标题栏图标 (左侧小方块 + 内部折线)
-  PD_SetColor(TOS_ACCENT);
-  PD_SetFill(true);
-  PD_DrawRect(6, 8, 13, 15);
-  PD_SetFill(false);
-
-  // 图标内部折线 (用背景色画)
-  {
-    const int16_t icon[10] = {8, 10, 16, 10, 16, 20, 8, 20, 8, 18};
-    PD_DrawPolygonOutline(icon, 5);
-
-    PD_SetColor(TOS_BG);
-    PD_DrawLine(14, 16, 14, 14);
-    PD_DrawLine(8, 12, 14, 12);
-    PD_DrawLine(14, 12, 14, 10);
-  }
+  // 标题栏图标 (ico bitmap)
+  extern void draw_icon_ico(void);
+  draw_icon_ico();
 
   // Header time (set by PD_SetHeaderTime)
   if (g_header_time[0] != '\0') {
@@ -684,6 +704,13 @@ void PD_DrawFrame(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(195, 2, g_header_time);
   }
+
+  /* Status icons (WiFi signal, WLAN, hotspot) */
+  extern void status_icons_draw(bool wlan_on, bool wlan_connected, bool hotspot_on);
+  extern bool esp_wlan_is_on(void);
+  extern bool esp_wlan_is_connected(void);
+  extern bool hotspot_is_active(void);
+  status_icons_draw(esp_wlan_is_on(), esp_wlan_is_connected(), hotspot_is_active());
 }
 
 void PD_SetHeaderTime(const char *time_str) {

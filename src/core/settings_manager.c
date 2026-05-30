@@ -137,3 +137,6 @@ const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }
 const char *SM_Hotspot_PWD(void)  { return g_settings.hs_pwd; }
 void SM_Hotspot_SetSSID(const char *s) { strncpy(g_settings.hs_ssid, s, 23); SM_Save(); }
 void SM_Hotspot_SetPWD(const char *s)  { strncpy(g_settings.hs_pwd, s, 31); SM_Save(); }
+
+/* --- Status icon helpers (C-callable) --- */
+bool esp_wlan_is_on(void) { return SM_Wlan_On(); }

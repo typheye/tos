@@ -592,3 +592,6 @@ void wlan_activity_run(void) {
     boardLCD.fillScreen(LCD_COLOR_BLACK);
   }
 }
+
+/* Status icon helpers */
+extern "C" bool esp_wlan_is_connected(void) { return esp8266.isConnected(); }

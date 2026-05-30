@@ -280,3 +280,6 @@ void hotspot_activity_run(void) {
     }
   }
 }
+
+/* Status icon helper */
+extern "C" bool hotspot_is_active(void) { return hs_on; }
