@@ -7,7 +7,7 @@
 extern USART boardSerial;
 
 extern "C" {
-extern uint8_t esp8266_global_buffer[32];
+extern uint8_t esp8266_global_buffer[512];
 extern uint16_t esp8266_global_index;
 extern uint8_t esp8266_data_ready;
 extern volatile uint32_t uart2_rx_count;
@@ -28,6 +28,9 @@ ESP8266::ESP8266(UART_HandleTypeDef *huart) {
 void ESP8266::clearRxBuffer(void) {
   _rx_index = 0;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
+  esp8266_global_index = 0;
+  esp8266_data_ready = 0;
+  memset(esp8266_global_buffer, 0, 512);
 }
 
 void ESP8266::processPendingData(void) {
@@ -35,6 +38,7 @@ void ESP8266::processPendingData(void) {
     esp8266_data_ready = 0;
     /* LOG_D("ESP", "PROCESS: Got data, len=%d", esp8266_global_index); */
     processRxData(esp8266_global_buffer, esp8266_global_index);
+    esp8266_global_index = 0;
   }
 }
 

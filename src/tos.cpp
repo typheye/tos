@@ -1,6 +1,7 @@
 #include "include/tos.hpp"
 #include "syslog.h"
 #include "core/include/settings_manager.h"
+#include "core/include/systime.h"
 #include "demo/include/bmp_activity.hpp"
 #include "demo/include/display_activity.hpp"
 #include "demo/include/i2c_activity.hpp"
@@ -109,6 +110,7 @@ void TOS::init() {
       }
       if (ok) break;
     }
+
   }
 
   SysUI::init();
@@ -129,6 +131,11 @@ void TOS::start() {
   PD_SplashFinish(100);
 
   boardLCD.fillScreen(LCD_COLOR_BLACK);
+
+  /* Background NTP sync — won't block UI */
+  if (SM_Wlan_On() && ESP8266_IsConnected()) {
+    SysTime_Sync();
+  }
 
   // 设置默认界面为启动器
   SysUI::setActivity(UI_PET);
