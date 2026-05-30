@@ -1,4 +1,5 @@
 #include "include/tos.hpp"
+#include "core/include/settings_manager.h"
 #include "demo/include/bmp_activity.hpp"
 #include "demo/include/display_activity.hpp"
 #include "demo/include/i2c_activity.hpp"
@@ -60,6 +61,10 @@ void TOS::init() {
   boardTCS3472.init();
   boardHC00N.init();
   boardPot.init();
+
+  SM_Init();
+  boardLCD.setAutoBrightness(SM_Disp_Auto());
+  if (!SM_Disp_Auto()) boardLCD.setBrightness((uint16_t)SM_Disp_Bright() * 100);
 
   initialized_ = true;
   boardLed.off();

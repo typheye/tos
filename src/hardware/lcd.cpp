@@ -293,8 +293,7 @@ void LCD::init() {
   // 4. 最后开背光
   LCD_BL_ON;
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
-  setBrightness(1000); // default full brightness
-  setAutoBrightness(true); // auto-brightness on by default
+  setBrightness(1000); // default full brightness (SM overrides after boot)
 
   initialized = true;
 }
@@ -384,7 +383,9 @@ void LCD::setBrightness(uint16_t val) {
 
 // 自动亮度: 读取 TCS3472 环境光, 映射到 PWM
 void LCD::updateAutoBrightness(void) {
-  if (!_auto_brightness) return;
+  static bool logged = false;
+  if (!_auto_brightness) { logged = false; return; }
+  if (!logged) { printf("[LCD] Auto-brightness active\r\n"); logged = true; }
   static uint32_t last = 0;
   if (HAL_GetTick() - last < 2000) return;
   last = HAL_GetTick();

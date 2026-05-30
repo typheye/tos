@@ -16,6 +16,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sysfonts.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syscalls_override.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/settings_manager.c
     
     # 硬件驱动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/led.cpp
@@ -31,6 +32,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/tcs3472.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sn74hc00n.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/pot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sfhd.c
     
     # 库文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/lib3dox.c

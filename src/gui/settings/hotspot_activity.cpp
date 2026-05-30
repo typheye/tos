@@ -1,6 +1,7 @@
 #include "include/hotspot_activity.hpp"
 #include "components/include/alert.hpp"
 #include "components/include/keyboard.hpp"
+#include "core/include/settings_manager.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -241,6 +242,7 @@ static void ssidpwd_run(void) {
         keyboard_open("SSID", hs_ssid, 23);
         if (hs_ssid[0] == '\0')
           strcpy(hs_ssid, "TOS-Hotspot");
+        SM_Hotspot_SetSSID(hs_ssid);
         if (hs_on)
           hs_start();
       }
@@ -248,6 +250,7 @@ static void ssidpwd_run(void) {
         keyboard_open("Password", hs_pwd, 31);
         if (hs_pwd[0] == '\0')
           strcpy(hs_pwd, "12345678");
+        SM_Hotspot_SetPWD(hs_pwd);
         if (hs_on)
           hs_start();
       }
