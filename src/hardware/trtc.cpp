@@ -1,4 +1,5 @@
 #include "include/trtc.hpp"
+#include "syslog.h"
 #include <stdio.h>
 
 extern RTC_HandleTypeDef hrtc;
@@ -27,7 +28,7 @@ void TRTC::init() {
   if (initialized)
     return;
 
-  printf("[RTC] Initializing...\r\n");
+  LOG_I("RTC", "Initializing...");
 
   // 1. 使能电源时钟和备份域访问（关键！）
   __HAL_RCC_PWR_CLK_ENABLE();
@@ -37,18 +38,18 @@ void TRTC::init() {
   uint32_t start = HAL_GetTick();
   uint8_t lse_ready = 0;
 
-  printf("[RTC] Waiting for LSE oscillator...\r\n");
+  LOG_I("RTC", "Waiting for LSE oscillator...");
   while ((HAL_GetTick() - start) < 3000) {
     if (__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
       lse_ready = 1;
-      printf("[RTC] LSE ready after %lu ms\r\n", HAL_GetTick() - start);
+      LOG_I("RTC", "LSE ready after %lu ms", (unsigned long)(HAL_GetTick() - start));
       break;
     }
     HAL_Delay(50);
   }
 
   if (!lse_ready) {
-    printf("[RTC] Warning: LSE not ready! RTC may not work correctly\r\n");
+    LOG_W("RTC", "LSE not ready! RTC may not work correctly");
   }
 
   // 3. 重新初始化 RTC（确保配置正确）
@@ -68,14 +69,14 @@ void TRTC::init() {
     ret = HAL_RTC_Init(&hrtc);
 
     if (ret != HAL_OK) {
-      printf("[RTC] Init failed (ret=%d), retry %d...\r\n", ret, 6 - retry);
+      LOG_E("RTC", "Init failed (ret=%d), retry %d...", ret, 6 - retry);
       HAL_Delay(100);
     }
     retry--;
   } while (ret != HAL_OK && retry > 0);
 
   if (ret != HAL_OK) {
-    printf("[RTC] Fatal: Cannot initialize RTC!\r\n");
+    LOG_F("RTC", "Cannot initialize RTC!");
     initialized = true; // 标记为已初始化，避免无限重试
     return;
   }
@@ -86,7 +87,7 @@ void TRTC::init() {
   // 验证时间是否有效
   if (sTime.Hours > 23 || sTime.Minutes > 59 || sTime.Seconds > 59 ||
       sDate.Year > 99 || sDate.Month > 12 || sDate.Date > 31) {
-    printf("[RTC] Invalid time detected, setting default...\r\n");
+    LOG_W("RTC", "Invalid time detected, setting default...");
 
     // 设置默认时间 2025-01-01 00:00:00
     sTime.Hours = 0;
@@ -103,7 +104,7 @@ void TRTC::init() {
   }
 
   initialized = true;
-  printf("[RTC] Initialized successfully: %04d-%02d-%02d %02d:%02d:%02d\r\n",
+  LOG_I("RTC", "Initialized successfully: %04d-%02d-%02d %02d:%02d:%02d",
          2000 + sDate.Year, sDate.Month, sDate.Date, sTime.Hours, sTime.Minutes,
          sTime.Seconds);
 }
@@ -120,7 +121,7 @@ void TRTC::setTime(uint8_t hours, uint8_t minutes, uint8_t seconds) {
   syncToHAL();
   syncFromHAL();
 
-  printf("[RTC] Time set to %02d:%02d:%02d\r\n", hours, minutes, seconds);
+  LOG_I("RTC", "Time set to %02d:%02d:%02d", hours, minutes, seconds);
 }
 
 void TRTC::setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday) {
@@ -135,7 +136,7 @@ void TRTC::setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday) {
   syncToHAL();
   syncFromHAL();
 
-  printf("[RTC] Date set to %04d-%02d-%02d (weekday=%d)\r\n", 2000 + year,
+  LOG_I("RTC", "Date set to %04d-%02d-%02d (weekday=%d)", 2000 + year,
          month, date, weekday);
 }
 
@@ -202,7 +203,7 @@ void TRTC::print(void) {
     return;
 
   syncFromHAL();
-  printf("RTC: %04d-%02d-%02d %02d:%02d:%02d WeekDay:%d\r\n", 2000 + sDate.Year,
+  LOG_I("RTC", "%04d-%02d-%02d %02d:%02d:%02d WeekDay:%d", 2000 + sDate.Year,
          sDate.Month, sDate.Date, sTime.Hours, sTime.Minutes, sTime.Seconds,
          sDate.WeekDay);
 }

@@ -10,6 +10,7 @@
 #include "settings/include/display_activity.hpp"
 #include "settings/include/sound_activity.hpp"
 #include <cstdio>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -33,7 +34,7 @@ static void draw_menu(const char *title, const char **items, int count,
     Time_t t;
     Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[6];
+    char ts[8];
     sprintf(ts, "%02d:%02d", t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }

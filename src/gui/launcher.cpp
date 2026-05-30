@@ -5,6 +5,7 @@
 #include "library/include/libemo.h"
 #include <cmath>
 #include <cstdio>
+#include "syslog.h"
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -418,14 +419,14 @@ void pet_launcher_run(void) {
   pet_brow_y  = 0.0f;
   pet_state   = ANIM_IDLE;
 
-  printf("[Pet] Launcher started — triple-press ENTER to exit\r\n");
+  LOG_I("PET", "Launcher started — triple-press ENTER to exit");
 
   uint32_t heartbeat = 0;
   while (1) {
     uint32_t now = HAL_GetTick();
     if (now - heartbeat > 5000) {
       heartbeat = now;
-      printf("[Pet] alive @ %lums, state=%d, expr=%d\r\n", now, pet_state, EHW_GetExpr());
+      LOG_D("PET", "alive @ %lums, state=%d, expr=%d", (unsigned long)now, pet_state, EHW_GetExpr());
     }
 
     // --- Input: triple-press ENTER to exit ---
@@ -438,7 +439,7 @@ void pet_launcher_run(void) {
         uint32_t t0 = enter_tm[(enter_idx - 3) % 3];
         uint32_t t2 = enter_tm[(enter_idx - 1) % 3];
         if (t2 - t0 < TRIPLE_WINDOW) {
-          printf("[Pet] Triple ENTER — returning to menu\r\n");
+          LOG_I("PET", "Triple ENTER — returning to menu");
           EMO_FillScreen(EMO_BLACK);
           LCD_Flush();
           return;

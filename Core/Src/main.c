@@ -114,9 +114,7 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  /* 启动 USART2 中断接收 - 必须调用！ */
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
-  printf("UART2 interrupt started, RX count: %lu\r\n", uart2_rx_count);
   start_tos();
   /* USER CODE END 2 */
 

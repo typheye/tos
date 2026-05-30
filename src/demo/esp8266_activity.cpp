@@ -5,6 +5,7 @@
 #include "hardware/include/usart.hpp"
 #include "include/libpd.h"
 #include <stdio.h>
+#include "syslog.h"
 #include <string.h>
 
 extern USART boardSerial;
@@ -70,7 +71,7 @@ static void show_message(const char *line1, const char *line2, uint32_t color) {
 }
 
 static void init_esp8266(void) {
-  printf("\r\n========== Init ESP8266 ==========\r\n");
+  LOG_I("EACT", "Init ESP8266");
   char at_cmd[] = "AT\r\n";
   HAL_UART_Transmit(&huart2, (uint8_t *)at_cmd, 4, 1000);
   HAL_Delay(500);
@@ -81,8 +82,8 @@ static void init_esp8266(void) {
 static void connect_wifi(void) {
   const char *ssid = "JanPNP One 0000";
   const char *password = "admin123";
-  printf("\r\n========== Connect WiFi ==========\r\n");
-  printf("Connecting to: %s\r\n", ssid);
+  LOG_I("EACT", "Connect WiFi");
+  LOG_I("EACT", "Connecting to: %s", ssid);
 
   if (ESP8266_ConnectWiFi(ssid, password)) {
     show_message("WiFi Connected!", ssid, LV_SUCCESS);
@@ -92,7 +93,7 @@ static void connect_wifi(void) {
 }
 
 static void http_get_test(void) {
-  printf("\r\n========== HTTP GET Test ==========\r\n");
+  LOG_I("EACT", "HTTP GET Test");
   if (!ESP8266_IsConnected()) {
     show_message("WiFi not connected!", "Please connect first", LV_ERROR);
     return;
@@ -107,7 +108,7 @@ static void http_get_test(void) {
                         "Host: baidu.com\r\n"
                         "Connection: close\r\n\r\n";
   if (ESP8266_SendData((const uint8_t *)request, strlen(request))) {
-    printf("Request sent!\r\n");
+    LOG_I("EACT", "Request sent");
     show_message("HTTP Request Sent!", "Check Serial Monitor", LV_SUCCESS);
   } else {
     show_message("HTTP Request Failed!", NULL, LV_ERROR);
@@ -150,7 +151,7 @@ void esp8266_test_activity(void) {
 }
 
 void esp8266_scan_activity(void) {
-  printf("\r\n========== WiFi Scan ==========\r\n");
+  LOG_I("EACT", "WiFi Scan");
   ESP8266_SendCommand("AT+CWLAP", "OK", 10000);
   while (1) {
     keyManager.btn_enter.tick();
@@ -160,10 +161,10 @@ void esp8266_scan_activity(void) {
 }
 
 void esp8266_tcp_server_test(void) {
-  printf("\r\n========== TCP Server Test ==========\r\n");
+  LOG_I("EACT", "TCP Server Test");
   ESP8266_SendCommand("AT+CIPMUX=1", "OK", 1000);
   if (ESP8266_SendCommand("AT+CIPSERVER=1,8888", "OK", 2000)) {
-    printf("Server started on port 8888\r\n");
+    LOG_I("EACT", "Server started on port 8888");
     show_message("TCP Server Running", "Port: 8888", LV_SUCCESS);
     ESP8266_SendCommand("AT+CIPSERVER=0", "OK", 1000);
     ESP8266_SendCommand("AT+CIPMUX=0", "OK", 1000);

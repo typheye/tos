@@ -6,6 +6,7 @@
 #include "include/libvan.h"
 #include "include/tcs3472.hpp"
 #include <stdio.h>
+#include "syslog.h"
 #include <string.h>
 
 extern USART boardSerial;
@@ -278,7 +279,7 @@ void tcs3472_color_demo(void) {
     bbar("EXIT", NULL, NULL);
     LCD_Flush();
 
-    printf("RGB: %u,%u,%u | CCT: %.0f K | Lux: %.1f\r\n", raw.red, raw.green, raw.blue, color.color_temp, color.lux);
+    LOG_D("TACT", "RGB: %u,%u,%u | CCT: %.0f K | Lux: %.1f", raw.red, raw.green, raw.blue, color.color_temp, color.lux);
     HAL_Delay(200);
   }
   boardTCS3472.ledOff();

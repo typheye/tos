@@ -55,8 +55,10 @@ static void menu_cards(int sel) {
 static void update_chart(float t,float p){
   chart_temp[chart_idx]=t; chart_press[chart_idx]=p; chart_idx++;
   if(chart_idx>=CHART_HISTORY)chart_idx=0;
-  if(t>temp_max)temp_max=t+2; if(t<temp_min)temp_min=t-2;
-  if(p>press_max)press_max=p+20; if(p<press_min)press_min=p-20;
+  if (t > temp_max) temp_max = t + 2;
+  if (t < temp_min) temp_min = t - 2;
+  if (p > press_max) press_max = p + 20;
+  if (p < press_min) press_min = p - 20;
   if(temp_max-temp_min>100){temp_max=temp_min+100;}
   if(press_max-press_min>500){press_max=press_min+500;}
 }
@@ -78,7 +80,10 @@ static void chart_line(float*d,int x,int y,int w,int h,float mx,float mn,uint32_
     int pv=(chart_idx-1-i+CHART_HISTORY)%CHART_HISTORY;
     int cv=(chart_idx-i+CHART_HISTORY)%CHART_HISTORY;
     int y1=y+h-(int)((d[pv]-mn)*h/r);int y2=y+h-(int)((d[cv]-mn)*h/r);
-    if(y1<y)y1=y;if(y1>y+h)y1=y+h;if(y2<y)y2=y;if(y2>y+h)y2=y+h;
+    if (y1 < y)       y1 = y;
+    if (y1 > y + h)   y1 = y + h;
+    if (y2 < y)       y2 = y;
+    if (y2 > y + h)   y2 = y + h;
     PD_DrawLine(x+w-i,y1,x+w-(i-1),y2);
   }
 }
@@ -144,7 +149,8 @@ void bmp180_chart_activity(void){
     uint8_t ca=(keyManager.collision_A8.getState()==KEY_PRESSED);
     if(ca&&!la8&&(HAL_GetTick()-lsw>300)){chart_mode=!chart_mode;lsw=HAL_GetTick();}la8=ca;
     uint8_t cd=(keyManager.collision_D0.getState()==KEY_PRESSED);
-    if(cd&&!ld0)rst_chart();ld0=cd;
+    if (cd && !ld0) rst_chart();
+    ld0 = cd;
     BMP180_Data_t d=boardBMP180.readData(BMP180_MODE_STD);
     update_chart(d.temperature,d.pressure);
     if(HAL_GetTick()-lu>50){lu=HAL_GetTick();

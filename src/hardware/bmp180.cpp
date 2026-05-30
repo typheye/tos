@@ -1,6 +1,7 @@
 #include "include/bmp180.hpp"
 #include "hardware/include/usart.hpp"
 #include "include/libvan.h"
+#include "syslog.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -253,16 +254,10 @@ uint8_t BMP180::getMeasurementDelay(BMP180_Mode_t mode) {
 
 // 调试函数：打印校准数据
 void BMP180::debugCalibration(void) {
-  char dbg[128];
-
-  sprintf(dbg, "AC1=%d, AC2=%d, AC3=%d\r\n", _calib.AC1, _calib.AC2,
+  LOG_D("BMP", "AC1=%d, AC2=%d, AC3=%d", _calib.AC1, _calib.AC2,
           _calib.AC3);
-  printf(dbg);
-  sprintf(dbg, "AC4=%u, AC5=%u, AC6=%u\r\n", _calib.AC4, _calib.AC5,
+  LOG_D("BMP", "AC4=%u, AC5=%u, AC6=%u", _calib.AC4, _calib.AC5,
           _calib.AC6);
-  printf(dbg);
-  sprintf(dbg, "B1=%d, B2=%d\r\n", _calib.B1, _calib.B2);
-  printf(dbg);
-  sprintf(dbg, "MB=%d, MC=%d, MD=%d\r\n", _calib.MB, _calib.MC, _calib.MD);
-  printf(dbg);
+  LOG_D("BMP", "B1=%d, B2=%d", _calib.B1, _calib.B2);
+  LOG_D("BMP", "MB=%d, MC=%d, MD=%d", _calib.MB, _calib.MC, _calib.MD);
 }

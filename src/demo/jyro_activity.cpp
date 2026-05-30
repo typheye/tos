@@ -7,6 +7,7 @@
 #include "include/libvan.h"
 #include <cstdint>
 #include <math.h>
+#include "syslog.h"
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -215,7 +216,7 @@ void jyro_text_activity(void) {
   char fstr[16];
   char display_str[32];
 
-  printf("\r\n========== JY901S Text Display ==========\r\n");
+  LOG_I("JACT", "JY901S Text Display started");
   PD_FillScreen(LV_BG_DARK);
 
   while (1) {

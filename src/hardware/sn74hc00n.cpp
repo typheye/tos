@@ -1,4 +1,5 @@
 #include "include/sn74hc00n.hpp"
+#include "syslog.h"
 #include <stdio.h>
 
 // 全局实例
@@ -126,11 +127,11 @@ void SN74HC00N::init(void) {
 
   _initialized = true;
 
-  printf("[HC00N] SN74HC00N Driver Initialized\r\n");
-  printf("[HC00N] Inputs: 8 switches (1A1B-4A4B)\r\n");
-  printf("[HC00N] Outputs: PE10=1Y, PE11=2Y, PE12=3Y, PE13=4Y\r\n");
-  printf("[HC00N] Logic: Y = NOT (A AND B)\r\n");
-  printf("[HC00N] Note: Input logic flipped for your hardware\r\n");
+  LOG_I("HC00", "SN74HC00N Driver Initialized");
+  LOG_I("HC00", "Inputs: 8 switches (1A1B-4A4B)");
+  LOG_I("HC00", "Outputs: PE10=1Y, PE11=2Y, PE12=3Y, PE13=4Y");
+  LOG_I("HC00", "Logic: Y = NOT (A AND B)");
+  LOG_I("HC00", "Note: Input logic flipped for your hardware");
 
   // 读取初始输出状态
   _lastOutputs = readOutputs();
@@ -153,7 +154,7 @@ void SN74HC00N::updateFromSwitches(uint8_t switchStates) {
 
   // 可选: 验证并打印不匹配
   if (expected != actual) {
-    printf("[HC00N] Mismatch! Expected: 0x%02X, Actual: 0x%02X\r\n", expected,
+    LOG_W("HC00", "Mismatch! Expected: 0x%02X, Actual: 0x%02X", expected,
            actual);
   }
 }
@@ -189,17 +190,18 @@ void SN74HC00N::debugPrint(void) {
   HC00N_Switches_t sw = getSwitchStates();
   HC00N_Outputs_t outs = getActualOutputs();
   uint8_t raw = readOutputByte();
+  (void)sw; (void)outs; (void)raw;
 
-  printf("\r\n========== HC00N Status ==========\r\n");
-  printf("Input Switches (raw: 1=closed, 0=open):\r\n");
-  printf("  CH1: A=%d, B=%d\r\n", sw.sw1A, sw.sw1B);
-  printf("  CH2: A=%d, B=%d\r\n", sw.sw2A, sw.sw2B);
-  printf("  CH3: A=%d, B=%d\r\n", sw.sw3A, sw.sw3B);
-  printf("  CH4: A=%d, B=%d\r\n", sw.sw4A, sw.sw4B);
-  printf("Outputs (read from PE10-PE13):\r\n");
-  printf("  1Y=%d, 2Y=%d, 3Y=%d, 4Y=%d\r\n", outs.output1, outs.output2,
+  LOG_D("HC00", "========== HC00N Status ==========");
+  LOG_D("HC00", "Input Switches (raw: 1=closed, 0=open):");
+  LOG_D("HC00", "  CH1: A=%d, B=%d", sw.sw1A, sw.sw1B);
+  LOG_D("HC00", "  CH2: A=%d, B=%d", sw.sw2A, sw.sw2B);
+  LOG_D("HC00", "  CH3: A=%d, B=%d", sw.sw3A, sw.sw3B);
+  LOG_D("HC00", "  CH4: A=%d, B=%d", sw.sw4A, sw.sw4B);
+  LOG_D("HC00", "Outputs (read from PE10-PE13):");
+  LOG_D("HC00", "  1Y=%d, 2Y=%d, 3Y=%d, 4Y=%d", outs.output1, outs.output2,
          outs.output3, outs.output4);
-  printf("Raw output byte: 0x%02X\r\n", raw);
-  printf("Logic: Y = NOT (A AND B)\r\n");
-  printf("==================================\r\n");
+  LOG_D("HC00", "Raw output byte: 0x%02X", raw);
+  LOG_D("HC00", "Logic: Y = NOT (A AND B)");
+  LOG_D("HC00", "==================================");
 }

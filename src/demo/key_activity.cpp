@@ -4,6 +4,7 @@
 #include "hardware/include/usart.hpp"
 #include "include/libpd.h"
 #include <stdio.h>
+#include "syslog.h"
 
 extern USART boardSerial;
 extern KeyManager keyManager;
@@ -45,7 +46,7 @@ void key_test_activity(void) {
 
   LCD_Flush();
 
-  printf("\r\n========== Key Test GUI Started ==========\r\n");
+  LOG_I("KACT", "Key Test GUI started");
 
   uint8_t last_mask = 0xFF;
   uint32_t last_update = HAL_GetTick();

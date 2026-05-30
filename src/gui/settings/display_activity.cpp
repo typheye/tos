@@ -6,6 +6,7 @@
 #include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include <cstdio>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -37,7 +38,7 @@ static void draw_frame_title(const char *title) {
     Time_t t;
     Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[6];
+    char ts[8];
     sprintf(ts, "%02d:%02d", t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
@@ -143,10 +144,10 @@ void display_activity_run(void) {
     disp_dir = SM_Disp_Dir();
     disp_inited = true;
   }
-  /* Always re-apply on entry — auto may override manual brightness */
+  /* Always re-apply on entry */
   boardLCD.setAutoBrightness(disp_auto);
-  if (!disp_auto) apply();
-  else boardLCD.setRotation((uint8_t)disp_dir);
+  boardLCD.setRotation((uint8_t)disp_dir);
+  if (!disp_auto) boardLCD.setBrightness((uint16_t)disp_bright * 100);
   disp_edit = false;
   edit_field = 0;
 
@@ -207,8 +208,9 @@ void display_activity_run(void) {
         s->disp_dir    = disp_dir;
         SM_Save();  /* single save after all changes */
         boardLCD.setAutoBrightness(disp_auto);
+        boardLCD.setRotation((uint8_t)disp_dir);
         if (!disp_auto)
-          apply();
+          boardLCD.setBrightness((uint16_t)disp_bright * 100);
       } else {
         if (sel == 0)
           return;

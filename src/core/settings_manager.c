@@ -4,6 +4,7 @@
  */
 #include "include/settings_manager.h"
 #include "hardware/include/sfhd.h"
+#include "syslog.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -20,7 +21,7 @@ static void defaults(void) {
   strcpy(g_settings.wlan_pwd, "");
   strcpy(g_settings.hs_ssid, "TOS-Hotspot");
   strcpy(g_settings.hs_pwd, "12345678");
-  printf("[SM] Defaults loaded\r\n");
+  LOG_I("SMGR", "Defaults loaded");
 }
 
 /* ========== Load from Flash ========== */
@@ -29,11 +30,11 @@ static bool load(void) {
   Flash_Status_t st = Flash_Rolling_Read((uint32_t *)&tmp, sizeof(tmp), NULL);
   if (st != FLASH_OK) return false;
   if (tmp.magic != SM_MAGIC) {
-    printf("[SM] Bad magic 0x%08lX\r\n", tmp.magic);
+    LOG_W("SMGR", "Bad magic 0x%08lX", (unsigned long)tmp.magic);
     return false;
   }
   memcpy(&g_settings, &tmp, sizeof(tmp));
-  printf("[SM] Loaded from Flash OK\r\n");
+  LOG_I("SMGR", "Loaded from Flash OK");
   return true;
 }
 
@@ -42,7 +43,7 @@ static bool load(void) {
 void SM_Init(void) {
   Flash_Check_Backup(); /* recover any interrupted write */
   if (!load()) {
-    printf("[SM] Load failed — erasing sector for clean start\r\n");
+    LOG_W("SMGR", "Load failed — erasing sector for clean start");
     Flash_Erase_Sector();
     defaults();
     SM_Save(); /* persist defaults immediately */
@@ -53,8 +54,9 @@ void SM_Save(void) {
   g_settings.magic = SM_MAGIC;
   g_settings.crc = 0;
   Flash_Status_t st = Flash_Rolling_Write((uint32_t *)&g_settings, sizeof(g_settings));
-  printf("[SM] Save (%luB): %s\r\n", sizeof(g_settings),
-         st == FLASH_OK ? "OK" : "FAIL");
+  LOG_I("SMGR", "Save (%luB): %s", (unsigned long)sizeof(g_settings),
+        st == FLASH_OK ? "OK" : "FAIL");
+  (void)st;
 }
 
 Settings_t *SM_Get(void) { return &g_settings; }

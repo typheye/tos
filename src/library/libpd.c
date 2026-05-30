@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h> // 添加：abs() 函数
 #include <string.h> // 添加：memset 等
+#include "syslog.h"
 
 
 #ifndef min
@@ -777,13 +778,13 @@ static uint16_t blend_rgb565(uint16_t color1, uint16_t color2, float ratio) {
 void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   PD_Init();
 
-  if (g_fb == NULL || logo_data == NULL) {
-    printf("[PD] Fade start failed: framebuffer or logo data is NULL\r\n");
+  if (g_fb == NULL) {
+    LOG_E("PD", "Fade start failed: framebuffer is NULL");
     return;
   }
 
   if (splash_in_progress) {
-    printf("[PD] Fade already in progress\r\n");
+    LOG_W("PD", "Fade already in progress");
     return;
   }
 
@@ -792,7 +793,7 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   splash_total_pixels = LOGO_WIDTH * LOGO_HEIGHT;
   splash_logo_data = (uint16_t *)logo_data;
 
-  printf("[PD] Starting fade in animation (%dms)\r\n", fade_in_ms);
+  LOG_I("PD", "Starting fade in animation (%lums)", (unsigned long)fade_in_ms);
 
   uint32_t steps = 30;
   uint32_t step_delay = fade_in_ms / steps;
@@ -810,7 +811,7 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
 
     // 检查是否被中断
     if (splash_fade_out_requested) {
-      printf("[PD] Fade in interrupted by fade out request\r\n");
+      LOG_W("PD", "Fade in interrupted by fade out request");
       break;
     }
 
@@ -825,7 +826,7 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
     LCD_Flush();
   }
 
-  printf("[PD] Fade in complete, waiting for finish signal\r\n");
+  LOG_I("PD", "Fade in complete, waiting for finish signal");
 }
 
 // ==================== 主动结束并淡出 ====================
@@ -835,11 +836,11 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
  */
 void PD_SplashFinish(uint32_t fade_out_ms) {
   if (!splash_in_progress) {
-    printf("[PD] No splash animation in progress\r\n");
+    LOG_W("PD", "No splash animation in progress");
     return;
   }
 
-  printf("[PD] Finish requested, starting fade out (%dms)\r\n", fade_out_ms);
+  LOG_I("PD", "Finish requested, starting fade out (%lums)", (unsigned long)fade_out_ms);
 
   splash_fade_out_requested = 1;
 
@@ -867,7 +868,7 @@ void PD_SplashFinish(uint32_t fade_out_ms) {
   LCD_Flush();
 
   splash_in_progress = 0;
-  printf("[PD] Fade out complete, splash finished\r\n");
+  LOG_I("PD", "Fade out complete, splash finished");
 }
 
 // ==================== 检查是否正在显示 ====================

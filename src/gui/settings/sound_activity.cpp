@@ -4,6 +4,7 @@
 #include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include <cstdio>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -16,7 +17,7 @@ static void draw_frame_title(const char *title) {
     last_tm = HAL_GetTick();
     Time_t t; Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[6]; sprintf(ts, "%02d:%02d", t.hours, t.minutes);
+    char ts[8]; sprintf(ts, "%02d:%02d", t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
   PD_DrawFrame();

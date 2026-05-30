@@ -22,6 +22,7 @@
 
 /* USER CODE BEGIN 0 */
 #include <stdio.h>
+#include "syslog.h"
 #define RTC_INITIALIZED_FLAG1 0x5A5A
 #define RTC_INITIALIZED_FLAG2 0xA5A5
 /* USER CODE END 0 */
@@ -40,17 +41,17 @@ void MX_RTC_Init(void)
 
   // 等待 LSE 就绪（最多等待 3 秒）
   uint32_t start = HAL_GetTick();
-  printf("[RTC] Waiting for LSE oscillator...\r\n");
+  LOG_I("RTC", "Waiting for LSE oscillator...");
   while ((HAL_GetTick() - start) < 3000) {
     if (__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
-      printf("[RTC] LSE ready after %lu ms\r\n", HAL_GetTick() - start);
+      LOG_I("RTC", "LSE ready after %lu ms", (unsigned long)(HAL_GetTick() - start));
       break;
     }
     HAL_Delay(10);
   }
 
   if (!__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)) {
-    printf("[RTC] Warning: LSE not ready after 3 seconds!\r\n");
+    LOG_W("RTC", "LSE not ready after 3 seconds");
   }
   // ========== 等待结束 ==========
   /* USER CODE END RTC_Init 0 */

@@ -1,4 +1,5 @@
 #include "include/tos.hpp"
+#include "syslog.h"
 #include "core/include/settings_manager.h"
 #include "demo/include/bmp_activity.hpp"
 #include "demo/include/display_activity.hpp"
@@ -64,6 +65,7 @@ void TOS::init() {
 
   SM_Init();
   boardLCD.setAutoBrightness(SM_Disp_Auto());
+  boardLCD.setRotation(SM_Disp_Dir());
   if (!SM_Disp_Auto()) boardLCD.setBrightness((uint16_t)SM_Disp_Bright() * 100);
 
   initialized_ = true;
@@ -76,7 +78,7 @@ void TOS::init() {
   HAL_Delay(50);
   errorLed.on();
 
-  printf("TOS initialized!\r\n");
+  LOG_I("MAIN", "System initialized, CPU:168MHz");
 
   ESP8266_Init();
   SysUI::init();

@@ -5,6 +5,7 @@
  *          擦写操作会短暂阻塞中断（~50ms 擦除 + 编程时间）
  */
 #include "include/sfhd.h"
+#include "syslog.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -13,7 +14,7 @@
 #define ALIGN4(x)        (((uint32_t)(x) + 3u) & ~3u)
 
 /* ========== 内部: 等待 Flash 就绪 ========== */
-static Flash_Status_t wait_ready(uint32_t timeout) {
+static __attribute__((unused)) Flash_Status_t wait_ready(uint32_t timeout) {
   uint32_t tick = HAL_GetTick();
   while (HAL_FLASH_GetError() != 0) {
     if (HAL_GetTick() - tick > timeout) return FLASH_ERR_TIMEOUT;
@@ -91,8 +92,8 @@ static Flash_Status_t check_align(const uint32_t *pData, uint32_t size) {
 /* ---------- 擦除数据扇区 ---------- */
 Flash_Status_t Flash_Erase_Sector(void) {
   Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
-  printf("[Flash] Erase sector %d: %s\r\n", FLASH_DATA_SECTOR,
-         st == FLASH_OK ? "OK" : "FAIL");
+  LOG_I("FLASH", "Erase sector %d: %s", FLASH_DATA_SECTOR,
+        st == FLASH_OK ? "OK" : "FAIL");
   return st;
 }
 
@@ -117,7 +118,7 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   if (st != FLASH_OK) return st;
 
   st = program_words(FLASH_DATA_ADDR, record, words);
-  printf("[Flash] Write %lu bytes: %s\r\n", dataSize, st == FLASH_OK ? "OK" : "FAIL");
+  LOG_I("FLASH", "Write %lu bytes: %s", (unsigned long)dataSize, st == FLASH_OK ? "OK" : "FAIL");
   return st;
 }
 
@@ -128,7 +129,7 @@ Flash_Status_t Flash_Read(uint32_t *pData, uint32_t dataSize) {
 
   Flash_Record_Header_t *phdr = (Flash_Record_Header_t *)FLASH_DATA_ADDR;
   if (phdr->magic != FLASH_RECORD_MAGIC) {
-    printf("[Flash] No valid data found (bad magic)\r\n");
+    LOG_W("FLASH", "No valid data found (bad magic)");
     return FLASH_ERR_CRC;
   }
 
@@ -137,10 +138,10 @@ Flash_Status_t Flash_Read(uint32_t *pData, uint32_t dataSize) {
 
   uint32_t crc = Flash_CRC32(pData, dataSize);
   if (crc != phdr->crc) {
-    printf("[Flash] CRC mismatch: stored=0x%08lX calc=0x%08lX\r\n", phdr->crc, crc);
+    LOG_E("FLASH", "CRC mismatch: stored=0x%08lX calc=0x%08lX", phdr->crc, crc);
     return FLASH_ERR_CRC;
   }
-  printf("[Flash] Read %lu bytes OK\r\n", dataSize);
+  LOG_I("FLASH", "Read %lu bytes OK", (unsigned long)dataSize);
   return FLASH_OK;
 }
 
@@ -166,14 +167,14 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
   if (st != FLASH_OK) return st;
   st = program_words(FLASH_BACKUP_ADDR, buf, words);
   if (st != FLASH_OK) return st;
-  printf("[Flash] Backup saved (%lu bytes)\r\n", total);
+  LOG_I("FLASH", "Backup saved (%lu bytes)", (unsigned long)total);
 
   /* Step 2: 擦除数据区并写入新数据 */
   st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
   if (st != FLASH_OK) return st;
   st = program_words(FLASH_DATA_ADDR, buf, words);
   if (st != FLASH_OK) {
-    printf("[Flash] Write FAILED — restoring from backup\r\n");
+    LOG_E("FLASH", "Write FAILED — restoring from backup");
     /* 从备份恢复 */
     for (uint32_t i = 0; i < words; i++)
       buf[i] = *(volatile uint32_t *)(FLASH_BACKUP_ADDR + i * 4);
@@ -185,7 +186,7 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
 
   /* Step 3: 清除备份（写零到魔术字即标记无效） */
   program_word(FLASH_BACKUP_ADDR, 0);
-  printf("[Flash] Write with backup OK (%lu bytes)\r\n", dataSize);
+  LOG_I("FLASH", "Write with backup OK (%lu bytes)", (unsigned long)dataSize);
   return FLASH_OK;
 }
 
@@ -194,7 +195,7 @@ bool Flash_Check_Backup(void) {
   volatile uint32_t *magic = (volatile uint32_t *)FLASH_BACKUP_ADDR;
   if (*magic != FLASH_RECORD_MAGIC) return false;
 
-  printf("[Flash] Found backup, restoring...\r\n");
+  LOG_W("FLASH", "Found backup, restoring...");
   uint32_t buf[FLASH_RECORD_MAX / 4 + 2];
   uint32_t words = FLASH_RECORD_MAX / 4 + 2;
   for (uint32_t i = 0; i < words; i++)
@@ -204,7 +205,7 @@ bool Flash_Check_Backup(void) {
   if (st == FLASH_OK) {
     program_words(FLASH_DATA_ADDR, buf, words);
     program_word(FLASH_BACKUP_ADDR, 0); /* 清除备份标记 */
-    printf("[Flash] Backup restored OK\r\n");
+    LOG_I("FLASH", "Backup restored OK");
   }
   return true;
 }
@@ -257,15 +258,15 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
 
   /* 扇区写满则擦除重来 */
   if (next + slot_size > FLASH_DATA_ADDR + FLASH_DATA_SIZE) {
-    printf("[Flash] Rolling sector full, erasing...\r\n");
+    LOG_W("FLASH", "Rolling sector full, erasing...");
     st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
     if (st != FLASH_OK) return st;
     next = FLASH_DATA_ADDR;
   }
 
   st = program_words(next, buf, words);
-  printf("[Flash] Rolling write @0x%08lX %lu bytes: %s\r\n",
-         next, dataSize, st == FLASH_OK ? "OK" : "FAIL");
+  LOG_I("FLASH", "Rolling write @0x%08lX %lu bytes: %s",
+        next, (unsigned long)dataSize, st == FLASH_OK ? "OK" : "FAIL");
   return st;
 }
 
@@ -275,7 +276,7 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
   Flash_Record_Header_t *hdr = (Flash_Record_Header_t *)last;
 
   if (hdr->magic != FLASH_RECORD_MAGIC) {
-    printf("[Flash] No rolling data found\r\n");
+    LOG_D("FLASH", "No rolling data found");
     if (outSize) *outSize = 0;
     return FLASH_ERR_CRC;
   }
@@ -283,7 +284,7 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
   /* 读取数据 — 使用 hdr->datasize（写入时保存的真实大小）进行 CRC 校验 */
   uint32_t storedSize = hdr->datasize;
   if (storedSize > FLASH_RECORD_MAX) {
-    printf("[Flash] Corrupt record: datasize=%lu exceeds max\r\n", storedSize);
+    LOG_E("FLASH", "Corrupt record: datasize=%lu exceeds max", (unsigned long)storedSize);
     return FLASH_ERR_CRC;
   }
   uint32_t copySize = maxSize < storedSize ? maxSize : storedSize;
@@ -292,23 +293,23 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
 
   uint32_t crc = Flash_CRC32(pData, storedSize);
   if (crc != hdr->crc) {
-    printf("[Flash] Rolling CRC mismatch: stored=0x%08lX calc=0x%08lX\r\n",
-           hdr->crc, crc);
+    LOG_E("FLASH", "Rolling CRC mismatch: stored=0x%08lX calc=0x%08lX",
+          hdr->crc, crc);
     return FLASH_ERR_CRC;
   }
   if (outSize) *outSize = copySize;
-  printf("[Flash] Rolling read @0x%08lX %lu bytes OK\r\n", last, copySize);
+  LOG_I("FLASH", "Rolling read @0x%08lX %lu bytes OK", last, (unsigned long)copySize);
   return FLASH_OK;
 }
 
 /* ---------- 调试打印 ---------- */
 void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize) {
   const uint8_t *p = (const uint8_t *)pData;
-  printf("[Flash] Data(%luB): ", dataSize);
-  for (uint32_t i = 0; i < dataSize && i < 64; i++) {
-    printf("%02X ", p[i]);
-    if ((i + 1) % 16 == 0) printf("\r\n          ");
-  }
-  if (dataSize > 64) printf("...(%lu more)", dataSize - 64);
-  printf("\r\n");
+  char hex[160];
+  int pos = 0;
+  uint32_t limit = dataSize < 64 ? dataSize : 64;
+  for (uint32_t i = 0; i < limit && pos < (int)sizeof(hex) - 4; i++)
+    pos += snprintf(hex + pos, sizeof(hex) - pos, "%02X ", p[i]);
+  LOG_D("FLASH", "Data(%luB): %s%s", (unsigned long)dataSize, hex,
+        dataSize > 64 ? "..." : "");
 }

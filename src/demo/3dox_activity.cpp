@@ -5,6 +5,7 @@
 #include "include/lib3dox.h"
 #include "include/libpd.h"
 #include <stdio.h>
+#include "syslog.h"
 
 extern USART boardSerial;
 extern KeyManager keyManager;
@@ -86,9 +87,9 @@ void render_3dox_activity(void) {
   int total_pixels = RENDER_WIDTH * RENDER_HEIGHT;
   int current_frame = 0;
 
-  printf("\r\n========== 3D Path Tracer Started ==========\r\n");
-  printf("Rendering Cornell Box with path tracing...\r\n");
-  printf("Press Enter to stop rendering\r\n");
+  LOG_I("3DOX", "3D Path Tracer started");
+  LOG_I("3DOX", "Rendering Cornell Box with path tracing...");
+  LOG_I("3DOX", "Press Enter to stop rendering");
 
   // 初始化 PD 图形库
   PD_Init();
@@ -96,7 +97,7 @@ void render_3dox_activity(void) {
   // 获取帧缓冲区
   framebuffer = LCD_GetFrameBuffer();
   if (!framebuffer) {
-    printf("[ERROR] Failed to get framebuffer!\r\n");
+    LOG_E("3DOX", "Failed to get framebuffer");
     return;
   }
 
@@ -108,7 +109,7 @@ void render_3dox_activity(void) {
   render_init();
   render_frame = 0;
 
-  printf("Rendering in progress...\r\n");
+  LOG_I("3DOX", "Rendering in progress...");
 
   // 持续渲染多帧（不清除旧帧，累积采样）
   while (1) {
@@ -123,10 +124,7 @@ void render_3dox_activity(void) {
       uint8_t current_enter =
           (keyManager.btn_enter.getState() == KEY_PRESSED) ? 1 : 0;
       if (current_enter == 1 && last_enter_state == 0) {
-        printf("\r\nRender stopped by user at frame ");
-        char buf[16];
-        sprintf(buf, "%d\r\n", current_frame);
-        printf(buf);
+        LOG_I("3DOX", "Render stopped by user at frame %d", current_frame);
         goto exit_render;
       }
       last_enter_state = current_enter;
@@ -151,11 +149,7 @@ void render_3dox_activity(void) {
 
     // 当前帧渲染完成
     render_frame = current_frame;
-    printf("Frame ");
-    char buf[16];
-    sprintf(buf, "%d", render_frame);
-    printf(buf);
-    printf(" complete\r\n");
+    LOG_I("3DOX", "Frame %d complete", render_frame);
 
     // 显示完成状态（帧结束时显示一次）
     draw_ui(100, current_frame);
@@ -181,11 +175,8 @@ exit_render:
   // 等待2秒后退出
   HAL_Delay(2000);
 
-  printf("Total frames rendered: ");
-  char buf[16];
-  sprintf(buf, "%d\r\n", render_frame);
-  printf(buf);
-  printf("3D Path Tracer Activity Exit\r\n");
+  LOG_I("3DOX", "Total frames rendered: %d", render_frame);
+  LOG_I("3DOX", "3D Path Tracer Activity exit");
 }
 
 // 带退出提示的版本

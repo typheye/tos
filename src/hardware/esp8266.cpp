@@ -1,5 +1,6 @@
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/usart.hpp"
+#include "syslog.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -32,7 +33,7 @@ void ESP8266::clearRxBuffer(void) {
 void ESP8266::processPendingData(void) {
   if (esp8266_data_ready) {
     esp8266_data_ready = 0;
-    printf("[PROCESS] Got data, len=%d\r\n", esp8266_global_index);
+    LOG_D("ESP", "PROCESS: Got data, len=%d", esp8266_global_index);
     processRxData(esp8266_global_buffer, esp8266_global_index);
   }
 }
@@ -61,31 +62,34 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
 void ESP8266::parseResponse(const char *response) {
   if (strstr(response, "WIFI GOT IP") != NULL) {
     _state = 3;
-    printf("ESP8266: Got IP\r\n");
+    LOG_I("ESP", "Got IP");
   } else if (strstr(response, "CONNECT") != NULL) {
     _state = 2;
-    printf("ESP8266: Connected\r\n");
+    LOG_I("ESP", "Connected");
   } else if (strstr(response, "CLOSED") != NULL ||
              strstr(response, "DISCONNECT") != NULL) {
     _state = 0;
-    printf("ESP8266: Disconnected\r\n");
+    LOG_I("ESP", "Disconnected");
   }
 }
 
 void ESP8266::processRxData(uint8_t *data, uint16_t len) {
-  printf("[ESP8266 RAW] ");
-  for (uint16_t i = 0; i < len; i++) {
+  /* Build single-line hex dump for debug log */
+  char raw[128];
+  uint16_t pos = 0;
+  for (uint16_t i = 0; i < len && pos < sizeof(raw) - 4; i++) {
     if (data[i] >= 0x20 && data[i] <= 0x7E) {
-      printf("%c", data[i]);
+      raw[pos++] = (char)data[i];
     } else if (data[i] == '\r') {
-      printf("\\r");
+      /* skip — \r is noise in debug output */
     } else if (data[i] == '\n') {
-      printf("\\n");
+      raw[pos++] = '|';  /* visual line break */
     } else {
-      printf("[%02X]", data[i]);
+      pos += snprintf(raw + pos, sizeof(raw) - pos, "[%02X]", data[i]);
     }
   }
-  printf("\r\n");
+  raw[pos] = '\0';
+  LOG_D("ESP", "RAW: %s", raw);
 
   for (uint16_t i = 0; i < len && _rx_index < sizeof(_rx_buffer) - 1; i++) {
     _rx_buffer[_rx_index++] = data[i];
@@ -94,19 +98,19 @@ void ESP8266::processRxData(uint8_t *data, uint16_t len) {
 }
 
 void ESP8266::init(void) {
-  printf("ESP8266: Initializing...\r\n");
-  printf("UART2 RX count before: %lu\r\n", uart2_rx_count);
+  LOG_I("ESP", "Initializing...");
+  LOG_I("ESP", "UART2 RX count before: %lu", (unsigned long)uart2_rx_count);
 
   clearRxBuffer();
   HAL_Delay(500);
 
-  printf("Sending AT command...\r\n");
+  LOG_I("ESP", "Sending AT command...");
   if (sendCommand("AT", "OK", 3000)) {
-    printf("ESP8266: AT OK\r\n");
+    LOG_I("ESP", "AT OK");
     sendCommand("ATE0", "OK", 1000);
   } else {
-    printf("ESP8266: No response!\r\n");
-    printf("UART2 RX count after: %lu\r\n", uart2_rx_count);
+    LOG_E("ESP", "No response!");
+    LOG_I("ESP", "UART2 RX count after: %lu", (unsigned long)uart2_rx_count);
   }
 }
 
@@ -118,7 +122,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
   sprintf(buffer, "%s\r\n", cmd);
 
-  printf("\r\n[ESP8266 SEND] %s\r\n", cmd);
+  LOG_D("ESP", "SEND: %s", cmd);
 
   HAL_UART_Transmit(_huart, (uint8_t *)buffer, strlen(buffer), 1000);
 
@@ -128,7 +132,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
     processPendingData();
 
     if (_rx_index > 0) {
-      printf("[ESP8266 RSP] %s\r\n", (char *)_rx_buffer);
+      LOG_D("ESP", "RSP: %s", (char *)_rx_buffer);
 
       if (expected_response) {
         if (strstr((char *)_rx_buffer, expected_response) != NULL) {
@@ -146,7 +150,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
     HAL_Delay(10);
   }
 
-  printf("[ESP8266 TIMEOUT]\r\n");
+  LOG_E("ESP", "TIMEOUT");
   return false;
 }
 

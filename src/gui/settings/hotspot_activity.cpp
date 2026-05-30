@@ -9,6 +9,7 @@
 #include "include/libpd.h"
 #include <cstdio>
 #include <cstring>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -34,7 +35,7 @@ static void draw_frame_title(const char *title) {
     Time_t t;
     Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[6];
+    char ts[8];
     sprintf(ts, "%02d:%02d", t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
@@ -73,7 +74,7 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 // ============ Hotspot ON/OFF ============
 
 static void hs_start(void) {
-  printf("[HOTS] Starting hotspot: %s\r\n", hs_ssid);
+  LOG_I("HOTS", "Starting hotspot: %s", hs_ssid);
   ESP8266_SendCommand("AT+CWMODE=2", "OK", 3000); // softAP mode
   char cmd[96];
   snprintf(cmd, sizeof(cmd), "AT+CWSAP=\"%s\",\"%s\",6,3", hs_ssid, hs_pwd);
@@ -82,16 +83,16 @@ static void hs_start(void) {
   ESP8266_SendCommand("AT+CIPSERVER=1,80", "OK", 3000);
   // ESP8266 softAP default gateway is always 192.168.4.1
   strcpy(ap_ip, "192.168.4.1");
-  printf("[HOTS] Hotspot started, AP IP: %s\r\n", ap_ip);
+  LOG_I("HOTS", "Hotspot started, AP IP: %s", ap_ip);
 }
 
 static void hs_stop(void) {
-  printf("[HOTS] Stopping hotspot\r\n");
+  LOG_I("HOTS", "Stopping hotspot");
   ESP8266_SendCommand("AT+CIPSERVER=0", "OK", 2000);
   ESP8266_SendCommand("AT+CIPMUX=0", "OK", 2000);
   ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000); // back to STA mode
   ap_ip[0] = '\0';
-  printf("[HOTS] Hotspot stopped\r\n");
+  LOG_I("HOTS", "Hotspot stopped");
 }
 
 // CWLIF not supported on this firmware — show hotspot info instead
@@ -176,7 +177,7 @@ static int hs_main_loop(void) {
           hs_start();
         else
           hs_stop();
-        printf("[HOTS] Set %s\r\n", hs_on ? "ON" : "OFF");
+        LOG_I("HOTS", "Set %s", hs_on ? "ON" : "OFF");
       } else if (sel == 0) {
         return 0;
       } else if (sel == 1) {

@@ -1,4 +1,5 @@
 #include "include/tsdio.hpp"
+#include "syslog.h"
 
 // 外部 SDIO 句柄 (由 CubeMX 生成)
 extern SD_HandleTypeDef hsd;
@@ -51,30 +52,26 @@ void TSDIO::updateCardInfo(void) {
 // 初始化 SD 卡
 SDCard_Status_t TSDIO::init(void) {
   HAL_SD_CardInfoTypeDef hal_card_info;
-  char dbg[64];
-  ;
 
-  printf("  [SDIO] Starting init...\r\n");
+  LOG_I("SDIO", "Starting init...");
 
   // 1. 初始化 SDIO 接口
-  printf("  [SDIO] Calling HAL_SD_Init...\r\n");
+  LOG_I("SDIO", "Calling HAL_SD_Init...");
   if (HAL_SD_Init(&hsd) != HAL_OK) {
-    printf("  [SDIO] HAL_SD_Init FAILED\r\n");
+    LOG_E("SDIO", "HAL_SD_Init FAILED");
     return SD_CARD_ERROR;
   }
-  printf("  [SDIO] HAL_SD_Init OK\r\n");
+  LOG_I("SDIO", "HAL_SD_Init OK");
 
   // 2. 重要：等待卡上电完成
   HAL_Delay(200);
 
   // 3. 检查卡是否插入 (通过检查卡状态)
-  printf("  [SDIO] Checking card presence...\r\n");
-  HAL_SD_CardStateTypeDef state = HAL_SD_GetCardState(&hsd);
-  sprintf(dbg, "  [SDIO] Card state after init: %ld\r\n", (long)state);
-  printf(dbg);
+  LOG_I("SDIO", "Checking card presence...");
+  LOG_I("SDIO", "Card state after init: %ld", (long)HAL_SD_GetCardState(&hsd));
 
   // 4. 获取卡信息
-  printf("  [SDIO] Getting card info...\r\n");
+  LOG_I("SDIO", "Getting card info...");
 
   // 尝试多次获取卡信息
   int retry = 5;
@@ -84,27 +81,24 @@ SDCard_Status_t TSDIO::init(void) {
         break;
       }
     }
-    printf("  [SDIO] Retrying get card info...\r\n");
+    LOG_W("SDIO", "Retrying get card info...");
     HAL_Delay(100);
   }
 
   if (hal_card_info.BlockNbr == 0) {
-    sprintf(dbg,
-            "  [SDIO] Card Info: Type=%lu, BlockSize=%lu, BlockNbr=%lu\r\n",
-            hal_card_info.CardType, hal_card_info.BlockSize,
-            hal_card_info.BlockNbr);
-    printf(dbg);
-    printf("  [SDIO] Failed to get valid card info!\r\n");
+    LOG_I("SDIO", "Card Info: Type=%lu, BlockSize=%lu, BlockNbr=%lu",
+            (unsigned long)hal_card_info.CardType, (unsigned long)hal_card_info.BlockSize,
+            (unsigned long)hal_card_info.BlockNbr);
+    LOG_E("SDIO", "Failed to get valid card info!");
     return SD_CARD_ERROR;
   }
 
-  sprintf(dbg, "  [SDIO] Card Info: Type=%lu, BlockSize=%lu, BlockNbr=%lu\r\n",
-          hal_card_info.CardType, hal_card_info.BlockSize,
-          hal_card_info.BlockNbr);
-  printf(dbg);
+  LOG_I("SDIO", "Card Info: Type=%lu, BlockSize=%lu, BlockNbr=%lu",
+          (unsigned long)hal_card_info.CardType, (unsigned long)hal_card_info.BlockSize,
+          (unsigned long)hal_card_info.BlockNbr);
 
   // 5. 配置总线宽度 (先尝试 1-bit，成功后再试 4-bit)
-  printf("  [SDIO] Configuring bus width...\r\n");
+  LOG_I("SDIO", "Configuring bus width...");
 
   // 先用 1-bit 模式验证读写是否正常
   card_info.bus_width = 1;
@@ -113,9 +107,9 @@ SDCard_Status_t TSDIO::init(void) {
 #ifdef SDIO_BUS_WIDE_4B
   if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) == HAL_OK) {
     card_info.bus_width = 4;
-    printf("  [SDIO] 4-bit mode enabled\r\n");
+    LOG_I("SDIO", "4-bit mode enabled");
   } else {
-    printf("  [SDIO] 4-bit mode failed, using 1-bit\r\n");
+    LOG_W("SDIO", "4-bit mode failed, using 1-bit");
   }
 #endif
 
@@ -128,14 +122,14 @@ SDCard_Status_t TSDIO::init(void) {
   card_info.card_type = hal_card_info.CardType;
 
   // 7. 等待卡就绪
-  printf("  [SDIO] Waiting for card ready...\r\n");
+  LOG_I("SDIO", "Waiting for card ready...");
   if (!waitForReady(5000)) {
-    printf("  [SDIO] Card ready timeout\r\n");
+    LOG_E("SDIO", "Card ready timeout");
     return SD_CARD_NOT_READY;
   }
 
   initialized = true;
-  printf("  [SDIO] Init complete!\r\n");
+  LOG_I("SDIO", "Init complete!");
   return SD_CARD_OK;
 }
 
@@ -199,21 +193,17 @@ SDCard_Status_t TSDIO::writeSector(uint8_t *buffer, uint32_t sector) {
   HAL_SD_CardInfoTypeDef card_info;
   HAL_SD_GetCardInfo(&hsd, &card_info);
 
-  char dbg[64];
-  ;
-  sprintf(dbg, "  [Write] Card Type: %lu, Sector: %lu\r\n", card_info.CardType,
-          sector);
-  printf(dbg);
+  LOG_I("SDIO", "Write Card Type: %lu, Sector: %lu",
+          (unsigned long)card_info.CardType, (unsigned long)sector);
 
   // 对于 SDHC/SDXC，CardType 是 1
   if (card_info.CardType == 1) {
-    printf("  [Write] SDHC/SDXC card detected\r\n");
+    LOG_I("SDIO", "Write SDHC/SDXC card detected");
   }
 
   if (HAL_SD_WriteBlocks(&hsd, buffer, sector, 1, HAL_MAX_DELAY) != HAL_OK) {
     uint32_t error = HAL_SD_GetError(&hsd);
-    sprintf(dbg, "  [Write] Error code: 0x%08lX\r\n", error);
-    printf(dbg);
+    LOG_E("SDIO", "Write Error code: 0x%08lX", (unsigned long)error);
     return SD_CARD_ERROR;
   }
 
@@ -346,29 +336,26 @@ bool TSDIO::selfTest(void) {
 
 // 在 tsdio.cpp 中替换 directWriteTest 函数
 bool TSDIO::directWriteTest(void) {
-  char dbg[128];
   uint8_t write_buf[512];
   uint8_t read_buf[512];
 
   // 先获取卡信息
   HAL_SD_CardInfoTypeDef card_info;
   if (HAL_SD_GetCardInfo(&hsd, &card_info) != HAL_OK) {
-    printf("  [Direct Test] Cannot get card info\r\n");
+    LOG_E("SDIO", "Direct Test: Cannot get card info");
     return false;
   }
 
-  sprintf(dbg,
-          "  [Direct Test] Card Type: %lu, BlockSize: %lu, BlockNbr: %lu\r\n",
-          card_info.CardType, card_info.BlockSize, card_info.BlockNbr);
-  printf(dbg);
+  LOG_I("SDIO", "Direct Test: Card Type: %lu, BlockSize: %lu, BlockNbr: %lu",
+          (unsigned long)card_info.CardType, (unsigned long)card_info.BlockSize,
+          (unsigned long)card_info.BlockNbr);
 
   // 使用一个安全的测试扇区
   uint32_t test_sector = 1000; // 改用扇区 1000
   if (test_sector >= card_info.BlockNbr) {
     test_sector = card_info.BlockNbr - 100;
   }
-  sprintf(dbg, "  [Direct Test] Using test sector: %lu\r\n", test_sector);
-  printf(dbg);
+  LOG_I("SDIO", "Direct Test: Using test sector: %lu", (unsigned long)test_sector);
 
   // 准备数据
   for (int i = 0; i < 512; i++) {
@@ -376,7 +363,7 @@ bool TSDIO::directWriteTest(void) {
   }
 
   // 等待卡就绪
-  printf("  [Direct Test] Checking card state...\r\n");
+  LOG_I("SDIO", "Direct Test: Checking card state...");
   HAL_SD_CardStateTypeDef state;
   for (int i = 0; i < 1000; i++) {
     state = HAL_SD_GetCardState(&hsd);
@@ -385,118 +372,112 @@ bool TSDIO::directWriteTest(void) {
     }
     HAL_Delay(1);
   }
-  sprintf(dbg, "  [Direct Test] Card state: %ld\r\n", (long)state);
-  printf(dbg);
+  LOG_I("SDIO", "Direct Test: Card state: %ld", (long)state);
 
-  printf("  [Direct Test] Writing sector...\r\n");
+  LOG_I("SDIO", "Direct Test: Writing sector...");
 
   // 写入
   HAL_StatusTypeDef result =
       HAL_SD_WriteBlocks(&hsd, write_buf, test_sector, 1, HAL_MAX_DELAY);
-  sprintf(dbg, "  [Direct Test] HAL_SD_WriteBlocks result: %d\r\n", result);
-  printf(dbg);
+  LOG_I("SDIO", "Direct Test: HAL_SD_WriteBlocks result: %d", result);
 
   if (result != HAL_OK) {
     uint32_t error_code = HAL_SD_GetError(&hsd);
-    sprintf(dbg, "  [Direct Test] Error code: 0x%08lX\r\n", error_code);
-    printf(dbg);
+    LOG_E("SDIO", "Direct Test: Error code: 0x%08lX", (unsigned long)error_code);
 
     // 打印错误位（只打印存在的）
-    printf("  [Direct Test] Error flags:\r\n");
+    LOG_D("SDIO", "Direct Test: Error flags -- checking...");
     if (error_code & HAL_SD_ERROR_NONE)
-      printf("    NONE\r\n");
+      LOG_D("SDIO", "  NONE");
     if (error_code & HAL_SD_ERROR_CMD_CRC_FAIL)
-      printf("    CMD_CRC_FAIL\r\n");
+      LOG_D("SDIO", "  CMD_CRC_FAIL");
     if (error_code & HAL_SD_ERROR_DATA_CRC_FAIL)
-      printf("    DATA_CRC_FAIL\r\n");
+      LOG_D("SDIO", "  DATA_CRC_FAIL");
     if (error_code & HAL_SD_ERROR_CMD_RSP_TIMEOUT)
-      printf("    CMD_RSP_TIMEOUT\r\n");
+      LOG_D("SDIO", "  CMD_RSP_TIMEOUT");
     if (error_code & HAL_SD_ERROR_DATA_TIMEOUT)
-      printf("    DATA_TIMEOUT\r\n");
+      LOG_D("SDIO", "  DATA_TIMEOUT");
     if (error_code & HAL_SD_ERROR_TX_UNDERRUN)
-      printf("    TX_UNDERRUN\r\n");
+      LOG_D("SDIO", "  TX_UNDERRUN");
     if (error_code & HAL_SD_ERROR_RX_OVERRUN)
-      printf("    RX_OVERRUN\r\n");
+      LOG_D("SDIO", "  RX_OVERRUN");
     if (error_code & HAL_SD_ERROR_ADDR_MISALIGNED)
-      printf("    ADDR_MISALIGNED\r\n");
+      LOG_D("SDIO", "  ADDR_MISALIGNED");
     if (error_code & HAL_SD_ERROR_BLOCK_LEN_ERR)
-      printf("    BLOCK_LEN_ERR\r\n");
+      LOG_D("SDIO", "  BLOCK_LEN_ERR");
     if (error_code & HAL_SD_ERROR_ERASE_SEQ_ERR)
-      printf("    ERASE_SEQ_ERR\r\n");
+      LOG_D("SDIO", "  ERASE_SEQ_ERR");
     if (error_code & HAL_SD_ERROR_BAD_ERASE_PARAM)
-      printf("    BAD_ERASE_PARAM\r\n");
+      LOG_D("SDIO", "  BAD_ERASE_PARAM");
     if (error_code & HAL_SD_ERROR_WRITE_PROT_VIOLATION)
-      printf("    WRITE_PROT_VIOLATION\r\n");
+      LOG_D("SDIO", "  WRITE_PROT_VIOLATION");
     if (error_code & HAL_SD_ERROR_LOCK_UNLOCK_FAILED)
-      printf("    LOCK_UNLOCK_FAILED\r\n");
+      LOG_D("SDIO", "  LOCK_UNLOCK_FAILED");
     if (error_code & HAL_SD_ERROR_COM_CRC_FAILED)
-      printf("    COM_CRC_FAILED\r\n");
+      LOG_D("SDIO", "  COM_CRC_FAILED");
     if (error_code & HAL_SD_ERROR_DMA)
-      printf("    DMA\r\n");
+      LOG_D("SDIO", "  DMA");
     if (error_code & HAL_SD_ERROR_UNSUPPORTED_FEATURE)
-      printf("    UNSUPPORTED_FEATURE\r\n");
+      LOG_D("SDIO", "  UNSUPPORTED_FEATURE");
 
     return false;
   }
 
-  printf("  [Direct Test] Write OK, waiting for completion...\r\n");
+  LOG_I("SDIO", "Direct Test: Write OK, waiting for completion...");
 
   // 等待写入完成
   if (!waitForReady(5000)) {
-    printf("  [Direct Test] Wait timeout\r\n");
+    LOG_E("SDIO", "Direct Test: Wait timeout");
     return false;
   }
 
-  printf("  [Direct Test] Reading back...\r\n");
+  LOG_I("SDIO", "Direct Test: Reading back...");
   HAL_Delay(50);
 
   result = HAL_SD_ReadBlocks(&hsd, read_buf, test_sector, 1, HAL_MAX_DELAY);
-  sprintf(dbg, "  [Direct Test] HAL_SD_ReadBlocks result: %d\r\n", result);
-  printf(dbg);
+  LOG_I("SDIO", "Direct Test: HAL_SD_ReadBlocks result: %d", result);
 
   if (result != HAL_OK) {
-    printf("  [Direct Test] Read failed\r\n");
+    LOG_E("SDIO", "Direct Test: Read failed");
     return false;
   }
 
   if (!waitForReady(5000)) {
-    printf("  [Direct Test] Read wait timeout\r\n");
+    LOG_E("SDIO", "Direct Test: Read wait timeout");
     return false;
   }
 
-  // 显示前32字节
-  printf("  [Direct Test] First 32 bytes of read data:\r\n  ");
-  for (int i = 0; i < 32; i++) {
-    sprintf(dbg, "%02X ", read_buf[i]);
-    printf(dbg);
-    if ((i + 1) % 16 == 0)
-      printf("\r\n  ");
+  /* 显示前32字节 */
+  {
+    char hex[128];
+    int pos = 0;
+    for (int i = 0; i < 32 && pos < (int)sizeof(hex) - 4; i++) {
+      pos += snprintf(hex + pos, sizeof(hex) - pos, "%02X ", read_buf[i]);
+    }
+    LOG_D("SDIO", "Direct Test: first 32 bytes: %s", hex);
   }
-  printf("\r\n");
 
   // 比较数据
   if (memcmp(write_buf, read_buf, 512) == 0) {
-    printf("  [Direct Test] PASSED!\r\n");
+    LOG_I("SDIO", "Direct Test: PASSED!");
     return true;
   } else {
-    printf("  [Direct Test] Data mismatch! FAILED!\r\n");
+    LOG_E("SDIO", "Direct Test: Data mismatch! FAILED!");
     return false;
   }
 }
 
 // 在 tsdio.cpp 中添加
 bool TSDIO::simpleWriteTest(void) {
-  char dbg[64];
-  ;
   uint8_t write_buf[512];
   uint8_t read_buf[512];
 
-  printf("  [Simple Test] Starting...\r\n");
+  LOG_I("SDIO", "Simple Test: Starting...");
 
   // 获取卡信息
   HAL_SD_CardInfoTypeDef card_info;
   if (HAL_SD_GetCardInfo(&hsd, &card_info) != HAL_OK) {
-    printf("  [Simple Test] Cannot get card info\r\n");
+    LOG_E("SDIO", "Simple Test: Cannot get card info");
     return false;
   }
 
@@ -505,8 +486,7 @@ bool TSDIO::simpleWriteTest(void) {
   if (test_sector >= card_info.BlockNbr) {
     test_sector = card_info.BlockNbr / 2;
   }
-  sprintf(dbg, "  [Simple Test] Using sector %lu\r\n", test_sector);
-  printf(dbg);
+  LOG_I("SDIO", "Simple Test: Using sector %lu", (unsigned long)test_sector);
 
   // 准备数据
   for (int i = 0; i < 512; i++) {
@@ -515,7 +495,7 @@ bool TSDIO::simpleWriteTest(void) {
 
   // 写入
   if (writeSector(write_buf, test_sector) != SD_CARD_OK) {
-    printf("  [Simple Test] Write failed\r\n");
+    LOG_E("SDIO", "Simple Test: Write failed");
     return false;
   }
 
@@ -523,16 +503,16 @@ bool TSDIO::simpleWriteTest(void) {
 
   // 读取
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {
-    printf("  [Simple Test] Read failed\r\n");
+    LOG_E("SDIO", "Simple Test: Read failed");
     return false;
   }
 
   // 验证
   if (memcmp(write_buf, read_buf, 512) == 0) {
-    printf("  [Simple Test] PASSED\r\n");
+    LOG_I("SDIO", "Simple Test: PASSED");
     return true;
   } else {
-    printf("  [Simple Test] Data mismatch\r\n");
+    LOG_E("SDIO", "Simple Test: Data mismatch");
     return false;
   }
 }

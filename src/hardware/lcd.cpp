@@ -1,6 +1,7 @@
 #include "include/lcd.hpp"
 #include "include/tcs3472.hpp"
 #include "tim.h"
+#include "syslog.h"
 #include <stdio.h>
 
 extern TIM_HandleTypeDef htim4;
@@ -385,7 +386,7 @@ void LCD::setBrightness(uint16_t val) {
 void LCD::updateAutoBrightness(void) {
   static bool logged = false;
   if (!_auto_brightness) { logged = false; return; }
-  if (!logged) { printf("[LCD] Auto-brightness active\r\n"); logged = true; }
+  if (!logged) { LOG_I("LCD", "Auto-brightness active"); logged = true; }
   static uint32_t last = 0;
   if (HAL_GetTick() - last < 2000) return;
   last = HAL_GetTick();

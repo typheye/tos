@@ -3,6 +3,7 @@
 #include "hardware/include/lcd.hpp"
 #include "include/libpd.h"
 #include <cstring>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

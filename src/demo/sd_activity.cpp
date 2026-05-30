@@ -9,6 +9,7 @@
 #include "include/libpd.h"
 #include <stdint.h>
 #include <stdio.h>
+#include "syslog.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -212,110 +213,105 @@ void sd_card_activity_gui(void) {
 void sd_card_activity(void) { sd_card_activity_gui(); }
 
 void sd_card_direct_activity(void) {
-  printf("\r\n========== SD Card Direct Test ==========\r\n");
+  LOG_I("SDAC", "SD Card Direct Test");
   if (boardSDIO.directWriteTest())
-    printf("  [OK] SD card functional\r\n");
+    LOG_I("SDAC", "SD card functional");
   else
-    printf("  [FAIL] SD card test failed\r\n");
-  printf("========== Activity Complete ==========\r\n");
+    LOG_E("SDAC", "SD card test failed");
+  LOG_I("SDAC", "Activity Complete");
 }
 
 void sd_card_diagnostic(void) {
-  char dbg[128];
-  printf("\r\n========== SD CARD DIAGNOSTIC ==========\r\n");
-  HAL_SD_CardStateTypeDef state = HAL_SD_GetCardState(&hsd);
-  sprintf(dbg, "Card state: %lu\r\n", (unsigned long)state);
-  printf(dbg);
+  LOG_I("SDAC", "SD Card Diagnostic");
+  LOG_I("SDAC", "Card state: %lu", (unsigned long)HAL_SD_GetCardState(&hsd));
 
   HAL_SD_CardInfoTypeDef info;
   if (HAL_SD_GetCardInfo(&hsd, &info) == HAL_OK) {
-    uint64_t total_mb = (uint64_t)info.BlockNbr * info.BlockSize / (1024 * 1024);
-    sprintf(dbg, "Card Type: %lu, Capacity: %llu MB\r\n", (unsigned long)info.CardType, total_mb);
-    printf(dbg);
+    LOG_I("SDAC", "Card Type: %lu, Capacity: %llu MB", (unsigned long)info.CardType,
+           (uint64_t)info.BlockNbr * info.BlockSize / (1024 * 1024));
   }
 
   FATFS fs;
   FRESULT res = f_mount(&fs, "0:", 1);
   if (res == FR_OK) {
-    printf("Mount: OK\r\n");
+    LOG_I("SDAC", "Mount: OK");
     DWORD free_clusters;
     FATFS *fs_info;
     if (f_getfree("0:", &free_clusters, &fs_info) == FR_OK) {
-      uint64_t total = (uint64_t)(fs_info->n_fatent - 2) * fs_info->csize * 512 / (1024 * 1024);
-      uint64_t free_mb = (uint64_t)free_clusters * fs_info->csize * 512 / (1024 * 1024);
-      sprintf(dbg, "Total: %llu MB, Free: %llu MB\r\n", total, free_mb);
-      printf(dbg);
+      LOG_I("SDAC", "Total: %llu MB, Free: %llu MB",
+             (uint64_t)(fs_info->n_fatent - 2) * fs_info->csize * 512 / (1024 * 1024),
+             (uint64_t)free_clusters * fs_info->csize * 512 / (1024 * 1024));
     }
     f_mount(NULL, "0:", 0);
   }
-  printf("========== DIAGNOSTIC COMPLETE ==========\r\n");
+  LOG_I("SDAC", "Diagnostic complete");
 }
 
 void sd_card_rw_test(void) {
-  printf("\r\n========== SD CARD RW TEST ==========\r\n");
+  LOG_I("SDAC", "SD Card RW Test");
   FATFS fs;
-  if (f_mount(&fs, "0:", 1) != FR_OK) { printf("Mount failed!\r\n"); return; }
+  if (f_mount(&fs, "0:", 1) != FR_OK) { LOG_E("SDAC", "Mount failed"); return; }
 
   FIL file;
   const char *test_data = "SD Card Test - Hello from STM32!\nLine 2\nLine 3\n";
   if (f_open(&file, "0:/rw_test.txt", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK) {
     UINT bw; f_write(&file, test_data, strlen(test_data), &bw); f_close(&file);
-    printf("Write: OK\r\n");
+    LOG_I("SDAC", "Write: OK");
   }
 
   if (f_open(&file, "0:/rw_test.txt", FA_READ) == FR_OK) {
     char buffer[256]; UINT br;
     f_read(&file, buffer, sizeof(buffer) - 1, &br);
     buffer[br] = '\0'; f_close(&file);
-    printf("Read: OK\r\nContent:\r\n---\r\n%s---\r\n", buffer);
+    LOG_I("SDAC", "Read: OK\nContent:\n---\n%s---", buffer);
   }
 
   DIR dir; FILINFO fno;
   if (f_opendir(&dir, "0:") == FR_OK) {
     while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0]) {
-      printf("  %s (%lu bytes)\r\n", fno.fname, (unsigned long)fno.fsize);
+      LOG_I("SDAC", "%s (%lu bytes)", fno.fname, (unsigned long)fno.fsize);
     }
     f_closedir(&dir);
   }
   f_mount(NULL, "0:", 0);
-  printf("========== RW TEST COMPLETE ==========\r\n");
+  LOG_I("SDAC", "RW Test complete");
 }
 
 void sd_card_mount(void) {
-  if (FS_Mount("0:") == FS_OK) { printf("  [OK] Mounted\r\n"); list_root_files(); }
-  else printf("  [FAIL] Mount failed\r\n");
+  if (FS_Mount("0:") == FS_OK) { LOG_I("SDAC", "Mounted"); list_root_files(); }
+  else LOG_E("SDAC", "Mount failed");
 }
 void sd_card_unmount(void) {
-  if (FS_Unmount("0:") == FS_OK) printf("  [OK] Unmounted\r\n");
-  else printf("  [FAIL] Unmount failed\r\n");
+  if (FS_Unmount("0:") == FS_OK) LOG_I("SDAC", "Unmounted");
+  else LOG_E("SDAC", "Unmount failed");
 }
 void sd_card_list(void) {
   if (is_fs_mounted()) list_root_files();
-  else printf("  Filesystem not mounted\r\n");
+  else LOG_W("SDAC", "Filesystem not mounted");
 }
 
 void sd_card_format(void) {
-  printf("\r\n========== SD CARD FORMAT =========\r\n");
-  printf("WARNING: This will erase ALL data!\r\n");
-  printf("Press Enter to continue, D0 to cancel...\r\n");
+  LOG_I("SDAC", "SD Card Format");
+  LOG_W("SDAC", "This will erase ALL data");
+  LOG_I("SDAC", "Press Enter to continue, D0 to cancel...");
   uint32_t start = HAL_GetTick();
   while (HAL_GetTick() - start < 5000) {
     keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { printf("Cancelled\r"); return; }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) { LOG_I("SDAC", "Cancelled"); return; }
     if (keyManager.btn_enter.getState() == KEY_PRESSED) break;
     HAL_Delay(50);
   }
   f_mount(NULL, "0:", 0);
-  printf("Formatting...\r");
+  LOG_I("SDAC", "Formatting...");
 
 #define WORK_BUF_SIZE (32 * 1024)
   uint32_t *work = (uint32_t *)malloc(WORK_BUF_SIZE);
-  if (!work) { printf("  No memory\r"); return; }
+  if (!work) { LOG_E("SDAC", "No memory"); return; }
   memset(work, 0, WORK_BUF_SIZE);
   FRESULT res = f_mkfs("0:", 0, 0, work, WORK_BUF_SIZE);
-  printf("  f_mkfs result: %d\r", res);
+  LOG_I("SDAC", "f_mkfs result: %d", res);
   free(work);
-  if (res == FR_OK) printf("  [OK] Format complete\r");
-  else printf("  [FAIL] Format failed\r");
-  printf("========== FORMAT COMPLETE ==========\r");
+  if (res == FR_OK) LOG_I("SDAC", "Format complete");
+  else LOG_E("SDAC", "Format failed");
+  LOG_I("SDAC", "Format operation complete");
 }

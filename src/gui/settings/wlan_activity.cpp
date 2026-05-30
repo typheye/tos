@@ -8,6 +8,7 @@
 #include "include/libpd.h"
 #include <cstdio>
 #include <cstring>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -30,15 +31,15 @@ static int ap_count = 0;
 
 static bool do_scan(void) {
   ap_count = 0;
-  printf("[WLAN] Setting STA mode and scanning...\r\n");
+  LOG_I("WLAN", "Setting STA mode and scanning...");
   ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000); // ensure station mode
   HAL_Delay(200);
-  printf("[WLAN] Scanning with AT+CWLAP...\r\n");
+  LOG_I("WLAN", "Scanning with AT+CWLAP...");
   if (!esp8266.scanNetworks()) {
-    printf("[WLAN] Scan failed, retrying once...\r\n");
+    LOG_W("WLAN", "Scan failed, retrying once...");
     HAL_Delay(300);
     if (!esp8266.scanNetworks()) {
-      printf("[WLAN] Scan failed after retry\r\n");
+      LOG_E("WLAN", "Scan failed after retry");
       alert_show("ALERT", "WiFi scan failed. Check module.");
       return false;
     }
@@ -49,7 +50,7 @@ static bool do_scan(void) {
     return false;
   }
 
-  printf("[WLAN] Raw %d bytes\r\n", (int)strlen(buf));
+  LOG_D("WLAN", "Raw %d bytes", (int)strlen(buf));
   const char *p = buf;
   while (p && *p && ap_count < MAX_APS) {
     p = strstr(p, "+CWLAP:");
@@ -91,7 +92,7 @@ static bool do_scan(void) {
     if (neg)
       rssi = -rssi;
     if (si == 0 || strcmp(ap_ssid[ap_count], "N/A") == 0) {
-      printf("[WLAN] Skip empty/N/A\r\n");
+      LOG_D("WLAN", "Skip empty/N/A");
       continue;
     }
     // Deduplicate: keep strongest RSSI
@@ -109,12 +110,11 @@ static bool do_scan(void) {
     if (!dup) {
       ap_enc[ap_count] = ecn;
       ap_rssi[ap_count] = rssi;
-      printf("[WLAN] %d: \"%s\" RSSI=%d enc=%d\r\n", ap_count,
-             ap_ssid[ap_count], rssi, ecn);
+      LOG_D("WLAN", "%d: \"%s\" RSSI=%d enc=%d", ap_count, ap_ssid[ap_count], rssi, ecn);
       ap_count++;
     }
   }
-  printf("[WLAN] %d unique networks\r\n", ap_count);
+  LOG_I("WLAN", "%d unique networks", ap_count);
   return true;
 }
 
@@ -131,7 +131,7 @@ static void draw_frame_title(const char *title) {
     Time_t t;
     Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[6];
+    char ts[8];
     sprintf(ts, "%02d:%02d", t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
@@ -286,14 +286,13 @@ static int wlan_main_loop(void) {
           wlan_ssid[0] = '\0';
           wlan_pwd[0] = '\0';
         }
-        printf("[WLAN] Set %s\r\n", wlan_on ? "ON" : "OFF");
+        LOG_I("WLAN", "Set %s", wlan_on ? "ON" : "OFF");
       } else if (sel == 0) {
         return 0;
       } else if (sel == 1) {
         wlan_edit = true;
       } else {
         // Map selected index to action
-        int n = wlan_item_count();
         if (wlan_on && sel >= 2) {
           int sub = sel - 2;
           if (sub == 0) {
@@ -431,8 +430,7 @@ static void scaning_run(void) {
         snprintf(title, sizeof(title), "Password for %s", ap_ssid[ap_idx]);
         char pwd[32];
         if (keyboard_open(title, pwd, 31)) {
-          printf("[WLAN] Connecting to %s with password...\r\n",
-                 ap_ssid[ap_idx]);
+          LOG_I("WLAN", "Connecting to %s with password...", ap_ssid[ap_idx]);
           boardLCD.fillScreen(LCD_COLOR_BLACK);
           draw_frame_title("WLAN");
           PD_SetColor(TOS_TEXT);
@@ -446,12 +444,12 @@ static void scaning_run(void) {
             wlan_connected = true;
             strncpy(wlan_ssid, ap_ssid[ap_idx], SSID_LEN - 1);
             strncpy(wlan_pwd, pwd, 31);
-            printf("[WLAN] Connected to %s\r\n", wlan_ssid);
+            LOG_I("WLAN", "Connected to %s", wlan_ssid);
             alert_show("ALERT", "WiFi connected successfully!");
             return; // back to WLAN main page
           } else {
             wlan_connected = false;
-            printf("[WLAN] Connection failed\r\n");
+            LOG_E("WLAN", "Connection failed");
             alert_show("ALERT", "Connection failed. Check password.");
           }
         }

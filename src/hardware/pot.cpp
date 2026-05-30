@@ -1,4 +1,5 @@
 #include "include/pot.hpp"
+#include "syslog.h"
 #include <stdio.h>
 
 // 外部 ADC 句柄
@@ -23,16 +24,15 @@ void Potentiometer::init(void) {
     return;
 
   // ADC 已在 CubeMX 中配置，这里只需验证
-  printf("[POT] Potentiometer Driver Initialized\r\n");
-  printf("[POT] ADC Channel: PC0 (ADC123_IN10)\r\n");
-  printf("[POT] Reference Voltage: %.2fV\r\n", POT_VREF);
-  printf("[POT] Max Resistance: %.1fkΩ\r\n", _maxResistance);
+  LOG_I("POT", "Potentiometer Driver Initialized");
+  LOG_I("POT", "ADC Channel: PC0 (ADC123_IN10)");
+  LOG_I("POT", "Reference Voltage: %.2fV", POT_VREF);
+  LOG_I("POT", "Max Resistance: %.1fkΩ", _maxResistance);
 
   _initialized = true;
 
   // 测试读取
-  uint16_t test = readRaw();
-  printf("[POT] Test reading: %d (%.2fV)\r\n", test, readVoltage());
+  LOG_I("POT", "Test reading: %d (%.2fV)", (int)readRaw(), (double)readVoltage());
 }
 
 // 读取 ADC 原始值 (单次)
@@ -108,19 +108,19 @@ Pot_Data_t Potentiometer::readAll(void) {
 // 设置最大阻值
 void Potentiometer::setMaxResistance(float maxRes_kΩ) {
   _maxResistance = maxRes_kΩ;
-  printf("[POT] Max resistance set to %.1fkΩ\r\n", _maxResistance);
+  LOG_I("POT", "Max resistance set to %.1fkΩ", _maxResistance);
 }
 
 // 校准最大值 (将当前 ADC 值设为最大值)
 void Potentiometer::calibrateMax(void) {
   _maxRaw = readAverage(10);
-  printf("[POT] Calibrated MAX: raw=%d (%.2fV)\r\n", _maxRaw,
+  LOG_I("POT", "Calibrated MAX: raw=%d (%.2fV)", _maxRaw,
          (float)_maxRaw * POT_VREF / POT_ADC_MAX_VALUE);
 }
 
 // 校准最小值
 void Potentiometer::calibrateMin(void) {
   _minRaw = readAverage(10);
-  printf("[POT] Calibrated MIN: raw=%d (%.2fV)\r\n", _minRaw,
+  LOG_I("POT", "Calibrated MIN: raw=%d (%.2fV)", _minRaw,
          (float)_minRaw * POT_VREF / POT_ADC_MAX_VALUE);
 }

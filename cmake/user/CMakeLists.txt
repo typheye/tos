@@ -4,6 +4,7 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/
@@ -17,6 +18,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sysfonts.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syscalls_override.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/settings_manager.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syslog.c
     
     # 硬件驱动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/led.cpp

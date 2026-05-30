@@ -4,6 +4,7 @@
 #include "include/tcs3472.hpp"
 #include <math.h>
 #include <stdio.h>
+#include "syslog.h"
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -30,12 +31,12 @@ static CCMRAM float last_mag     = 0.0f;
 static CCMRAM bool  mag_valid    = false;
 
 static EHW_Expr_t check_jy901s(void) {
-  if (!boardJY901S.isInitialized()) { printf("[EHW] JY901S not init\r\n"); return EHW_EXPR_NONE; }
+  if (!boardJY901S.isInitialized()) { LOG_W("EHW", "JY901S not init"); return EHW_EXPR_NONE; }
 
   uint32_t t0 = HAL_GetTick();
   JY901S_Data_t d = boardJY901S.readData();
   uint32_t dt = HAL_GetTick() - t0;
-  if (dt > SENSOR_TO_MS) printf("[EHW] JY901S read took %lums\r\n", dt);
+  if (dt > SENSOR_TO_MS) LOG_W("EHW", "JY901S read took %lums", (unsigned long)dt);
 
   float mag = sqrtf(d.acc_x * d.acc_x + d.acc_y * d.acc_y + d.acc_z * d.acc_z);
   float gyro_mag = sqrtf(d.gyro_x * d.gyro_x + d.gyro_y * d.gyro_y + d.gyro_z * d.gyro_z);
@@ -72,12 +73,12 @@ static EHW_Expr_t check_jy901s(void) {
 static CCMRAM float smooth_temp = 22.0f;
 
 static EHW_Expr_t check_bmp180(void) {
-  if (!boardBMP180.isInitialized()) { printf("[EHW] BMP180 not init\r\n"); return EHW_EXPR_NONE; }
+  if (!boardBMP180.isInitialized()) { LOG_W("EHW", "BMP180 not init"); return EHW_EXPR_NONE; }
 
   uint32_t t0 = HAL_GetTick();
   float temp = boardBMP180.readTemperature();  // faster, no pressure hang risk
   uint32_t dt = HAL_GetTick() - t0;
-  if (dt > SENSOR_TO_MS) printf("[EHW] BMP180 read took %lums\r\n", dt);
+  if (dt > SENSOR_TO_MS) LOG_W("EHW", "BMP180 read took %lums", (unsigned long)dt);
 
   smooth_temp = smooth_temp * 0.85f + temp * 0.15f;
   float t = smooth_temp;
@@ -106,12 +107,12 @@ static EHW_Expr_t check_bmp180(void) {
 static CCMRAM float smooth_lux = 100.0f;
 
 static EHW_Expr_t check_tcs3472(void) {
-  if (!boardTCS3472.isInitialized()) { printf("[EHW] TCS3472 not init\r\n"); return EHW_EXPR_NONE; }
+  if (!boardTCS3472.isInitialized()) { LOG_W("EHW", "TCS3472 not init"); return EHW_EXPR_NONE; }
 
   uint32_t t0 = HAL_GetTick();
   TCS3472_ColorData_t c = boardTCS3472.readColor();
   uint32_t dt = HAL_GetTick() - t0;
-  if (dt > SENSOR_TO_MS) printf("[EHW] TCS3472 read took %lums\r\n", dt);
+  if (dt > SENSOR_TO_MS) LOG_W("EHW", "TCS3472 read took %lums", (unsigned long)dt);
 
   smooth_lux = smooth_lux * 0.9f + c.lux * 0.1f;
   float lux = smooth_lux;
@@ -145,7 +146,7 @@ void EHW_Init(void) {
   pending_cnt  = 0;
   expr_since   = 0;
   cooldown_until = 0;
-  printf("[EHW] Init done\r\n");
+  LOG_I("EHW", "Init done");
 }
 
 EHW_Expr_t EHW_Update(void) {
@@ -166,7 +167,7 @@ EHW_Expr_t EHW_Update(void) {
 
   if (pending_cnt >= DEBOUNCE && pending_expr != stable_expr) {
     if (now - expr_since >= MIN_HOLD_MS && now >= cooldown_until) {
-      printf("[EHW] expr: %d -> %d (cnt=%d)\r\n", stable_expr, pending_expr, pending_cnt);
+      LOG_I("EHW", "expr: %d -> %d (cnt=%d)", stable_expr, pending_expr, pending_cnt);
       stable_expr = pending_expr;
       expr_since = now;
       if (pending_expr == EHW_EXPR_NONE) {

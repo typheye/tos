@@ -4,6 +4,7 @@
 #include "hardware/include/usart.hpp"
 #include "include/libpd.h"
 #include <stdio.h>
+#include "syslog.h"
 
 extern USART boardSerial;
 extern KeyManager keyManager;
@@ -28,15 +29,17 @@ static void draw_bottom_hint(const char *left, const char *mid, const char *righ
   PD_DrawFooterCenter(left, mid, right);
 }
 
+#if 0
 static void draw_subtitle(const char *text) {
   PD_SetFont(FONT_ASCII_12);
   PD_SetColor(TOS_GREY);
   PD_DrawString(16, 44, text);
 }
+#endif
 
 // ===== 显示测试菜单 =====
 void display_test_activity(void) {
-  printf("\r\n========== Display Activity ==========\r\n");
+  LOG_I("DACT", "Display Activity started");
 
   PD_Init();
   PD_FillScreen(LV_BG_DARK);

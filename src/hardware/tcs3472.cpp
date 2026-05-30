@@ -1,4 +1,5 @@
 #include "include/tcs3472.hpp"
+#include "syslog.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -73,7 +74,7 @@ void TCS3472::init(void) {
   }
 
   if (!_initialized) {
-    printf("[TCS3472] Init failed! ID=0x%02X\r\n", id);
+    LOG_E("TCS", "Init failed! ID=0x%02X", id);
     return;
   }
 
@@ -89,8 +90,8 @@ void TCS3472::init(void) {
   // 默认关闭补光灯
   ledOff();
 
-  printf("[TCS3472] Initialized, ID=0x%02X\r\n", id);
-  printf("[TCS3472] Gain=%dX, Integration=%.1fms\r\n", (int)pow(4, _gain),
+  LOG_I("TCS", "Initialized, ID=0x%02X", id);
+  LOG_I("TCS", "Gain=%dX, Integration=%.1fms", (int)pow(4, _gain),
          (256 - _atime) * 2.4f);
 }
 

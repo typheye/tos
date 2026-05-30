@@ -5,6 +5,7 @@
 #include "include/pot.hpp"
 #include <cstdio>
 #include <cstring>
+#include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -193,7 +194,7 @@ bool keyboard_open(const char *title, char *out, int max_len) {
 
         if (strcmp(label, "OK") == 0) {
           out[len] = '\0';
-          printf("[KB] Done: %s\r\n", out);
+          LOG_I("KB", "Done: %s", out);
           return true;
         } else if (strcmp(label, "<-") == 0) {
           if (len > 0)
