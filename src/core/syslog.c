@@ -1,18 +1,41 @@
 /**
  * @file    syslog.c
- * @brief   Placeholder — logging currently done via printf-direct macros in syslog.h
- *
- * SysLog_Write() kept for future use when a more sophisticated formatter is needed.
+ * @brief   Timestamp helper for printf-direct log macros
  */
 
 #include "include/syslog.h"
+#include "stm32f4xx_hal.h"
+
+/* Hand-rolled uint32→dec (avoids newlib-nano snprintf issues) */
+static int u32dec(uint32_t v, char *b) {
+  if (!v) { b[0] = '0'; return 1; }
+  char t[12]; int n = 0;
+  while (v) { t[n++] = '0' + (v % 10); v /= 10; }
+  for (int i = 0; i < n; i++) b[i] = t[n - 1 - i];
+  return n;
+}
+
+/* Return formatted timestamp "[sssss.mmm]" in a static buffer */
+const char *syslog_ts(void) {
+  static char buf[16];
+  uint32_t t = SysLog_GetTick();
+  uint32_t sec = t / 1000u;
+  uint32_t ms  = t % 1000u;
+  int p = 0;
+  buf[p++] = '[';
+  /* seconds: right-aligned in 5 */
+  char ts[12]; int n = u32dec(sec, ts);
+  for (int i = n; i < 5; i++) buf[p++] = ' ';
+  for (int i = 0; i < n; i++) buf[p++] = ts[i];
+  buf[p++] = '.';
+  /* milliseconds: zero-padded 3 digits */
+  buf[p++] = '0' + (ms / 100);
+  buf[p++] = '0' + ((ms / 10) % 10);
+  buf[p++] = '0' + (ms % 10);
+  buf[p++] = ']';
+  buf[p] = '\0';
+  return buf;
+}
 
 __attribute__((weak))
-uint32_t SysLog_GetTick(void) { return 0; }
-
-void SysLog_Write(SysLog_Level_t level, const char *mod, const char *task,
-                  const char *file, int line, const char *fmt, ...) {
-  (void)level; (void)mod; (void)task; (void)file; (void)line; (void)fmt;
-  /* Not used while macros bypass to printf directly.
-   * Restore macro definitions in syslog.h to re-enable this path. */
-}
+uint32_t SysLog_GetTick(void) { return HAL_GetTick(); }

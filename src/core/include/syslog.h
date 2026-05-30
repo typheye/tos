@@ -83,37 +83,40 @@ void SysLog_Write(SysLog_Level_t level, const char *mod, const char *task,
  */
 uint32_t SysLog_GetTick(void);
 
-/* ========== Per-level macros — printf DIRECT (bypass syslog.c) ========== */
+/* ========== Timestamp helper ========== */
+const char *syslog_ts(void);  /* returns "[sssss.mmm]" from HAL_GetTick() */
+
+/* ========== Per-level macros — printf DIRECT ========== */
 
 #define LOG_FATAL(mod, task, fmt, ...) \
-  printf("[FATAL] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
+  printf("%s [FATAL] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
 
 #define LOG_ERROR(mod, task, fmt, ...) \
-  printf("[ERROR] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
+  printf("%s [ERROR] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
 
 #define LOG_WARN(mod, task, fmt, ...) \
-  printf("[WARN ] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
+  printf("%s [WARN ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
 
 #if SYSLOG_MAX_LEVEL >= 3
 #define LOG_INFO(mod, task, fmt, ...) \
-  printf("[INFO ] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
+  printf("%s [INFO ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
 #else
 #define LOG_INFO(...)  ((void)0)
 #endif
 
 #if SYSLOG_MAX_LEVEL >= 4
 #define LOG_DEBUG(mod, task, fmt, ...) \
-  printf("[DEBUG] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
+  printf("%s [DEBUG] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
 #else
 #define LOG_DEBUG(...) ((void)0)
 #endif
 
 /* ========== Shortcut macros ========== */
-#define LOG_F(mod, fmt, ...)  printf("[FATAL] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
-#define LOG_E(mod, fmt, ...)  printf("[ERROR] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
-#define LOG_W(mod, fmt, ...)  printf("[WARN ] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
-#define LOG_I(mod, fmt, ...)  printf("[INFO ] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
-#define LOG_D(mod, fmt, ...)  printf("[DEBUG] [%-5s] " fmt "\r\n", mod, ##__VA_ARGS__)
+#define LOG_F(mod, fmt, ...)  printf("%s [FATAL] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+#define LOG_E(mod, fmt, ...)  printf("%s [ERROR] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+#define LOG_W(mod, fmt, ...)  printf("%s [WARN ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+#define LOG_I(mod, fmt, ...)  printf("%s [INFO ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+#define LOG_D(mod, fmt, ...)  printf("%s [DEBUG] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
 
 #ifdef __cplusplus
 }

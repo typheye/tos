@@ -33,7 +33,7 @@ void ESP8266::clearRxBuffer(void) {
 void ESP8266::processPendingData(void) {
   if (esp8266_data_ready) {
     esp8266_data_ready = 0;
-    LOG_D("ESP", "PROCESS: Got data, len=%d", esp8266_global_index);
+    /* LOG_D("ESP", "PROCESS: Got data, len=%d", esp8266_global_index); */
     processRxData(esp8266_global_buffer, esp8266_global_index);
   }
 }
@@ -74,23 +74,6 @@ void ESP8266::parseResponse(const char *response) {
 }
 
 void ESP8266::processRxData(uint8_t *data, uint16_t len) {
-  /* Build single-line hex dump for debug log */
-  char raw[128];
-  uint16_t pos = 0;
-  for (uint16_t i = 0; i < len && pos < sizeof(raw) - 4; i++) {
-    if (data[i] >= 0x20 && data[i] <= 0x7E) {
-      raw[pos++] = (char)data[i];
-    } else if (data[i] == '\r') {
-      /* skip — \r is noise in debug output */
-    } else if (data[i] == '\n') {
-      raw[pos++] = '|';  /* visual line break */
-    } else {
-      pos += snprintf(raw + pos, sizeof(raw) - pos, "[%02X]", data[i]);
-    }
-  }
-  raw[pos] = '\0';
-  LOG_D("ESP", "RAW: %s", raw);
-
   for (uint16_t i = 0; i < len && _rx_index < sizeof(_rx_buffer) - 1; i++) {
     _rx_buffer[_rx_index++] = data[i];
   }
@@ -122,7 +105,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
   sprintf(buffer, "%s\r\n", cmd);
 
-  LOG_D("ESP", "SEND: %s", cmd);
+  /* LOG_D("ESP", "SEND: %s", cmd); */
 
   HAL_UART_Transmit(_huart, (uint8_t *)buffer, strlen(buffer), 1000);
 
@@ -132,7 +115,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
     processPendingData();
 
     if (_rx_index > 0) {
-      LOG_D("ESP", "RSP: %s", (char *)_rx_buffer);
+      /* LOG_D("ESP", "RSP: %s", (char *)_rx_buffer); */
 
       if (expected_response) {
         if (strstr((char *)_rx_buffer, expected_response) != NULL) {
