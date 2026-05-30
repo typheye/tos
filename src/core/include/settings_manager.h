@@ -13,7 +13,14 @@
 extern "C" {
 #endif
 
-#define SM_MAGIC 0x544F5302u  /* "TOS\2" */
+#define SM_MAGIC        0x544F5303u  /* "TOS\3" — bump on struct change */
+#define SM_SAVED_MAX    10           /* max saved WiFi networks */
+
+/* ========== Saved WiFi network entry ========== */
+typedef struct __attribute__((packed)) {
+  char     ssid[24];
+  char     pwd[32];
+} SM_SavedNet_t;
 
 /* ========== Unified settings struct ========== */
 typedef struct __attribute__((packed, aligned(4))) {
@@ -25,7 +32,7 @@ typedef struct __attribute__((packed, aligned(4))) {
   uint8_t  disp_bright;      /* manual brightness 1-10 */
   uint8_t  disp_dir;         /* rotation 0-1 */
 
-  /* --- WLAN --- */
+  /* --- WLAN (current connection) --- */
   char     wlan_ssid[24];
   char     wlan_pwd[32];
 
@@ -33,31 +40,26 @@ typedef struct __attribute__((packed, aligned(4))) {
   char     hs_ssid[24];
   char     hs_pwd[32];
 
-  /* --- Alignment fix: ensures struct size is multiple of 4 for Flash word writes --- */
-  uint8_t  _align8;
+  /* --- WLAN settings --- */
+  bool     wlan_on;          /* WiFi enabled */
+  bool     wlan_auto_conn;   /* auto-connect on enable */
+  uint8_t  _pad1[3];         /* alignment */
 
-  /* --- Reserved --- */
-  uint32_t _pad[4];
+  /* --- Saved networks --- */
+  uint8_t  saved_count;                    /* 0 .. SM_SAVED_MAX */
+  SM_SavedNet_t saved[SM_SAVED_MAX];       /* 10 * 56 = 560 bytes */
+
+  /* --- Alignment tail --- */
+  uint8_t  _pad2[3];         /* ensures sizeof % 4 == 0 */
 } Settings_t;
 
 /* ========== API ========== */
 
-/**
- * @brief  Initialize: load from Flash, or init defaults if first boot
- */
 void SM_Init(void);
-
-/**
- * @brief  Save current settings to Flash (rolling write)
- */
 void SM_Save(void);
-
-/**
- * @brief  Get pointer to settings struct (read/write directly)
- */
 Settings_t *SM_Get(void);
 
-/* Convenience getters */
+/* --- Display --- */
 bool    SM_Disp_Auto(void);
 uint8_t SM_Disp_Bright(void);
 uint8_t SM_Disp_Dir(void);
@@ -65,11 +67,26 @@ void    SM_Disp_SetAuto(bool v);
 void    SM_Disp_SetBright(uint8_t v);
 void    SM_Disp_SetDir(uint8_t v);
 
+/* --- WLAN current --- */
 const char *SM_Wlan_SSID(void);
 const char *SM_Wlan_PWD(void);
 void SM_Wlan_SetSSID(const char *s);
 void SM_Wlan_SetPWD(const char *s);
 
+/* --- WLAN settings --- */
+bool SM_Wlan_On(void);
+void SM_Wlan_SetOn(bool v);
+bool SM_Wlan_AutoConn(void);
+void SM_Wlan_SetAutoConn(bool v);
+
+/* --- Saved networks --- */
+uint8_t SM_Saved_Count(void);
+const SM_SavedNet_t *SM_Saved_Get(uint8_t idx);
+bool SM_Saved_Add(const char *ssid, const char *pwd);
+void SM_Saved_Del(uint8_t idx);
+bool SM_Saved_Find(const char *ssid);
+
+/* --- Hotspot --- */
 const char *SM_Hotspot_SSID(void);
 const char *SM_Hotspot_PWD(void);
 void SM_Hotspot_SetSSID(const char *s);

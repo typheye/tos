@@ -21,7 +21,10 @@ static void defaults(void) {
   strcpy(g_settings.wlan_pwd, "");
   strcpy(g_settings.hs_ssid, "TOS-Hotspot");
   strcpy(g_settings.hs_pwd, "12345678");
-  LOG_I("SMGR", "Defaults loaded");
+  g_settings.wlan_on        = false;
+  g_settings.wlan_auto_conn = false;
+  g_settings.saved_count    = 0;
+  LOG_D("SMGR", "Defaults loaded");
 }
 
 /* ========== Load from Flash ========== */
@@ -41,12 +44,12 @@ static bool load(void) {
 /* ========== Public ========== */
 
 void SM_Init(void) {
-  Flash_Check_Backup(); /* recover any interrupted write */
+  Flash_Check_Backup();
   if (!load()) {
     LOG_W("SMGR", "Load failed — erasing sector for clean start");
     Flash_Erase_Sector();
     defaults();
-    SM_Save(); /* persist defaults immediately */
+    SM_Save();
   }
 }
 
@@ -62,18 +65,72 @@ void SM_Save(void) {
 Settings_t *SM_Get(void) { return &g_settings; }
 
 /* --- Display --- */
-bool    SM_Disp_Auto(void)        { return g_settings.disp_auto; }
-uint8_t SM_Disp_Bright(void)      { return g_settings.disp_bright; }
-uint8_t SM_Disp_Dir(void)         { return g_settings.disp_dir; }
-void    SM_Disp_SetAuto(bool v)   { g_settings.disp_auto = v; SM_Save(); }
-void    SM_Disp_SetBright(uint8_t v) { g_settings.disp_bright = v; SM_Save(); }
-void    SM_Disp_SetDir(uint8_t v)    { g_settings.disp_dir = v; SM_Save(); }
+bool    SM_Disp_Auto(void)          { return g_settings.disp_auto; }
+uint8_t SM_Disp_Bright(void)        { return g_settings.disp_bright; }
+uint8_t SM_Disp_Dir(void)           { return g_settings.disp_dir; }
+void    SM_Disp_SetAuto(bool v)     { g_settings.disp_auto = v; SM_Save(); }
+void    SM_Disp_SetBright(uint8_t v){ g_settings.disp_bright = v; SM_Save(); }
+void    SM_Disp_SetDir(uint8_t v)   { g_settings.disp_dir = v; SM_Save(); }
 
-/* --- WLAN --- */
-const char *SM_Wlan_SSID(void)    { return g_settings.wlan_ssid; }
-const char *SM_Wlan_PWD(void)     { return g_settings.wlan_pwd; }
-void SM_Wlan_SetSSID(const char *s) { strncpy(g_settings.wlan_ssid, s, 23); SM_Save(); }
-void SM_Wlan_SetPWD(const char *s)  { strncpy(g_settings.wlan_pwd, s, 31); SM_Save(); }
+/* --- WLAN current --- */
+const char *SM_Wlan_SSID(void)       { return g_settings.wlan_ssid; }
+const char *SM_Wlan_PWD(void)        { return g_settings.wlan_pwd; }
+void SM_Wlan_SetSSID(const char *s)  { strncpy(g_settings.wlan_ssid, s, 23); SM_Save(); }
+void SM_Wlan_SetPWD(const char *s)   { strncpy(g_settings.wlan_pwd, s, 31); SM_Save(); }
+
+/* --- WLAN settings --- */
+bool SM_Wlan_On(void)               { return g_settings.wlan_on; }
+void SM_Wlan_SetOn(bool v)          { g_settings.wlan_on = v; SM_Save(); }
+bool SM_Wlan_AutoConn(void)         { return g_settings.wlan_auto_conn; }
+void SM_Wlan_SetAutoConn(bool v)    { g_settings.wlan_auto_conn = v; SM_Save(); }
+
+/* --- Saved networks --- */
+uint8_t SM_Saved_Count(void) { return g_settings.saved_count; }
+
+const SM_SavedNet_t *SM_Saved_Get(uint8_t idx) {
+  if (idx >= g_settings.saved_count) return NULL;
+  return &g_settings.saved[idx];
+}
+
+bool SM_Saved_Find(const char *ssid) {
+  for (uint8_t i = 0; i < g_settings.saved_count; i++) {
+    if (strcmp(g_settings.saved[i].ssid, ssid) == 0) return true;
+  }
+  return false;
+}
+
+bool SM_Saved_Add(const char *ssid, const char *pwd) {
+  /* Update existing entry if found */
+  for (uint8_t i = 0; i < g_settings.saved_count; i++) {
+    if (strcmp(g_settings.saved[i].ssid, ssid) == 0) {
+      strncpy(g_settings.saved[i].pwd, pwd, 31);
+      SM_Save();
+      return true;
+    }
+  }
+  /* Add new entry */
+  if (g_settings.saved_count >= SM_SAVED_MAX) {
+    /* Shift oldest out (index 0) */
+    memmove(&g_settings.saved[0], &g_settings.saved[1],
+            (SM_SAVED_MAX - 1) * sizeof(SM_SavedNet_t));
+    g_settings.saved_count = SM_SAVED_MAX - 1;
+  }
+  strncpy(g_settings.saved[g_settings.saved_count].ssid, ssid, 23);
+  strncpy(g_settings.saved[g_settings.saved_count].pwd, pwd, 31);
+  g_settings.saved_count++;
+  SM_Save();
+  return true;
+}
+
+void SM_Saved_Del(uint8_t idx) {
+  if (idx >= g_settings.saved_count) return;
+  uint8_t tail = g_settings.saved_count - idx - 1;
+  if (tail > 0)
+    memmove(&g_settings.saved[idx], &g_settings.saved[idx + 1],
+            tail * sizeof(SM_SavedNet_t));
+  g_settings.saved_count--;
+  SM_Save();
+}
 
 /* --- Hotspot --- */
 const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }

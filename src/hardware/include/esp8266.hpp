@@ -68,6 +68,8 @@ int ESP8266_GetState(void);
  * @return true 已连接, false 未连接
  */
 bool ESP8266_IsConnected(void);
+void ESP8266_Disconnect(void);
+bool ESP8266_GetIP(char *buf, uint16_t sz);
 
 #ifdef __cplusplus
 }
@@ -96,6 +98,7 @@ public:
 
   // 在 ESP8266 类中添加以下方法声明
   bool scanNetworks(void);
+  void disconnect(void);
   bool getIP(char *ip_buffer, uint16_t buffer_size);
   bool sendString(const char *str);
   const char *getRxBuffer(void) const { return (const char *)_rx_buffer; }
@@ -105,7 +108,7 @@ public:
 private:
   UART_HandleTypeDef *_huart;
   int _state; // 0=断开, 1=连接中, 2=已连接, 3=已获取IP
-  uint8_t _rx_buffer[512];
+  uint8_t _rx_buffer[1536];
   uint16_t _rx_index;
 
   void clearRxBuffer(void);

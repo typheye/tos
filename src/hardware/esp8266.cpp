@@ -82,18 +82,22 @@ void ESP8266::processRxData(uint8_t *data, uint16_t len) {
 
 void ESP8266::init(void) {
   LOG_I("ESP", "Initializing...");
-  LOG_I("ESP", "UART2 RX count before: %lu", (unsigned long)uart2_rx_count);
+  LOG_D("ESP", "UART2 RX count before: %lu", (unsigned long)uart2_rx_count);
 
+  /* Flush any stale boot data from ESP8266 */
   clearRxBuffer();
   HAL_Delay(500);
+  processPendingData();
+  clearRxBuffer();
+  HAL_Delay(200);
 
-  LOG_I("ESP", "Sending AT command...");
+  LOG_D("ESP", "Sending AT test...");
   if (sendCommand("AT", "OK", 3000)) {
     LOG_I("ESP", "AT OK");
     sendCommand("ATE0", "OK", 1000);
   } else {
-    LOG_E("ESP", "No response!");
-    LOG_I("ESP", "UART2 RX count after: %lu", (unsigned long)uart2_rx_count);
+    LOG_E("ESP", "No response to AT! Check wiring/power.");
+    LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
   }
 }
 
@@ -110,16 +114,22 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
   HAL_UART_Transmit(_huart, (uint8_t *)buffer, strlen(buffer), 1000);
 
   uint32_t start = HAL_GetTick();
+  uint32_t last_dbg = 0;
 
   while (HAL_GetTick() - start < timeout_ms) {
     processPendingData();
 
     if (_rx_index > 0) {
-      /* LOG_D("ESP", "RSP: %s", (char *)_rx_buffer); */
-
       if (expected_response) {
         if (strstr((char *)_rx_buffer, expected_response) != NULL) {
+          LOG_D("ESP", "OK after %lums, rx=%u bytes",
+                (unsigned long)(HAL_GetTick() - start), _rx_index);
           return true;
+        }
+        /* Buffer nearly full — search for partial match */
+        if (_rx_index >= sizeof(_rx_buffer) - 10) {
+          LOG_W("ESP", "Rx buffer nearly full (%u/%u), searching for '%s'",
+                _rx_index, (unsigned)sizeof(_rx_buffer), expected_response);
         }
       } else {
         return true;
@@ -127,13 +137,24 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
       if (strstr((char *)_rx_buffer, "ERROR") != NULL ||
           strstr((char *)_rx_buffer, "FAIL") != NULL) {
+        LOG_E("ESP", "Got ERROR/FAIL after %lums, rx=%u bytes",
+              (unsigned long)(HAL_GetTick() - start), _rx_index);
         return false;
+      }
+
+      /* Periodic debug during long waits */
+      if (timeout_ms > 3000 && HAL_GetTick() - last_dbg > 2000) {
+        last_dbg = HAL_GetTick();
+        LOG_D("ESP", "Waiting... %lums, rx=%u/%u bytes",
+              (unsigned long)(HAL_GetTick() - start),
+              _rx_index, (unsigned)sizeof(_rx_buffer));
       }
     }
     HAL_Delay(10);
   }
 
-  LOG_E("ESP", "TIMEOUT");
+  LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes",
+        (unsigned long)timeout_ms, _rx_index);
   return false;
 }
 
@@ -174,8 +195,13 @@ bool ESP8266::closeConnection(void) {
 
 bool ESP8266::isConnected(void) { return (_state == 2 || _state == 3); }
 
+void ESP8266::disconnect(void) {
+  sendCommand("AT+CWQAP", "OK", 3000);
+  _state = 0;
+}
+
 bool ESP8266::scanNetworks(void) {
-  return sendCommand("AT+CWLAP", "OK", 10000);
+  return sendCommand("AT+CWLAP", "OK", 15000);
 }
 
 bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
@@ -229,3 +255,7 @@ bool ESP8266_StartTCP(const char *host, uint16_t port) {
 int ESP8266_GetState(void) { return esp8266.getState(); }
 
 bool ESP8266_IsConnected(void) { return esp8266.isConnected(); }
+
+void ESP8266_Disconnect(void) { esp8266.disconnect(); }
+
+bool ESP8266_GetIP(char *buf, uint16_t sz) { return esp8266.getIP(buf, sz); }

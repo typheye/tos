@@ -26,21 +26,23 @@ void alert_show(const char *title, const char *msg) {
       PD_SetColor(TOS_ACCENT);
       PD_DrawString(22, 5, title);
 
-      // Message — same top margin as first menu card (y=33)
-      int msg_y = 33;
+      // Message — split on \n, draw each line
+      PD_SetFont(FONT_ASCII_16);
       PD_SetColor(TOS_TEXT);
-      int len = strlen(msg);
-      int max_chars = 22; // fits 240px screen at x=16 with 16px font
-      if (len <= max_chars) {
-        PD_DrawString(16, msg_y, msg);
-      } else {
-        char line[32];
-        strncpy(line, msg, max_chars);
-        line[max_chars] = '\0';
+      int msg_y = 33;
+      const char *p = msg;
+      while (*p && msg_y < 200) {
+        /* Find end of this line (\n or \0) */
+        const char *eol = p;
+        while (*eol && *eol != '\n') eol++;
+        int len = eol - p;
+        /* Truncate to screen width if needed */
+        if (len > 22) len = 22;
+        char line[24];
+        memcpy(line, p, len); line[len] = '\0';
         PD_DrawString(16, msg_y, line);
-        const char *rest = msg + max_chars;
-        if (*rest == ' ') rest++;
-        PD_DrawString(16, msg_y + 22, rest);
+        msg_y += 20;
+        p = (*eol == '\n') ? eol + 1 : eol;
       }
 
       PD_DrawFooterCenter("ENTER", NULL, NULL);
