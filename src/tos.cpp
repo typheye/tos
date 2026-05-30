@@ -81,6 +81,36 @@ void TOS::init() {
   LOG_I("MAIN", "System initialized, CPU:168MHz");
 
   ESP8266_Init();
+
+  /* ── WLAN Auto-Connect ── */
+  if (SM_Wlan_On() && SM_Wlan_AutoConn()) {
+    LOG_I("MAIN", "Auto-connect: starting...");
+    ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
+    HAL_Delay(300);
+
+    int saved = SM_Saved_Count();
+    for (int round = 0; round < 2; round++) {
+      bool ok = false;
+      for (int i = 0; i < saved; i++) {
+        const SM_SavedNet_t *net = SM_Saved_Get(i);
+        if (!net || !net->ssid[0]) continue;
+        LOG_I("MAIN", "Auto-connect: trying %s (round %d)...", net->ssid, round + 1);
+        if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
+          HAL_Delay(500);
+          if (ESP8266_IsConnected()) {
+            SM_Wlan_SetSSID(net->ssid);
+            SM_Wlan_SetPWD(net->pwd);
+            LOG_I("MAIN", "Auto-connect: connected to %s!", net->ssid);
+            ok = true;
+            break;
+          }
+        }
+        HAL_Delay(300);
+      }
+      if (ok) break;
+    }
+  }
+
   SysUI::init();
 }
 
