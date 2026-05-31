@@ -49,7 +49,13 @@
   */
 
 /* USER CODE BEGIN EXPORTED_DEFINES */
+#define TOS_HID_REPORT_ID_KEYBOARD  0x01U
+#define TOS_HID_REPORT_ID_MOUSE     0x02U
+#define TOS_HID_REPORT_ID_VENDOR    0x10U
 
+#define TOS_HID_KEYBOARD_REPORT_SIZE  9U   /* ID + modifier + reserved + 6 keys */
+#define TOS_HID_MOUSE_REPORT_SIZE     5U   /* ID + buttons + X + Y + wheel */
+#define TOS_HID_VENDOR_REPORT_SIZE    64U  /* ID + 63-byte payload */
 /* USER CODE END EXPORTED_DEFINES */
 
 /**
@@ -104,7 +110,13 @@ extern USBD_CUSTOM_HID_ItfTypeDef USBD_CustomHID_fops_FS;
   */
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-
+int8_t TOS_HID_SendKeyboard(uint8_t modifier,
+                            uint8_t key1, uint8_t key2, uint8_t key3,
+                            uint8_t key4, uint8_t key5, uint8_t key6);
+int8_t TOS_HID_ReleaseKeyboard(void);
+int8_t TOS_HID_SendMouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel);
+int8_t TOS_HID_SendVendor(const uint8_t *payload, uint16_t len);
+uint8_t TOS_HID_GetLastVendorOut(uint8_t *payload, uint16_t max_len, uint16_t *out_len);
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

@@ -35,7 +35,12 @@
 #include "stm32f4xx_hal.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+/* 64-byte interrupt endpoints are required because report ID 0x10 uses
+ * 1-byte Report ID + 63-byte vendor payload. Keep this in USER CODE so
+ * CubeMX code generation will not remove it.
+ */
+#define CUSTOM_HID_EPIN_SIZE   0x40U
+#define CUSTOM_HID_EPOUT_SIZE  0x40U
 /* USER CODE END INCLUDE */
 
 /** @addtogroup USBD_OTG_DRIVER
@@ -75,9 +80,9 @@
 /*---------- -----------*/
 #define USBD_SELF_POWERED     1U
 /*---------- -----------*/
-#define USBD_CUSTOMHID_OUTREPORT_BUF_SIZE     2U
+#define USBD_CUSTOMHID_OUTREPORT_BUF_SIZE     64U
 /*---------- -----------*/
-#define USBD_CUSTOM_HID_REPORT_DESC_SIZE     2U
+#define USBD_CUSTOM_HID_REPORT_DESC_SIZE     148U
 /*---------- -----------*/
 #define CUSTOM_HID_FS_BINTERVAL     0x5U
 
