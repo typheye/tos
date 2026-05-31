@@ -20,6 +20,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/settings_manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syslog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/systime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/tos_api.cpp
     
     # 硬件驱动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/led.cpp
@@ -74,6 +75,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/about_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/keyboard.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/alert.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/confirm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/status_icons.cpp
 
 )

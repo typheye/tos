@@ -1,5 +1,4 @@
 #include "include/settings.hpp"
-#include "demo/include/demo_activity.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/trtc.hpp"
@@ -18,13 +17,11 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-#define SET_N 10
+#define SET_N 8
 static const char *set_m[SET_N] = {
     "00 Return", "01 WLAN", "02 Hotspot", "03 Storage", "04 Display",
-    "05 Sound & GFX", "06 Date & Time", "07 About", "08 Restore", "09 Debugs",
+    "05 Sound & GFX", "06 Date & Time", "07 About & More",
 };
-#define DBG_N 2
-static const char *dbg_m[DBG_N] = {"00 Return", "01 Run Demo"};
 
 static void draw_menu(const char *title, const char **items, int count,
                       int sel) {
@@ -138,19 +135,6 @@ void settings_run(void) {
     }
     if (sel == 7) {
       about_activity_run();
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
-    }
-    if (sel == 9) {
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
-      while (1) {
-        int ds = menu_loop("DEBUG", dbg_m, DBG_N, 0);
-        if (ds == 0)
-          break;
-        if (ds == 1) {
-          demo_list_run();
-          boardLCD.fillScreen(LCD_COLOR_BLACK);
-        }
-      }
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
   }
