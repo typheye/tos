@@ -1,5 +1,6 @@
 #include "include/hid_activity.hpp"
 #include "core/include/systime.h"
+#include "hardware/include/jy901s.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/thid.hpp"
@@ -7,13 +8,15 @@
 #include "include/libpd.h"
 #include <cstdio>
 #include <cstring>
+#include <math.h>
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern THID boardHID;
 extern TRTC boardTRTC;
+extern JY901S boardJY901S;
 
-#define HID_MENU_ITEMS 7
+#define HID_MENU_ITEMS 8
 static const char *hid_menu[HID_MENU_ITEMS] = {
     "00 Return",
     "01 USB Status",
@@ -22,6 +25,7 @@ static const char *hid_menu[HID_MENU_ITEMS] = {
     "04 Win + L",
     "05 Type TOS",
     "06 Mouse Wiggle",
+    "07 Gyro Mouse",
 };
 
 static void draw_frame_title(const char *title) {
@@ -148,6 +152,155 @@ static void mouse_wiggle(void) {
   show_message("HID", "Mouse test done", boardHID.statusText(st), nullptr, 900);
 }
 
+#define GYRO_MOUSE_MAX_DELTA 120
+#define GYRO_MOUSE_SPEED_GAIN 2.00f  /* Previous value was 0.20f. 10x faster. */
+
+static int8_t clamp_mouse_delta(int v) {
+  if (v > GYRO_MOUSE_MAX_DELTA) {
+    return GYRO_MOUSE_MAX_DELTA;
+  }
+  if (v < -GYRO_MOUSE_MAX_DELTA) {
+    return -GYRO_MOUSE_MAX_DELTA;
+  }
+  return (int8_t)v;
+}
+
+static int8_t gyro_rate_to_delta(float rate_dps, float *fraction_accum) {
+  const float dead_zone_dps = 4.0f;
+  const float gain = GYRO_MOUSE_SPEED_GAIN;
+  float a = fabsf(rate_dps);
+
+  if (a < dead_zone_dps) {
+    *fraction_accum *= 0.60f;
+    return 0;
+  }
+
+  float delta = (a - dead_zone_dps) * gain;
+  if (rate_dps < 0.0f) {
+    delta = -delta;
+  }
+
+  *fraction_accum += delta;
+  int whole = (int)(*fraction_accum);
+  if (whole > GYRO_MOUSE_MAX_DELTA) {
+    whole = GYRO_MOUSE_MAX_DELTA;
+  } else if (whole < -GYRO_MOUSE_MAX_DELTA) {
+    whole = -GYRO_MOUSE_MAX_DELTA;
+  }
+  *fraction_accum -= (float)whole;
+  return clamp_mouse_delta(whole);
+}
+
+static void draw_gyro_mouse_status(float gx, float gy, float gz,
+                                   int8_t dx, int8_t dy, uint8_t buttons) {
+  char line[48];
+  draw_frame_title("Gyro Mouse");
+
+  PD_SetFont(FONT_ASCII_16);
+  PD_SetColor(TOS_TEXT);
+  PD_DrawString(18, 34, "JY901S -> HID Mouse x10");
+
+  PD_SetColor(TOS_TEXT_SEC);
+  snprintf(line, sizeof(line), "X=Gz:%ld  Y=-Gx:%ld", (long)gz, (long)(-gx));
+  PD_DrawString(18, 58, line);
+
+  snprintf(line, sizeof(line), "dX:%d dY:%d", (int)dx, (int)dy);
+  PD_DrawString(18, 80, line);
+
+  snprintf(line, sizeof(line), "A8:L=%s D0:R=%s",
+           (buttons & THID::MOUSE_LEFT) ? "ON" : "--",
+           (buttons & THID::MOUSE_RIGHT) ? "ON" : "--");
+  PD_DrawString(18, 102, line);
+
+  snprintf(line, sizeof(line), "Gain x10 Max %d", GYRO_MOUSE_MAX_DELTA);
+  PD_DrawString(18, 124, line);
+
+  snprintf(line, sizeof(line), "Gyro X/Y/Z %ld/%ld/%ld",
+           (long)gx, (long)gy, (long)gz);
+  PD_DrawString(18, 146, line);
+
+  PD_DrawFooterCenter("ENTER EXIT", "A8 LEFT", "D0 RIGHT");
+  LCD_Flush();
+}
+
+static void gyro_mouse_activity(void) {
+  if (!boardJY901S.isInitialized()) {
+    boardJY901S.init();
+  }
+
+  if (!boardHID.isConfigured()) {
+    show_message("Gyro Mouse", "USB not configured", "Reconnect USB first", nullptr, 1200);
+    return;
+  }
+
+  show_message("Gyro Mouse", "Move by JY901S gyro", "A8=L  D0=R", "ENTER exits", 1000);
+
+  float smooth_x = 0.0f;
+  float smooth_y = 0.0f;
+  float smooth_z = 0.0f;
+  float frac_x = 0.0f;
+  float frac_y = 0.0f;
+  int8_t last_dx = 0;
+  int8_t last_dy = 0;
+  uint8_t last_buttons = 0xFFU;
+  uint32_t last_report = 0;
+  uint32_t last_ui = 0;
+
+  while (1) {
+    keyManager.tick();
+    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+      if (boardHID.isConfigured()) {
+        (void)boardHID.releaseMouse();
+      }
+      show_message("Gyro Mouse", "Stopped", "Mouse released", nullptr, 500);
+      return;
+    }
+
+    uint32_t now = HAL_GetTick();
+    if (now - last_report >= 16U) {
+      last_report = now;
+
+      JY901S_Data_t data = boardJY901S.readData();
+
+      smooth_x = smooth_x * 0.72f + data.gyro_x * 0.28f;
+      smooth_y = smooth_y * 0.72f + data.gyro_y * 0.28f;
+      smooth_z = smooth_z * 0.72f + data.gyro_z * 0.28f;
+
+      /* Default mapping:
+       *   yaw rate   gyro_z  -> mouse X
+       *   pitch rate -gyro_x -> mouse Y
+       * If your board orientation is different, swap/invert these two lines.
+       */
+      int8_t dx = gyro_rate_to_delta(smooth_z, &frac_x);
+      int8_t dy = gyro_rate_to_delta(-smooth_x, &frac_y);
+
+      uint8_t buttons = 0;
+      if (keyManager.collision_A8.isPressed()) {
+        buttons |= THID::MOUSE_LEFT;
+      }
+      if (keyManager.collision_D0.isPressed()) {
+        buttons |= THID::MOUSE_RIGHT;
+      }
+
+      if (boardHID.isConfigured() && boardHID.isTxIdle() &&
+          (dx != 0 || dy != 0 || buttons != last_buttons)) {
+        (void)boardHID.sendMouse(buttons, dx, dy, 0);
+        last_buttons = buttons;
+      }
+
+      last_dx = dx;
+      last_dy = dy;
+
+      if (now - last_ui >= 160U) {
+        last_ui = now;
+        draw_gyro_mouse_status(smooth_x, smooth_y, smooth_z, last_dx, last_dy, buttons);
+      }
+    }
+
+    HAL_Delay(1);
+  }
+}
+
 void hid_test_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
 
@@ -185,6 +338,8 @@ void hid_test_activity_run(void) {
         type_tos();
       } else if (sel == 6) {
         mouse_wiggle();
+      } else if (sel == 7) {
+        gyro_mouse_activity();
       }
       last_ui = 0;
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TOS Custom HID host tool.
+TOS Custom HID host tool (improved GUI).
 
 Default device: VID 0x0483, PID 0x5750, Vendor Report ID 0x10.
 Install dependency:
@@ -11,7 +11,8 @@ Run GUI:
 
 CLI examples:
     python tools/hid_host_tool.py --list
-    python tools/hid_host_tool.py --send "hello from PC" --read
+    python tools/hid_host_tool.py --send "hello from PC"
+    python tools/hid_host_tool.py --read
 """
 from __future__ import annotations
 
@@ -22,11 +23,12 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 try:
     import hid  # type: ignore
-except Exception as exc:  # pragma: no cover - user environment dependent
+except Exception as exc:  # pragma: no cover
     hid = None
     HID_IMPORT_ERROR = exc
 else:
@@ -68,11 +70,24 @@ class HidEntry:
             interface_number=int(item.get("interface_number", -1) or -1),
         )
 
+    def kind(self) -> str:
+        if self.usage_page == 0xFF00:
+            return "Vendor"
+        if self.usage_page == 0x0001 and self.usage == 0x0006:
+            return "Keyboard"
+        if self.usage_page == 0x0001 and self.usage == 0x0002:
+            return "Mouse"
+        return "Other"
+
+    def short_label(self) -> str:
+        name = (self.product or "HID").strip()
+        return f"{self.kind():<8} UP={self.usage_page:04X} U={self.usage:04X}  {name}"
+
     def label(self) -> str:
         return (
-            f"VID={self.vendor_id:04X} PID={self.product_id:04X} "
-            f"UP={self.usage_page:04X} U={self.usage:04X} "
-            f"IF={self.interface_number} {self.manufacturer} {self.product}"
+            f"{self.kind()}  VID={self.vendor_id:04X} PID={self.product_id:04X} "
+            f"UP={self.usage_page:04X} U={self.usage:04X} IF={self.interface_number} "
+            f"{self.manufacturer} {self.product}"
         ).strip()
 
 
@@ -88,17 +103,11 @@ def enumerate_devices(vid: int = DEFAULT_VID, pid: int = DEFAULT_PID) -> list[Hi
     return [HidEntry.from_dict(x) for x in hid.enumerate(vid, pid)]
 
 
-def pick_vendor_device(vid: int = DEFAULT_VID, pid: int = DEFAULT_PID) -> HidEntry:
-    devices = enumerate_devices(vid, pid)
-    if not devices:
-        raise RuntimeError(f"No HID device found for VID={vid:04X} PID={pid:04X}")
-
-    # Windows often exposes one logical HID path per top-level collection.
-    # Prefer the vendor-defined collection from the 0xFF00 usage page.
+def pick_vendor_device(devices: list[HidEntry]) -> Optional[HidEntry]:
     for dev in devices:
         if dev.usage_page == 0xFF00:
             return dev
-    return devices[0]
+    return devices[0] if devices else None
 
 
 def open_device(entry: HidEntry):
@@ -124,15 +133,18 @@ def parse_vendor_report(data: list[int] | bytes | bytearray) -> Optional[bytes]:
 
 
 def cli_main(args: argparse.Namespace) -> int:
+    devices = enumerate_devices(args.vid, args.pid)
     if args.list:
-        for idx, dev in enumerate(enumerate_devices(args.vid, args.pid)):
+        for idx, dev in enumerate(devices):
             print(f"[{idx}] {dev.label()}")
         return 0
 
-    entry = pick_vendor_device(args.vid, args.pid)
+    entry = pick_vendor_device(devices)
+    if entry is None:
+        raise RuntimeError(f"No HID device found for VID={args.vid:04X} PID={args.pid:04X}")
+
     print(f"Opening: {entry.label()}")
     dev = open_device(entry)
-
     try:
         if args.send is not None:
             payload = args.send.encode("utf-8")
@@ -143,7 +155,7 @@ def cli_main(args: argparse.Namespace) -> int:
         if args.read:
             deadline = time.time() + args.timeout
             while time.time() < deadline:
-                data = dev.read(REPORT_SIZE, timeout_ms=100)
+                data = dev.read(REPORT_SIZE, timeout_ms=120)
                 payload = parse_vendor_report(data)
                 if payload is not None:
                     print("RX text:", payload.decode("utf-8", errors="replace"))
@@ -153,7 +165,6 @@ def cli_main(args: argparse.Namespace) -> int:
             return 2
     finally:
         dev.close()
-
     return 0
 
 
@@ -165,69 +176,130 @@ def gui_main() -> int:
         print(f"Tkinter unavailable: {exc}", file=sys.stderr)
         return 1
 
-    q: queue.Queue[str] = queue.Queue()
+    q: queue.Queue[tuple[str, str]] = queue.Queue()
     stop_event = threading.Event()
-    dev_holder: dict[str, object] = {"dev": None, "entry": None}
 
     root = tk.Tk()
     root.title("TOS HID Tool")
-    root.geometry("820x520")
+    root.geometry("980x660")
+    root.minsize(900, 600)
+
+    style = ttk.Style(root)
+    try:
+        style.theme_use("vista")
+    except Exception:
+        pass
 
     vid_var = tk.StringVar(value=f"{DEFAULT_VID:04X}")
     pid_var = tk.StringVar(value=f"{DEFAULT_PID:04X}")
     send_var = tk.StringVar(value="hello from PC")
     device_var = tk.StringVar(value="")
+    status_var = tk.StringVar(value="Disconnected")
+    hint_var = tk.StringVar(value="Refresh to scan HID collections. The tool prefers the Vendor collection (UP=FF00).")
+    autoconnect_var = tk.BooleanVar(value=True)
+    monitor_var = tk.BooleanVar(value=True)
 
     devices: list[HidEntry] = []
+    dev_holder: dict[str, object] = {"dev": None, "entry": None, "thread": None}
+    last_selected_path: list[bytes | None] = [None]
 
-    top = ttk.Frame(root, padding=8)
+    top = ttk.Frame(root, padding=10)
     top.pack(fill=tk.X)
 
-    ttk.Label(top, text="VID").pack(side=tk.LEFT)
-    ttk.Entry(top, width=8, textvariable=vid_var).pack(side=tk.LEFT, padx=(4, 10))
-    ttk.Label(top, text="PID").pack(side=tk.LEFT)
-    ttk.Entry(top, width=8, textvariable=pid_var).pack(side=tk.LEFT, padx=(4, 10))
+    ttk.Label(top, text="VID").grid(row=0, column=0, sticky="w")
+    ttk.Entry(top, width=8, textvariable=vid_var).grid(row=0, column=1, padx=(4, 10), sticky="w")
+    ttk.Label(top, text="PID").grid(row=0, column=2, sticky="w")
+    ttk.Entry(top, width=8, textvariable=pid_var).grid(row=0, column=3, padx=(4, 10), sticky="w")
 
-    combo = ttk.Combobox(top, textvariable=device_var, state="readonly", width=72)
-    combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+    ttk.Label(top, text="Collection").grid(row=1, column=0, sticky="w", pady=(8, 0))
+    combo = ttk.Combobox(top, textvariable=device_var, state="readonly", width=92)
+    combo.grid(row=1, column=1, columnspan=5, sticky="ew", pady=(8, 0), padx=(4, 8))
 
-    log = tk.Text(root, height=18)
-    log.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+    button_bar = ttk.Frame(top)
+    button_bar.grid(row=0, column=6, rowspan=2, sticky="e")
+    btn_refresh = ttk.Button(button_bar, text="Refresh")
+    btn_connect = ttk.Button(button_bar, text="Connect")
+    btn_disconnect = ttk.Button(button_bar, text="Disconnect")
+    btn_refresh.pack(side=tk.LEFT, padx=(0, 6))
+    btn_connect.pack(side=tk.LEFT, padx=(0, 6))
+    btn_disconnect.pack(side=tk.LEFT)
+    top.columnconfigure(5, weight=1)
 
-    bottom = ttk.Frame(root, padding=8)
-    bottom.pack(fill=tk.X)
-    ttk.Entry(bottom, textvariable=send_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+    opts = ttk.Frame(root, padding=(10, 0, 10, 6))
+    opts.pack(fill=tk.X)
+    ttk.Checkbutton(opts, text="Auto connect preferred Vendor collection", variable=autoconnect_var).pack(side=tk.LEFT)
+    ttk.Checkbutton(opts, text="Monitor incoming Vendor IN reports", variable=monitor_var).pack(side=tk.LEFT, padx=(18, 0))
 
-    def append(text: str) -> None:
-        log.insert(tk.END, text + "\n")
+    status_frame = ttk.LabelFrame(root, text="Connection status", padding=10)
+    status_frame.pack(fill=tk.X, padx=10, pady=(0, 8))
+    ttk.Label(status_frame, textvariable=status_var, font=("Segoe UI", 10, "bold")).pack(anchor="w")
+    ttk.Label(status_frame, textvariable=hint_var, wraplength=920, foreground="#555555").pack(anchor="w", pady=(4, 0))
+
+    mid = ttk.Panedwindow(root, orient="horizontal")
+    mid.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+    left = ttk.Frame(mid)
+    right = ttk.Frame(mid, width=280)
+    mid.add(left, weight=3)
+    mid.add(right, weight=1)
+
+    log_frame = ttk.LabelFrame(left, text="Log", padding=8)
+    log_frame.pack(fill=tk.BOTH, expand=True)
+    log = tk.Text(log_frame, wrap="word", height=22)
+    log_scroll = ttk.Scrollbar(log_frame, orient="vertical", command=log.yview)
+    log.configure(yscrollcommand=log_scroll.set)
+    log.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+    right_top = ttk.LabelFrame(right, text="Quick actions", padding=8)
+    right_top.pack(fill=tk.X)
+    ttk.Button(right_top, text="Ping / Hello", command=lambda: send_text("hello from PC"), width=24).pack(fill=tk.X, pady=2)
+    ttk.Button(right_top, text="Read once", command=lambda: read_once(), width=24).pack(fill=tk.X, pady=2)
+    ttk.Button(right_top, text="Clear log", command=lambda: clear_log(), width=24).pack(fill=tk.X, pady=2)
+
+    info_frame = ttk.LabelFrame(right, text="Tips", padding=8)
+    info_frame.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+    info_text = (
+        "• This device exposes 3 HID collections: Keyboard, Mouse, Vendor.\n"
+        "• The PC tool should connect to the Vendor collection (Usage Page FF00).\n"
+        "• Device-side menu: TOS -> 03 HID Test.\n"
+        "• To verify PC -> MCU: send text here, then on the device press '03 Read PC OUT'.\n"
+        "• To verify MCU -> PC: on the device press '02 Vendor Hello'."
+    )
+    ttk.Label(info_frame, text=info_text, wraplength=250, justify="left").pack(anchor="w")
+
+    send_frame = ttk.LabelFrame(root, text="Vendor OUT -> Device", padding=10)
+    send_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+    send_entry = ttk.Entry(send_frame, textvariable=send_var)
+    send_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+    btn_send = ttk.Button(send_frame, text="Send text")
+    btn_send.pack(side=tk.LEFT)
+
+    def now() -> str:
+        return datetime.now().strftime("%H:%M:%S")
+
+    def append(text: str, tag: str = "INFO") -> None:
+        log.insert(tk.END, f"[{now()}] {tag:<5} {text}\n")
         log.see(tk.END)
+
+    def clear_log() -> None:
+        log.delete("1.0", tk.END)
 
     def get_vid_pid() -> tuple[int, int]:
         return int(vid_var.get(), 16), int(pid_var.get(), 16)
 
-    def refresh() -> None:
-        nonlocal devices
-        try:
-            vid, pid = get_vid_pid()
-            devices = enumerate_devices(vid, pid)
-            labels = [d.label() for d in devices]
-            combo["values"] = labels
-            if labels:
-                # Prefer vendor collection.
-                sel = 0
-                for i, d in enumerate(devices):
-                    if d.usage_page == 0xFF00:
-                        sel = i
-                        break
-                combo.current(sel)
-                append(f"Found {len(labels)} HID collection(s).")
-            else:
-                device_var.set("")
-                append("No device found.")
-        except Exception as exc:
-            messagebox.showerror("Refresh failed", str(exc))
+    def set_connected_ui(connected: bool) -> None:
+        if connected:
+            status_var.set("Connected")
+            btn_send.state(["!disabled"])
+            btn_disconnect.state(["!disabled"])
+        else:
+            status_var.set("Disconnected")
+            btn_send.state(["disabled"])
+            btn_disconnect.state(["disabled"])
 
     def close_dev() -> None:
+        stop_event.set()
         dev = dev_holder.get("dev")
         if dev is not None:
             try:
@@ -236,72 +308,167 @@ def gui_main() -> int:
                 pass
         dev_holder["dev"] = None
         dev_holder["entry"] = None
+        dev_holder["thread"] = None
+        set_connected_ui(False)
 
     def read_worker(dev) -> None:
         while not stop_event.is_set():
+            if not monitor_var.get():
+                time.sleep(0.1)
+                continue
             try:
                 data = dev.read(REPORT_SIZE, timeout_ms=100)
                 payload = parse_vendor_report(data)
                 if payload is not None:
                     text = payload.decode("utf-8", errors="replace")
                     hx = binascii.hexlify(payload).decode()
-                    q.put(f"RX text: {text}\nRX hex : {hx}")
+                    q.put(("RX", f"Vendor IN text: {text}"))
+                    q.put(("RX", f"Vendor IN hex : {hx}"))
             except Exception as exc:
-                q.put(f"Read stopped: {exc}")
+                q.put(("ERR", f"Read stopped: {exc}"))
                 break
 
-    def connect() -> None:
-        close_dev()
-        stop_event.clear()
+    def selected_entry() -> Optional[HidEntry]:
         idx = combo.current()
-        if idx < 0 or idx >= len(devices):
-            messagebox.showwarning("Connect", "Please refresh and select a device first.")
-            return
+        if 0 <= idx < len(devices):
+            return devices[idx]
+        return None
+
+    def choose_preferred_index() -> int:
+        if last_selected_path[0] is not None:
+            for i, dev in enumerate(devices):
+                if dev.path == last_selected_path[0]:
+                    return i
+        for i, dev in enumerate(devices):
+            if dev.usage_page == 0xFF00:
+                return i
+        return 0
+
+    def connect_selected(auto: bool = False) -> bool:
+        stop_event.clear()
+        entry = selected_entry()
+        if entry is None:
+            if not auto:
+                messagebox.showwarning("Connect", "Please refresh and select a device first.")
+            return False
         try:
-            entry = devices[idx]
+            close_dev()
+            stop_event.clear()
             dev = open_device(entry)
             dev_holder["dev"] = dev
             dev_holder["entry"] = entry
+            dev_holder["thread"] = threading.Thread(target=read_worker, args=(dev,), daemon=True)
+            dev_holder["thread"].start()
+            last_selected_path[0] = entry.path
+            set_connected_ui(True)
+            status_var.set(f"Connected to {entry.kind()} collection")
+            hint_var.set(f"Path opened successfully. Usage Page={entry.usage_page:04X}, Usage={entry.usage:04X}. You can send Vendor OUT text below.")
             append(f"Connected: {entry.label()}")
-            threading.Thread(target=read_worker, args=(dev,), daemon=True).start()
+            return True
         except Exception as exc:
-            messagebox.showerror("Connect failed", str(exc))
+            set_connected_ui(False)
+            msg = f"Connect failed: {exc}"
+            append(msg, "ERR")
+            if not auto:
+                messagebox.showerror("Connect failed", str(exc))
+            return False
 
-    def send() -> None:
+    def refresh(auto_connect: Optional[bool] = None) -> None:
+        nonlocal devices
+        try:
+            vid, pid = get_vid_pid()
+            devices = enumerate_devices(vid, pid)
+            labels = [d.short_label() for d in devices]
+            combo["values"] = labels
+            if labels:
+                sel = choose_preferred_index()
+                combo.current(sel)
+                kinds = ", ".join([d.kind() for d in devices])
+                append(f"Found {len(labels)} HID collection(s): {kinds}")
+                hint_var.set("Keyboard/Mouse collections are for input emulation; Vendor collection (FF00) is used for PC <-> MCU custom data.")
+                if auto_connect is None:
+                    auto_connect = autoconnect_var.get()
+                if auto_connect:
+                    connect_selected(auto=True)
+            else:
+                device_var.set("")
+                close_dev()
+                append("No matching HID device found.", "WARN")
+                hint_var.set("No device found. Check USB cable, VID/PID, or whether the board has enumerated.")
+        except Exception as exc:
+            close_dev()
+            messagebox.showerror("Refresh failed", str(exc))
+
+    def send_text(text: Optional[str] = None) -> None:
         dev = dev_holder.get("dev")
         if dev is None:
-            messagebox.showwarning("Send", "Connect first.")
-            return
+            if autoconnect_var.get():
+                refresh(auto_connect=True)
+                dev = dev_holder.get("dev")
+            if dev is None:
+                messagebox.showwarning("Send", "No active connection. Click Refresh/Connect first.")
+                return
         try:
-            payload = send_var.get().encode("utf-8")
+            content = send_var.get() if text is None else text
+            payload = content.encode("utf-8")
             report = make_vendor_report(payload)
             n = dev.write(report)
-            append(f"TX {n} bytes: {send_var.get()!r}")
+            append(f"Vendor OUT sent ({n} bytes): {content}", "TX")
         except Exception as exc:
+            append(f"Send failed: {exc}", "ERR")
             messagebox.showerror("Send failed", str(exc))
+
+    def read_once() -> None:
+        dev = dev_holder.get("dev")
+        if dev is None:
+            messagebox.showwarning("Read", "No active connection.")
+            return
+        try:
+            data = dev.read(REPORT_SIZE, timeout_ms=200)
+            payload = parse_vendor_report(data)
+            if payload is None:
+                append("No Vendor IN report received this time.", "INFO")
+                return
+            append(f"Vendor IN text: {payload.decode('utf-8', errors='replace')}", "RX")
+            append(f"Vendor IN hex : {binascii.hexlify(payload).decode()}", "RX")
+        except Exception as exc:
+            append(f"Read failed: {exc}", "ERR")
+            messagebox.showerror("Read failed", str(exc))
 
     def pump_queue() -> None:
         try:
             while True:
-                append(q.get_nowait())
+                tag, text = q.get_nowait()
+                append(text, tag)
         except queue.Empty:
             pass
         root.after(100, pump_queue)
 
     def on_close() -> None:
-        stop_event.set()
         close_dev()
         root.destroy()
 
-    ttk.Button(top, text="Refresh", command=refresh).pack(side=tk.LEFT, padx=(0, 4))
-    ttk.Button(top, text="Connect", command=connect).pack(side=tk.LEFT)
-    ttk.Button(bottom, text="Send Vendor OUT", command=send).pack(side=tk.LEFT)
+    def on_select(_event=None) -> None:
+        entry = selected_entry()
+        if entry is not None:
+            hint_var.set(
+                f"Selected {entry.kind()} collection. For custom data, connect to Vendor (Usage Page FF00)."
+            )
 
-    append("Install dependency: python -m pip install hidapi")
-    append("Use Report ID 0x10 vendor channel: 1-byte ID + 63-byte payload.")
+    btn_refresh.configure(command=lambda: refresh())
+    btn_connect.configure(command=lambda: connect_selected(auto=False))
+    btn_disconnect.configure(command=close_dev)
+    btn_send.configure(command=lambda: send_text())
+    combo.bind("<<ComboboxSelected>>", on_select)
+
+    set_connected_ui(False)
+    append("Install dependency if needed: python -m pip install hidapi")
+    append("This board exposes 3 collections: Keyboard, Mouse, Vendor.")
+    append("The tool will prefer the Vendor collection (Usage Page FF00).")
+    append("Device-side menu: TOS -> 03 HID Test")
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.after(100, pump_queue)
-    refresh()
+    refresh(auto_connect=True)
     root.mainloop()
     return 0
 
