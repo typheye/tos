@@ -27,6 +27,7 @@
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -113,6 +114,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_TIM4_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
   start_tos();
