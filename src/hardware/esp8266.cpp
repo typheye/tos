@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef CCMRAM
+#define CCMRAM __attribute__((section(".ccmram"), aligned(4)))
+#endif
+
 extern USART boardSerial;
 
 extern "C" {
@@ -14,7 +18,7 @@ extern volatile uint32_t uart2_rx_count;
 }
 
 // 全局实例
-ESP8266 esp8266(&huart2);
+CCMRAM ESP8266 esp8266(&huart2);
 
 // ==================== C++ 类实现 ====================
 

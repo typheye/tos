@@ -12,6 +12,8 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
+#define PD_MAX_TEXT_CHARS 160
+
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
 #endif
@@ -176,6 +178,8 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
     return;
   if (g_fb == NULL)
     return;
+  if (ch < 32 || ch > 126)
+    ch = '?';
 
   uint8_t c = ch - 32;
   uint16_t sizes = (*current_ascii_font)->Bytes;
@@ -198,8 +202,11 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
         // 读取原帧缓冲区的内容，保持背景不变
         uint8_t col = i % width;
         uint8_t row = i / width;
-        if (row < height && col < width) {
-          buffer[i] = g_fb[(y + row) * LCD_WIDTH + (x + col)];
+        int16_t px = x + col;
+        int16_t py = y + row;
+        if (row < height && col < width &&
+            px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
+          buffer[i] = g_fb[py * g_fb_width + px];
         } else {
           buffer[i] = 0x0000;
         }
@@ -218,8 +225,11 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
   for (uint16_t idx = 0; idx < width * height; idx++) {
     uint8_t col = idx % width;
     uint8_t row = idx / width;
-    if (row < height && col < width) {
-      g_fb[(y + row) * LCD_WIDTH + (x + col)] = buffer[idx];
+    int16_t px = x + col;
+    int16_t py = y + row;
+    if (row < height && col < width &&
+        px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
+      g_fb[py * g_fb_width + px] = buffer[idx];
     }
   }
 }
@@ -227,14 +237,17 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
 void PD_DrawString(int16_t x, int16_t y, const char *str) {
   if (current_ascii_font == NULL || *current_ascii_font == NULL)
     return;
+  if (str == NULL)
+    return;
 
   int16_t cursor_x = x;
   int16_t cursor_y = y;
   uint8_t space = 1;
   uint8_t width = (*current_ascii_font)->Width;
   uint8_t height = (*current_ascii_font)->Height;
+  uint16_t guard = 0;
 
-  while (*str) {
+  while (*str && guard++ < PD_MAX_TEXT_CHARS) {
     if (*str == '\n') {
       cursor_x = x;
       cursor_y += height + 1;
@@ -251,10 +264,13 @@ void PD_DrawString(int16_t x, int16_t y, const char *str) {
 uint16_t PD_GetStringWidth(const char *str) {
   if (current_ascii_font == NULL || *current_ascii_font == NULL)
     return 0;
+  if (str == NULL)
+    return 0;
   uint16_t width = 0;
   uint8_t space = 1;
   uint8_t char_width = (*current_ascii_font)->Width;
-  while (*str) {
+  uint16_t guard = 0;
+  while (*str && guard++ < PD_MAX_TEXT_CHARS) {
     if (*str != '\n' && *str != '\r') {
       width += char_width + space;
     }
@@ -444,7 +460,7 @@ typedef struct {
 
 void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
                     uint32_t color) {
-  if (num_points < 3 || points == NULL)
+  if (num_points < 3 || points == NULL || g_fb == NULL)
     return;
 
   uint16_t color_565 = color_to_565(color);
@@ -520,7 +536,8 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
     }
 
     // 配对填充
-    for (uint16_t k = 0; k + 1 < int_count; k += 2) {
+    if (y >= 0 && y < g_fb_height) {
+      for (uint16_t k = 0; k + 1 < int_count; k += 2) {
       int16_t x0 = intersections[k];
       int16_t x1 = intersections[k + 1];
       if (x0 < 0)
@@ -531,6 +548,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
         continue;
       for (int16_t x = x0; x <= x1; x++) {
         g_fb[y * g_fb_width + x] = color_565;
+      }
       }
     }
 

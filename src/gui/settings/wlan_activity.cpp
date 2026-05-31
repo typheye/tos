@@ -42,6 +42,13 @@ static char wlan_pwd[32]   = "";
  *  Helpers
  * ================================================================== */
 
+static void wlan_copy(char *dst, size_t dst_sz, const char *src) {
+  if (!dst || dst_sz == 0) return;
+  if (!src) src = "";
+  strncpy(dst, src, dst_sz - 1);
+  dst[dst_sz - 1] = '\0';
+}
+
 static void wlan_clear_state(void) {
   wlan_connected = false;
   wlan_ssid[0] = '\0';
@@ -51,6 +58,7 @@ static void wlan_clear_state(void) {
 }
 
 static const char *trunc_str(const char *s, char *out, int maxw) {
+  if (!s) s = "";
   int len = strlen(s);
   if (len <= maxw) { strcpy(out, s); return out; }
   memcpy(out, s, maxw - 3);
@@ -64,8 +72,8 @@ static void wlan_load_state(void) {
   wlan_auto_conn = SM_Wlan_AutoConn();
   wlan_connected = esp8266.isConnected();
   if (wlan_connected) {
-    strncpy(wlan_ssid, SM_Wlan_SSID(), SSID_LEN - 1);
-    strncpy(wlan_pwd,  SM_Wlan_PWD(),  31);
+    wlan_copy(wlan_ssid, sizeof(wlan_ssid), SM_Wlan_SSID());
+    wlan_copy(wlan_pwd, sizeof(wlan_pwd), SM_Wlan_PWD());
   }
 }
 
@@ -273,8 +281,8 @@ static void scaning_run(void) {
           HAL_Delay(500);
           if (ok && ESP8266_IsConnected()) {
             wlan_connected = true;
-            strncpy(wlan_ssid, ap_ssid[ap_idx], SSID_LEN-1);
-            strncpy(wlan_pwd, pwd, 31);
+            wlan_copy(wlan_ssid, sizeof(wlan_ssid), ap_ssid[ap_idx]);
+            wlan_copy(wlan_pwd, sizeof(wlan_pwd), pwd);
             SM_Wlan_SetSSID(wlan_ssid);
             SM_Wlan_SetPWD(wlan_pwd);
             SM_Saved_Add(wlan_ssid, wlan_pwd);
@@ -402,7 +410,8 @@ static void saved_net_action(int idx) {
           HAL_Delay(500);
           if (ESP8266_IsConnected()) {
             wlan_connected = true;
-            strncpy(wlan_ssid, net->ssid, SSID_LEN-1);
+            wlan_copy(wlan_ssid, sizeof(wlan_ssid), net->ssid);
+            wlan_copy(wlan_pwd, sizeof(wlan_pwd), net->pwd);
             SM_Wlan_SetSSID(net->ssid); SM_Wlan_SetPWD(net->pwd);
             SM_Saved_Add(net->ssid, net->pwd);
             alert_show("OK", "Connected!");

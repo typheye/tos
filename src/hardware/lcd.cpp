@@ -143,44 +143,39 @@ void LCD::drawPixel(uint16_t x, uint16_t y, uint32_t color) {
 // 填充矩形
 void LCD::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                    uint32_t color) {
-  if (!initialized || x >= LCD_WIDTH || y >= LCD_HEIGHT)
+  if (!initialized || x >= LCD_WIDTH || y >= LCD_HEIGHT || w == 0 || h == 0)
     return;
 
   if (x + w > LCD_WIDTH)
     w = LCD_WIDTH - x;
   if (y + h > LCD_HEIGHT)
     h = LCD_HEIGHT - y;
+  if (w == 0 || h == 0)
+    return;
 
   uint16_t c565 = rgb888_to_rgb565(color);
   set_address(x, y, x + w - 1, y + h - 1);
 
   const uint32_t pixels = (uint32_t)w * h;
+  uint8_t buf[128];
+  const uint32_t chunk_pixels = sizeof(buf) / 2;
+  const uint8_t hi = c565 >> 8;
+  const uint8_t lo = c565 & 0xFF;
 
-  if (pixels <= 64) {
-    LCD_DC_DATA;
-    LCD_CS_L;
-    uint8_t buf[2];
-    buf[0] = c565 >> 8;
-    buf[1] = c565 & 0xFF;
-    for (uint32_t i = 0; i < pixels; i++) {
-      HAL_SPI_Transmit(&hspi, buf, 2, HAL_MAX_DELAY);
-    }
-    LCD_CS_H;
-  } else {
-    uint16_t *line_buffer = new uint16_t[w];
-    for (uint16_t i = 0; i < w; i++) {
-      line_buffer[i] = c565;
-    }
-
-    LCD_DC_DATA;
-    LCD_CS_L;
-    for (uint16_t row = 0; row < h; row++) {
-      HAL_SPI_Transmit(&hspi, (uint8_t *)line_buffer, w * 2, HAL_MAX_DELAY);
-    }
-    LCD_CS_H;
-
-    delete[] line_buffer;
+  for (uint32_t i = 0; i < chunk_pixels; ++i) {
+    buf[i * 2] = hi;
+    buf[i * 2 + 1] = lo;
   }
+
+  LCD_DC_DATA;
+  LCD_CS_L;
+  uint32_t remaining = pixels;
+  while (remaining > 0) {
+    uint32_t batch = remaining < chunk_pixels ? remaining : chunk_pixels;
+    HAL_SPI_Transmit(&hspi, buf, (uint16_t)(batch * 2), HAL_MAX_DELAY);
+    remaining -= batch;
+  }
+  LCD_CS_H;
 }
 
 // LCD 初始化

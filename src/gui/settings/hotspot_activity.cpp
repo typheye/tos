@@ -43,6 +43,13 @@ static char hs_client_diag[24] = "Not scanned";
 
 static const size_t HS_AT_RX_SIZE = 512;
 
+static void hs_copy(char *dst, size_t dst_sz, const char *src) {
+  if (!dst || dst_sz == 0) return;
+  if (!src) src = "";
+  strncpy(dst, src, dst_sz - 1);
+  dst[dst_sz - 1] = '\0';
+}
+
 static char *hs_at_buf(void) {
   return (char *)esp8266_global_buffer;
 }
@@ -183,13 +190,10 @@ static void hs_add_client(const char *ip, const char *mac, bool tcp_only) {
   }
   if (hs_client_exists(ip)) return;
 
-  strncpy(hs_clients[hs_client_count].ip, ip,
-          sizeof(hs_clients[hs_client_count].ip) - 1);
-  hs_clients[hs_client_count].ip[sizeof(hs_clients[hs_client_count].ip) - 1] = '\0';
-
-  strncpy(hs_clients[hs_client_count].mac, mac ? mac : "",
-          sizeof(hs_clients[hs_client_count].mac) - 1);
-  hs_clients[hs_client_count].mac[sizeof(hs_clients[hs_client_count].mac) - 1] = '\0';
+  hs_copy(hs_clients[hs_client_count].ip,
+          sizeof(hs_clients[hs_client_count].ip), ip);
+  hs_copy(hs_clients[hs_client_count].mac,
+          sizeof(hs_clients[hs_client_count].mac), mac);
   hs_clients[hs_client_count].tcp_only = tcp_only;
   ++hs_client_count;
 }
@@ -374,7 +378,7 @@ static void hs_start(void) {
   ESP8266_SendCommand("AT+CIPMUX=1", "OK", 2000);
   ESP8266_SendCommand("AT+CIPSERVER=1,80", "OK", 3000);
   ESP8266_SendCommand("AT+CIPSTO=60", "OK", 2000);
-  strncpy(ap_ip, hs_ip, 23);
+  hs_copy(ap_ip, sizeof(ap_ip), hs_ip);
   hs_refresh_clients();
   LOG_I("HOTS", "Started, AP IP: %s", ap_ip);
 }
@@ -678,9 +682,9 @@ void hotspot_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   /* Load from Flash */
   hs_share_wlan = SM_Hotspot_ShareWlan();
-  strncpy(hs_ip,   SM_Hotspot_IP(),   15);
-  strncpy(hs_ssid, SM_Hotspot_SSID(), 23);
-  strncpy(hs_pwd,  SM_Hotspot_PWD(),  31);
+  hs_copy(hs_ip, sizeof(hs_ip), SM_Hotspot_IP());
+  hs_copy(hs_ssid, sizeof(hs_ssid), SM_Hotspot_SSID());
+  hs_copy(hs_pwd, sizeof(hs_pwd), SM_Hotspot_PWD());
   if (!hs_ip[0])   strcpy(hs_ip,   "192.168.4.1");
   if (!hs_ssid[0]) strcpy(hs_ssid, "TOS-Hotspot");
   if (!hs_pwd[0])  strcpy(hs_pwd,  "12345678");

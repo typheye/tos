@@ -10,6 +10,36 @@
 
 static Settings_t g_settings;
 
+static void copy_str(char *dst, const char *src, size_t cap) {
+  if (!dst || cap == 0) return;
+  if (!src) src = "";
+  strncpy(dst, src, cap - 1);
+  dst[cap - 1] = '\0';
+}
+
+static void sanitize(void) {
+  g_settings.wlan_ssid[sizeof(g_settings.wlan_ssid) - 1] = '\0';
+  g_settings.wlan_pwd[sizeof(g_settings.wlan_pwd) - 1] = '\0';
+  g_settings.hs_ssid[sizeof(g_settings.hs_ssid) - 1] = '\0';
+  g_settings.hs_pwd[sizeof(g_settings.hs_pwd) - 1] = '\0';
+  g_settings.hotspot_ip[sizeof(g_settings.hotspot_ip) - 1] = '\0';
+
+  if (g_settings.saved_count > SM_SAVED_MAX) {
+    g_settings.saved_count = SM_SAVED_MAX;
+  }
+  for (uint8_t i = 0; i < SM_SAVED_MAX; ++i) {
+    g_settings.saved[i].ssid[sizeof(g_settings.saved[i].ssid) - 1] = '\0';
+    g_settings.saved[i].pwd[sizeof(g_settings.saved[i].pwd) - 1] = '\0';
+  }
+
+  if (!g_settings.hotspot_ip[0]) copy_str(g_settings.hotspot_ip, "192.168.4.1",
+                                          sizeof(g_settings.hotspot_ip));
+  if (!g_settings.hs_ssid[0]) copy_str(g_settings.hs_ssid, "TOS-Hotspot",
+                                       sizeof(g_settings.hs_ssid));
+  if (!g_settings.hs_pwd[0]) copy_str(g_settings.hs_pwd, "12345678",
+                                      sizeof(g_settings.hs_pwd));
+}
+
 /* ========== Init defaults ========== */
 static void defaults(void) {
   memset(&g_settings, 0, sizeof(g_settings));
@@ -17,17 +47,17 @@ static void defaults(void) {
   g_settings.disp_auto   = true;
   g_settings.disp_bright = 10;
   g_settings.disp_dir    = 0;
-  strcpy(g_settings.wlan_ssid, "");
-  strcpy(g_settings.wlan_pwd, "");
-  strcpy(g_settings.hs_ssid, "TOS-Hotspot");
-  strcpy(g_settings.hs_pwd, "12345678");
+  copy_str(g_settings.wlan_ssid, "", sizeof(g_settings.wlan_ssid));
+  copy_str(g_settings.wlan_pwd, "", sizeof(g_settings.wlan_pwd));
+  copy_str(g_settings.hs_ssid, "TOS-Hotspot", sizeof(g_settings.hs_ssid));
+  copy_str(g_settings.hs_pwd, "12345678", sizeof(g_settings.hs_pwd));
   g_settings.wlan_on        = false;
   g_settings.wlan_auto_conn = false;
   g_settings.saved_count    = 0;
   g_settings.time_auto_sync     = true;
   g_settings.time_style_24h     = true;
   g_settings.hotspot_share_wlan = false;
-  strcpy(g_settings.hotspot_ip, "192.168.4.1");
+  copy_str(g_settings.hotspot_ip, "192.168.4.1", sizeof(g_settings.hotspot_ip));
   LOG_D("SMGR", "Defaults loaded");
 }
 
@@ -41,6 +71,7 @@ static bool load(void) {
     return false;
   }
   memcpy(&g_settings, &tmp, sizeof(tmp));
+  sanitize();
   LOG_I("SMGR", "Loaded from Flash OK");
   return true;
 }
@@ -60,6 +91,7 @@ void SM_Init(void) {
 void SM_Save(void) {
   g_settings.magic = SM_MAGIC;
   g_settings.crc = 0;
+  sanitize();
   Flash_Status_t st = Flash_Rolling_Write((uint32_t *)&g_settings, sizeof(g_settings));
   LOG_I("SMGR", "Save (%luB): %s", (unsigned long)sizeof(g_settings),
         st == FLASH_OK ? "OK" : "FAIL");
@@ -79,8 +111,8 @@ void    SM_Disp_SetDir(uint8_t v)   { g_settings.disp_dir = v; SM_Save(); }
 /* --- WLAN current --- */
 const char *SM_Wlan_SSID(void)       { return g_settings.wlan_ssid; }
 const char *SM_Wlan_PWD(void)        { return g_settings.wlan_pwd; }
-void SM_Wlan_SetSSID(const char *s)  { strncpy(g_settings.wlan_ssid, s, 23); SM_Save(); }
-void SM_Wlan_SetPWD(const char *s)   { strncpy(g_settings.wlan_pwd, s, 31); SM_Save(); }
+void SM_Wlan_SetSSID(const char *s)  { copy_str(g_settings.wlan_ssid, s, sizeof(g_settings.wlan_ssid)); SM_Save(); }
+void SM_Wlan_SetPWD(const char *s)   { copy_str(g_settings.wlan_pwd, s, sizeof(g_settings.wlan_pwd)); SM_Save(); }
 
 /* --- WLAN settings --- */
 bool SM_Wlan_On(void)               { return g_settings.wlan_on; }
@@ -107,7 +139,7 @@ bool SM_Saved_Add(const char *ssid, const char *pwd) {
   /* Update existing entry if found */
   for (uint8_t i = 0; i < g_settings.saved_count; i++) {
     if (strcmp(g_settings.saved[i].ssid, ssid) == 0) {
-      strncpy(g_settings.saved[i].pwd, pwd, 31);
+      copy_str(g_settings.saved[i].pwd, pwd, sizeof(g_settings.saved[i].pwd));
       SM_Save();
       return true;
     }
@@ -119,8 +151,10 @@ bool SM_Saved_Add(const char *ssid, const char *pwd) {
             (SM_SAVED_MAX - 1) * sizeof(SM_SavedNet_t));
     g_settings.saved_count = SM_SAVED_MAX - 1;
   }
-  strncpy(g_settings.saved[g_settings.saved_count].ssid, ssid, 23);
-  strncpy(g_settings.saved[g_settings.saved_count].pwd, pwd, 31);
+  copy_str(g_settings.saved[g_settings.saved_count].ssid, ssid,
+           sizeof(g_settings.saved[g_settings.saved_count].ssid));
+  copy_str(g_settings.saved[g_settings.saved_count].pwd, pwd,
+           sizeof(g_settings.saved[g_settings.saved_count].pwd));
   g_settings.saved_count++;
   SM_Save();
   return true;
@@ -146,11 +180,11 @@ void SM_Time_SetStyle24h(bool v)   { g_settings.time_style_24h = v; SM_Save(); }
 bool SM_Hotspot_ShareWlan(void)        { return g_settings.hotspot_share_wlan; }
 void SM_Hotspot_SetShareWlan(bool v)   { g_settings.hotspot_share_wlan = v; SM_Save(); }
 const char *SM_Hotspot_IP(void)        { return g_settings.hotspot_ip; }
-void SM_Hotspot_SetIP(const char *s)   { strncpy(g_settings.hotspot_ip, s, 15); SM_Save(); }
+void SM_Hotspot_SetIP(const char *s)   { copy_str(g_settings.hotspot_ip, s, sizeof(g_settings.hotspot_ip)); SM_Save(); }
 const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }
 const char *SM_Hotspot_PWD(void)  { return g_settings.hs_pwd; }
-void SM_Hotspot_SetSSID(const char *s) { strncpy(g_settings.hs_ssid, s, 23); SM_Save(); }
-void SM_Hotspot_SetPWD(const char *s)  { strncpy(g_settings.hs_pwd, s, 31); SM_Save(); }
+void SM_Hotspot_SetSSID(const char *s) { copy_str(g_settings.hs_ssid, s, sizeof(g_settings.hs_ssid)); SM_Save(); }
+void SM_Hotspot_SetPWD(const char *s)  { copy_str(g_settings.hs_pwd, s, sizeof(g_settings.hs_pwd)); SM_Save(); }
 
 /* --- Status icon helpers (C-callable) --- */
 bool esp_wlan_is_on(void) { return SM_Wlan_On(); }
