@@ -46,6 +46,8 @@ void ESP8266::processPendingData(void) {
   }
 }
 
+void ESP8266::resetRxBuffer(void) { clearRxBuffer(); }
+
 bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
   uint32_t start = HAL_GetTick();
 

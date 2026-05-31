@@ -104,6 +104,7 @@ public:
   const char *getRxBuffer(void) const { return (const char *)_rx_buffer; }
 
   void processPendingData(void);
+  void resetRxBuffer(void);
 
 private:
   UART_HandleTypeDef *_huart;
