@@ -26,6 +26,7 @@ extern uint8_t esp8266_data_ready;
 static bool hs_on = false;
 static bool hs_share_wlan = false;
 static bool hs_edit = false;
+static bool hs_nat_active = false;
 static char hs_ssid[24] = "";
 static char hs_pwd[32] = "";
 static char hs_ip[16] = "";
@@ -98,9 +99,17 @@ static void hs_at_append(char c, char *out, size_t out_sz, size_t *len) {
   }
 }
 
-static bool hs_at_command(const char *cmd, const char *expected,
-                          uint32_t timeout_ms, uint32_t settle_ms, char *out,
-                          size_t out_sz) {
+static bool hs_token_match(const char *out, const char *a, const char *b,
+                           const char *c) {
+  return (a && strstr(out, a)) || (b && strstr(out, b)) ||
+         (c && strstr(out, c));
+}
+
+static bool hs_at_command_any(const char *cmd, const char *expected1,
+                              const char *expected2, const char *expected3,
+                              uint32_t timeout_ms, uint32_t settle_ms,
+                              char *out, size_t out_sz,
+                              bool fail_on_error = true) {
   char tx[128];
   int n = snprintf(tx, sizeof(tx), "%s\r\n", cmd);
   uint32_t start = HAL_GetTick();
@@ -131,9 +140,9 @@ static bool hs_at_command(const char *cmd, const char *expected,
     }
 
     if (got) {
-      if (expected && strstr(out, expected))
+      if (hs_token_match(out, expected1, expected2, expected3))
         matched = true;
-      if (strstr(out, "ERROR") || strstr(out, "FAIL"))
+      if (fail_on_error && (strstr(out, "ERROR") || strstr(out, "FAIL")))
         failed = true;
     }
 
@@ -143,6 +152,13 @@ static bool hs_at_command(const char *cmd, const char *expected,
 
   hs_at_end();
   return matched && !failed;
+}
+
+static bool hs_at_command(const char *cmd, const char *expected,
+                          uint32_t timeout_ms, uint32_t settle_ms, char *out,
+                          size_t out_sz) {
+  return hs_at_command_any(cmd, expected, NULL, NULL, timeout_ms, settle_ms, out,
+                           out_sz);
 }
 
 static void hs_log_response(const char *tag, const char *resp) {
@@ -329,6 +345,82 @@ static bool hs_enable_softap_dhcp(void) {
   return false;
 }
 
+static bool hs_can_share_wlan(void) {
+  const char *ssid = SM_Wlan_SSID();
+  return SM_Wlan_On() && ssid && ssid[0];
+}
+
+static void hs_configure_dhcp_range(void) {
+  int a, b, c, d;
+  char cmd[96];
+
+  if (sscanf(hs_ip, "%d.%d.%d.%d", &a, &b, &c, &d) != 4 ||
+      a != 192 || b != 168 || c < 1 || c > 255 || d != 1) {
+    return;
+  }
+
+  snprintf(cmd, sizeof(cmd),
+           "AT+CWDHCPS=1,120,\"192.168.%d.2\",\"192.168.%d.100\"", c, c);
+  if (!hs_at_command(cmd, "OK", 2500, 80, hs_at_buf(), HS_AT_RX_SIZE)) {
+    hs_log_response("CWDHCPS fail", hs_at_buf());
+  }
+}
+
+static bool hs_station_has_ip(void) {
+  char *buf = hs_at_buf();
+
+  if (!hs_at_command("AT+CIFSR", "OK", 2500, 80, buf, HS_AT_RX_SIZE)) {
+    hs_log_response("CIFSR fail", buf);
+    return false;
+  }
+
+  hs_log_response("CIFSR", buf);
+  return strstr(buf, "STAIP") && !strstr(buf, "\"0.0.0.0\"");
+}
+
+static bool hs_restore_station(void) {
+  const char *ssid = SM_Wlan_SSID();
+  const char *pwd = SM_Wlan_PWD();
+  char cmd[96];
+
+  if (hs_station_has_ip()) return true;
+  if (!ssid || !ssid[0]) return false;
+
+  LOG_I("HOTS", "Restoring STA: %s", ssid);
+  int n = snprintf(cmd, sizeof(cmd), "AT+CWJAP=\"%s\",\"%s\"", ssid,
+                   pwd ? pwd : "");
+  if (n <= 0 || n >= (int)sizeof(cmd)) return false;
+
+  if (!hs_at_command(cmd, "OK", 15000, 120, hs_at_buf(), HS_AT_RX_SIZE)) {
+    hs_log_response("CWJAP fail", hs_at_buf());
+    return false;
+  }
+
+  HAL_Delay(500);
+  return hs_station_has_ip();
+}
+
+static bool hs_enable_nat(bool enable) {
+  char *buf = hs_at_buf();
+  const char *cmd = enable ? "AT+CIPNAT=1" : "AT+CIPNAT=0";
+
+  if (hs_at_command(cmd, "OK", 3000, 80, buf, HS_AT_RX_SIZE)) {
+    LOG_I("HOTS", "NAT %s", enable ? "enabled" : "disabled");
+    return true;
+  }
+
+  hs_log_response(enable ? "CIPNAT enable fail" : "CIPNAT disable fail", buf);
+  if (enable && hs_at_command("AT+IP_NAPT=1", "OK", 3000, 80, buf,
+                              HS_AT_RX_SIZE)) {
+    LOG_I("HOTS", "NAPT enabled");
+    return true;
+  }
+  if (enable) {
+    hs_log_response("IP_NAPT enable fail", buf);
+  }
+  return false;
+}
+
 // ============ Draw helpers ============
 
 static void draw_frame_title(const char *title) {
@@ -381,25 +473,49 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 
 static void hs_start(void) {
   LOG_I("HOTS", "Starting hotspot: %s", hs_ssid);
-  ESP8266_SendCommand("AT+CWMODE=2", "OK", 3000); // softAP mode
+  bool share = hs_share_wlan && hs_can_share_wlan();
+  hs_nat_active = false;
+  LOG_I("HOTS", "Share WLAN cfg=%d can=%d esp_state=%d",
+        hs_share_wlan ? 1 : 0, hs_can_share_wlan() ? 1 : 0,
+        ESP8266_GetState());
+  ESP8266_SendCommand(share ? "AT+CWMODE=3" : "AT+CWMODE=2", "OK", 3000);
   HAL_Delay(200);
-  if (!hs_enable_softap_dhcp()) {
-    LOG_W("HOTS", "SoftAP DHCP enable failed; CWLIF may stay empty");
+
+  if (share && !hs_restore_station()) {
+    LOG_W("HOTS", "STA restore failed; starting AP without WLAN sharing");
+    share = false;
   }
+
+  if (hs_share_wlan && !share) {
+    alert_show("HOTS", "Share WLAN failed.\nCheck WLAN connection.");
+  }
+
   char cmd[96];
   if (strlen(hs_pwd) < 8)
     strcpy(hs_pwd, "12345678");
+  /* Set AP IP address before DHCP leases are issued. */
+  {
+    char ip_cmd[48];
+    snprintf(ip_cmd, sizeof(ip_cmd), "AT+CIPAP=\"%s\"", hs_ip);
+    ESP8266_SendCommand(ip_cmd, "OK", 3000);
+  }
   snprintf(cmd, sizeof(cmd), "AT+CWSAP=\"%s\",\"%s\",6,3,4,0", hs_ssid, hs_pwd);
   if (!ESP8266_SendCommand(cmd, "OK", 5000)) {
     snprintf(cmd, sizeof(cmd), "AT+CWSAP=\"%s\",\"%s\",6,3", hs_ssid, hs_pwd);
     ESP8266_SendCommand(cmd, "OK", 5000);
   }
-  hs_enable_softap_dhcp();
-  /* Set AP IP address */
-  {
-    char ip_cmd[48];
-    snprintf(ip_cmd, sizeof(ip_cmd), "AT+CIPAP=\"%s\"", hs_ip);
-    ESP8266_SendCommand(ip_cmd, "OK", 3000);
+
+  if (!hs_enable_softap_dhcp()) {
+    LOG_W("HOTS", "SoftAP DHCP enable failed; CWLIF may stay empty");
+  }
+  hs_configure_dhcp_range();
+  if (share && !hs_enable_nat(true)) {
+    LOG_W("HOTS", "NAT unsupported by ESP8266 AT firmware");
+    hs_share_wlan = false;
+    SM_Hotspot_SetShareWlan(false);
+    alert_show("HOTS", "Share WLAN needs NAT-capable ESP AT firmware.");
+  } else if (share) {
+    hs_nat_active = true;
   }
   ESP8266_SendCommand("AT+CIPMUX=1", "OK", 2000);
   ESP8266_SendCommand("AT+CIPSERVER=1,80", "OK", 3000);
@@ -411,6 +527,10 @@ static void hs_start(void) {
 
 static void hs_stop(void) {
   LOG_I("HOTS", "Stopping hotspot");
+  if (hs_nat_active) {
+    hs_enable_nat(false);
+    hs_nat_active = false;
+  }
   ESP8266_SendCommand("AT+CIPSERVER=0", "OK", 2000);
   ESP8266_SendCommand("AT+CIPMUX=0", "OK", 2000);
   ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000); // back to STA mode
@@ -460,7 +580,7 @@ static void draw_hs_main(int sel) {
       break;
     }
     case 2: {
-      bool can_share = SM_Wlan_On() && ESP8266_IsConnected();
+      bool can_share = hs_can_share_wlan();
       if (can_share) {
         char b[32];
         snprintf(b, sizeof(b), "   Share WLAN");
@@ -545,6 +665,10 @@ static int hs_main_loop(void) {
           else
             hs_stop();
           LOG_I("HOTS", "Set %s", hs_on ? "ON" : "OFF");
+        } else if (sel == 2 && hs_on) {
+          hs_stop();
+          hs_start();
+          LOG_I("HOTS", "Share WLAN %s", hs_share_wlan ? "ON" : "OFF");
         }
       } else if (sel == 0) {
         return 0;
@@ -552,7 +676,7 @@ static int hs_main_loop(void) {
         hs_edit = true;
       } else if (hs_on && sel == 2) {
         /* Only respond if WLAN is ON and connected */
-        if (SM_Wlan_On() && ESP8266_IsConnected()) {
+        if (hs_can_share_wlan()) {
           hs_edit = true;
         }
       } else if (hs_on && sel == 3) {

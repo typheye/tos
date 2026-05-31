@@ -208,37 +208,52 @@ static bool tapi_http_get(const char *host, const char *path) {
   return has_response;
 }
 
+static const char *json_find_value(const char *buf, const char *key) {
+  char search[32];
+  snprintf(search, sizeof(search), "\"%s\"", key);
+  const char *p = strstr(buf, search);
+  if (!p) return NULL;
+  p += strlen(search);
+  while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+  if (*p != ':') return NULL;
+  p++;
+  while (*p == ' ' || *p == '\t') p++;
+  return p;
+}
+
 /* Minimal JSON integer extractor: find "key":<number> */
 static int json_get_int(const char *buf, const char *key) {
-  char search[32];
-  snprintf(search, sizeof(search), "\"%s\":", key);
-  const char *p = strstr(buf, search);
+  const char *p = json_find_value(buf, key);
   if (!p) return 0;
-  p += strlen(search);
-  while (*p == ' ' || *p == '\t') p++;
   return atoi(p);
 }
 
-/* Minimal JSON string extractor: find "key":"value" */
+/* Minimal JSON string extractor: find "key": "value" */
 static void json_get_str(const char *buf, const char *key, char *out, int outsz) {
-  char search[32];
-  snprintf(search, sizeof(search), "\"%s\":\"", key);
-  const char *p = strstr(buf, search);
+  const char *p = json_find_value(buf, key);
   if (!p) { out[0] = '\0'; return; }
-  p += strlen(search);
+  if (*p != '"') { out[0] = '\0'; return; }
+  ++p;
   int i = 0;
-  while (*p && *p != '"' && i < outsz - 1) out[i++] = *p++;
+  while (*p && *p != '"' && i < outsz - 1) {
+    if (*p == '\\' && p[1]) {
+      ++p;
+      if (*p == 'n') out[i++] = '\n';
+      else if (*p == 'r') out[i++] = '\r';
+      else if (*p == 't') out[i++] = '\t';
+      else out[i++] = *p;
+      ++p;
+    } else {
+      out[i++] = *p++;
+    }
+  }
   out[i] = '\0';
 }
 
 /* Minimal JSON bool extractor */
 static bool json_get_bool(const char *buf, const char *key) {
-  char search[32];
-  snprintf(search, sizeof(search), "\"%s\":", key);
-  const char *p = strstr(buf, search);
+  const char *p = json_find_value(buf, key);
   if (!p) return false;
-  p += strlen(search);
-  while (*p == ' ' || *p == '\t') p++;
   return (*p == 't' || *p == 'T');
 }
 
@@ -282,10 +297,15 @@ bool TosApi_CheckUpgrade(TosUpgradeInfo *info) {
 
   LOG_D("TAPI", "Raw: %.200s", buf);
 
-  /* Parse JSON body (after HTTP headers) */
-  const char *body = strstr(buf, "\r\n\r\n");
-  if (!body) body = buf;
-  else body += 4;
+  /* Parse JSON body (after HTTP headers inside +IPD payload) */
+  const char *http = strstr(buf, "HTTP/");
+  const char *body = http ? strstr(http, "\r\n\r\n") : NULL;
+  if (body) {
+    body += 4;
+  } else {
+    body = strchr(buf, '{');
+    if (!body) body = buf;
+  }
 
   /* Check response code */
   int code = json_get_int(body, "code");
@@ -299,7 +319,7 @@ bool TosApi_CheckUpgrade(TosUpgradeInfo *info) {
   info->has_update = json_get_bool(body, "has_update");
 
   /* Parse "latest" fields */
-  const char *latest = strstr(body, "\"latest\":");
+  const char *latest = strstr(body, "\"latest\"");
   if (latest) {
     json_get_str(latest, "version",      info->latest_version, sizeof(info->latest_version));
     info->latest_version_code = json_get_int(latest, "version_code");
@@ -310,6 +330,9 @@ bool TosApi_CheckUpgrade(TosUpgradeInfo *info) {
     json_get_str(latest, "sha256",       info->latest_sha256, sizeof(info->latest_sha256));
   }
 
+  LOG_D("TAPI", "Latest: ver='%s' build='%s' patch='%s' size=%d",
+        info->latest_version, info->latest_build, info->latest_patch,
+        info->latest_size);
   LOG_I("TAPI", "Update check done. has_update=%d", info->has_update);
   tapi_raw_at("AT+CIPCLOSE", "OK", 1500, 40, "CLOSED", "ERROR");
   return true;

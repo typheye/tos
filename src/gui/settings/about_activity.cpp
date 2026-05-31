@@ -145,12 +145,14 @@ void about_activity_run(void) {
         if (TosApi_CheckUpgrade(&info)) {
           if (info.has_update) {
             char msg[200];
+            const char *ver = info.latest_version[0] ? info.latest_version : "-";
+            const char *build = info.latest_build[0] ? info.latest_build : "-";
+            const char *patch = info.latest_patch[0] ? info.latest_patch : "-";
             snprintf(msg, sizeof(msg),
                      "New version available!\n\n"
                      "Version: %s\nBuild: %s\nPatch: %s\nSize: %d B\n\n"
                      "Download from PC.",
-                     info.latest_version, info.latest_build, info.latest_patch,
-                     info.latest_size);
+                     ver, build, patch, info.latest_size);
             alert_show("UPD", msg);
           } else {
             alert_show("UPD", "Already up to date!");
