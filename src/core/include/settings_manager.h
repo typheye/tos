@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#define SM_MAGIC        0x544F5303u  /* "TOS\3" — bump on struct change */
+#define SM_MAGIC        0x544F5304u  /* "TOS\4" — added hotspot_ip[16] */
 #define SM_SAVED_MAX    10           /* max saved WiFi networks */
 
 /* ========== Saved WiFi network entry ========== */
@@ -53,8 +53,10 @@ typedef struct __attribute__((packed, aligned(4))) {
   bool     time_auto_sync;   /* auto NTP sync on boot */
   bool     time_style_24h;   /* 24h (true) or 12h (false) */
 
-  /* --- Alignment tail --- */
-  uint8_t  _pad2[1];         /* ensures sizeof % 4 == 0 */
+  /* --- Hotspot settings --- */
+  bool     hotspot_share_wlan; /* share STA WiFi via hotspot */
+  char     hotspot_ip[16];     /* hotspot gateway IP, default 192.168.4.1 */
+
 } Settings_t;
 
 /* ========== API ========== */
@@ -97,6 +99,10 @@ bool SM_Time_Style24h(void);
 void SM_Time_SetStyle24h(bool v);
 
 /* --- Hotspot --- */
+bool SM_Hotspot_ShareWlan(void);
+void SM_Hotspot_SetShareWlan(bool v);
+const char *SM_Hotspot_IP(void);
+void SM_Hotspot_SetIP(const char *s);
 const char *SM_Hotspot_SSID(void);
 const char *SM_Hotspot_PWD(void);
 void SM_Hotspot_SetSSID(const char *s);

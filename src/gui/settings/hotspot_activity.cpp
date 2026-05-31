@@ -23,11 +23,13 @@ extern uint16_t esp8266_global_index;
 extern uint8_t esp8266_data_ready;
 }
 
-static bool hs_on = false;
-static bool hs_edit = false;
-static char hs_ssid[24] = "TOS-Hotspot";
-static char hs_pwd[32] = "12345678";
-static char ap_ip[24] = "";
+static bool hs_on        = false;
+static bool hs_share_wlan = false;
+static bool hs_edit       = false;
+static char hs_ssid[24]   = "";
+static char hs_pwd[32]    = "";
+static char hs_ip[16]     = "";
+static char ap_ip[24]     = "";
 
 struct HsClient {
   char ip[16];
@@ -372,10 +374,9 @@ static void hs_start(void) {
   ESP8266_SendCommand("AT+CIPMUX=1", "OK", 2000);
   ESP8266_SendCommand("AT+CIPSERVER=1,80", "OK", 3000);
   ESP8266_SendCommand("AT+CIPSTO=60", "OK", 2000);
-  // ESP8266 softAP default gateway is always 192.168.4.1
-  strcpy(ap_ip, "192.168.4.1");
+  strncpy(ap_ip, hs_ip, 23);
   hs_refresh_clients();
-  LOG_I("HOTS", "Hotspot started, AP IP: %s", ap_ip);
+  LOG_I("HOTS", "Started, AP IP: %s", ap_ip);
 }
 
 static void hs_stop(void) {
@@ -393,7 +394,7 @@ static void hs_stop(void) {
 
 static int hs_item_count(void) {
   int n = 2; // Return + toggle
-  if (hs_on) { n++; n++; } // SSID & PWD + Connected
+  if (hs_on) { n++; n++; n++; n++; } // ShareWLAN + SSID&PWD + IP + Connected
   return n;
 }
 
@@ -423,13 +424,30 @@ static void draw_hs_main(int sel) {
       draw_card_r(idx, sel, cy, b, hs_on ? "ON" : "OFF", hs_edit);
       break;
     }
-    case 2:
+    case 2: {
+      bool can_share = SM_Wlan_On() && ESP8266_IsConnected();
+      if (can_share) {
+        char b[32]; snprintf(b, sizeof(b), "   Share WLAN");
+        draw_card_r(idx, sel, cy, b, hs_share_wlan ? "ON" : "OFF",
+                    hs_edit && (idx == 2));
+      } else {
+        draw_card(idx, sel, cy, "   Share WLAN", true);
+      }
+      break;
+    }
+    case 3:
       draw_card(idx, sel, cy, "02 SSID & Password", false);
       break;
-    case 3:
-      char cb[32]; snprintf(cb, sizeof(cb), "03 Connected (%d)", hs_client_count);
+    case 4: {
+      char b[32]; snprintf(b, sizeof(b), "03 IP");
+      draw_card_r(idx, sel, cy, b, hs_ip, hs_edit && (idx == 4));
+      break;
+    }
+    case 5: {
+      char cb[32]; snprintf(cb, sizeof(cb), "04 Connected (%d)", hs_client_count);
       draw_card(idx, sel, cy, cb, false);
       break;
+    }
     }
   }
   PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -450,17 +468,19 @@ static int hs_main_loop(void) {
     keyManager.btn_enter.tick();
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
-      if (hs_edit)
-        hs_on = !hs_on;
-      else
-        sel = (sel + 1) % hs_item_count();
+      if (hs_edit) {
+        if (sel == 1)        { hs_on = !hs_on;  }
+        else if (sel == 2)   { hs_share_wlan = !hs_share_wlan;
+                               SM_Hotspot_SetShareWlan(hs_share_wlan); }
+      } else sel = (sel + 1) % hs_item_count();
       HAL_Delay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
-      if (hs_edit)
-        hs_on = !hs_on;
-      else
-        sel = (sel - 1 + hs_item_count()) % hs_item_count();
+      if (hs_edit) {
+        if (sel == 1)        { hs_on = !hs_on;  }
+        else if (sel == 2)   { hs_share_wlan = !hs_share_wlan;
+                               SM_Hotspot_SetShareWlan(hs_share_wlan); }
+      } else sel = (sel - 1 + hs_item_count()) % hs_item_count();
       HAL_Delay(150);
     }
 
@@ -468,23 +488,40 @@ static int hs_main_loop(void) {
     if (ce && !le) {
       if (hs_edit) {
         hs_edit = false;
-        if (hs_on)
-          hs_start();
-        else
-          hs_stop();
-        LOG_I("HOTS", "Set %s", hs_on ? "ON" : "OFF");
+        if (sel == 1) {
+          if (hs_on) hs_start(); else hs_stop();
+          LOG_I("HOTS", "Set %s", hs_on ? "ON" : "OFF");
+        }
       } else if (sel == 0) {
         return 0;
       } else if (sel == 1) {
         hs_edit = true;
       } else if (hs_on && sel == 2) {
-        return 2; // SSID & Password
+        bool can = SM_Wlan_On() && ESP8266_IsConnected();
+        if (can) hs_edit = true;
       } else if (hs_on && sel == 3) {
-        return 3; // Connected
+        return 3; // SSID & Password
+      } else if (hs_on && sel == 4) {
+        /* Edit IP */
+        keyboard_open("IP (192.168.x.1)", hs_ip, 15);
+        /* Validate: must be 192.168.X.1 where X in 1-255 */
+        int a, b, c, d;
+        if (sscanf(hs_ip, "%d.%d.%d.%d", &a, &b, &c, &d) == 4 &&
+            a == 192 && b == 168 && c >= 1 && c <= 255 && d == 1) {
+          SM_Hotspot_SetIP(hs_ip);
+          if (hs_on) { hs_stop(); hs_start(); }
+        } else {
+          strcpy(hs_ip, "192.168.4.1");
+          SM_Hotspot_SetIP(hs_ip);
+          alert_show("HOTS", "Invalid IP! Reset to default");
+        }
+        boardLCD.fillScreen(LCD_COLOR_BLACK);
+      } else if (hs_on && sel == 5) {
+        return 5; // Connected
       }
     }
     le = ce;
-    /* Periodic client refresh when hotspot ON */
+    /* Periodic client refresh */
     if (hs_on && HAL_GetTick() - lq > 3000) {
       lq = HAL_GetTick();
       hs_refresh_clients();
@@ -639,9 +676,12 @@ static void connected_page(void) {
 
 void hotspot_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  /* Load SSID/PWD from Flash */
+  /* Load from Flash */
+  hs_share_wlan = SM_Hotspot_ShareWlan();
+  strncpy(hs_ip,   SM_Hotspot_IP(),   15);
   strncpy(hs_ssid, SM_Hotspot_SSID(), 23);
   strncpy(hs_pwd,  SM_Hotspot_PWD(),  31);
+  if (!hs_ip[0])   strcpy(hs_ip,   "192.168.4.1");
   if (!hs_ssid[0]) strcpy(hs_ssid, "TOS-Hotspot");
   if (!hs_pwd[0])  strcpy(hs_pwd,  "12345678");
 
@@ -649,11 +689,11 @@ void hotspot_activity_run(void) {
     int act = hs_main_loop();
     if (act == 0)
       return;
-    if (act == 2) {
+    if (act == 3) {
       ssidpwd_run();
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
-    if (act == 3) {
+    if (act == 5) {
       connected_page();
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
