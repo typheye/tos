@@ -20,6 +20,7 @@
 #include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include "syslog.h"
+#include "core/include/systime.h"
 #include <cstdio>
 #include <cstring>
 
@@ -151,11 +152,11 @@ static void draw_frame_title(const char *title) {
   PD_FillScreen(TOS_BG);
   extern TRTC boardTRTC;
   static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 30000) {
+  if (HAL_GetTick() - last_tm > 1000) {
     last_tm = HAL_GetTick();
     Time_t t; Date_t d;
     boardTRTC.getDateTime(&t, &d);
-    char ts[8]; sprintf(ts, "%02d:%02d", t.hours, t.minutes);
+    char ts[8]; time_fmt(ts, sizeof(ts), t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
   PD_DrawFrame();

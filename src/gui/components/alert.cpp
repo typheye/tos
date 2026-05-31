@@ -1,12 +1,15 @@
 #include "include/alert.hpp"
+#include "core/include/systime.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include <cstring>
 #include "syslog.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
+extern TRTC boardTRTC;
 
 void alert_show(const char *title, const char *msg) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
@@ -18,6 +21,13 @@ void alert_show(const char *title, const char *msg) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
+
+      /* Update header time */
+      Time_t now; Date_t today;
+      boardTRTC.getDateTime(&now, &today);
+      char ts[8]; time_fmt(ts, sizeof(ts), now.hours, now.minutes);
+      PD_SetHeaderTime(ts);
+
       PD_Init();
       PD_FillScreen(TOS_BG);
       PD_DrawFrame();

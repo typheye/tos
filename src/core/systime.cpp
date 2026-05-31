@@ -4,6 +4,7 @@
  */
 
 #include "include/systime.h"
+#include "include/settings_manager.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/trtc.hpp"
 #include "syslog.h"
@@ -699,6 +700,16 @@ static bool query_http_time(TimeSample *sample) {
   }
 
   return false;
+}
+
+extern "C" void time_fmt(char *buf, int sz, int h24, int m) {
+  if (SM_Time_Style24h()) {
+    snprintf(buf, sz, "%02d:%02d", h24, m);
+  } else {
+    int h12 = h24 % 12;
+    if (h12 == 0) h12 = 12;
+    snprintf(buf, sz, "%02d:%02d", h12, m);
+  }
 }
 
 bool SysTime_Sync(void) {

@@ -9,8 +9,10 @@
 #include "settings/include/storage_activity.hpp"
 #include "settings/include/display_activity.hpp"
 #include "settings/include/sound_activity.hpp"
+#include "settings/include/time_activity.hpp"
 #include <cstdio>
 #include "syslog.h"
+#include "core/include/systime.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -18,7 +20,7 @@ extern LCD boardLCD;
 #define SET_N 10
 static const char *set_m[SET_N] = {
     "00 Return", "01 WLAN", "02 Hotspot", "03 Storage", "04 Display",
-    "05 Sound",  "06 Apps", "07 About",   "08 Restore", "09 Debugs",
+    "05 Sound",  "06 Date & Time", "07 About",   "08 Restore", "09 Debugs",
 };
 #define DBG_N 2
 static const char *dbg_m[DBG_N] = {"00 Return", "01 Run Demo"};
@@ -29,13 +31,13 @@ static void draw_menu(const char *title, const char **items, int count,
   PD_FillScreen(TOS_BG);
   extern TRTC boardTRTC;
   static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 30000) {
+  if (HAL_GetTick() - last_tm > 1000) {
     last_tm = HAL_GetTick();
     Time_t t;
     Date_t d;
     boardTRTC.getDateTime(&t, &d);
     char ts[8];
-    sprintf(ts, "%02d:%02d", t.hours, t.minutes);
+    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
   PD_DrawFrame();
@@ -127,6 +129,10 @@ void settings_run(void) {
     }
     if (sel == 5) {
       sound_activity_run();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
+    if (sel == 6) {
+      time_activity_run();
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     if (sel == 9) {

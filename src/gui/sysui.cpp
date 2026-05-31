@@ -4,6 +4,7 @@
 #include "include/launcher.hpp"
 #include "include/libpd.h"
 #include "syslog.h"
+#include "core/include/systime.h"
 
 extern LCD boardLCD;
 extern TRTC boardTRTC;
@@ -19,7 +20,7 @@ void SysUI::loop(void) {
   Time_t now; Date_t today;
   boardTRTC.getDateTime(&now, &today);
   char time_str[8];
-  sprintf(time_str, "%02d:%02d", now.hours, now.minutes);
+  time_fmt(time_str, sizeof(time_str), now.hours, now.minutes);
   PD_SetHeaderTime(time_str);
 
   if (now_activity == UI_LAUNCHER) {

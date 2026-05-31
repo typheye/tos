@@ -49,8 +49,12 @@ typedef struct __attribute__((packed, aligned(4))) {
   uint8_t  saved_count;                    /* 0 .. SM_SAVED_MAX */
   SM_SavedNet_t saved[SM_SAVED_MAX];       /* 10 * 56 = 560 bytes */
 
+  /* --- Time settings --- */
+  bool     time_auto_sync;   /* auto NTP sync on boot */
+  bool     time_style_24h;   /* 24h (true) or 12h (false) */
+
   /* --- Alignment tail --- */
-  uint8_t  _pad2[3];         /* ensures sizeof % 4 == 0 */
+  uint8_t  _pad2[1];         /* ensures sizeof % 4 == 0 */
 } Settings_t;
 
 /* ========== API ========== */
@@ -85,6 +89,12 @@ const SM_SavedNet_t *SM_Saved_Get(uint8_t idx);
 bool SM_Saved_Add(const char *ssid, const char *pwd);
 void SM_Saved_Del(uint8_t idx);
 bool SM_Saved_Find(const char *ssid);
+
+/* --- Time --- */
+bool SM_Time_AutoSync(void);
+void SM_Time_SetAutoSync(bool v);
+bool SM_Time_Style24h(void);
+void SM_Time_SetStyle24h(bool v);
 
 /* --- Hotspot --- */
 const char *SM_Hotspot_SSID(void);

@@ -116,8 +116,8 @@ void TOS::init() {
     }
   }
 
-  /* Background NTP sync — won't block UI */
-  if (SM_Wlan_On() && ESP8266_IsConnected()) {
+  /* Background NTP sync — only if Auto Sync is ON */
+  if (SM_Wlan_On() && ESP8266_IsConnected() && SM_Time_AutoSync()) {
     SysTime_Sync();
   }
 

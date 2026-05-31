@@ -24,6 +24,8 @@ static void defaults(void) {
   g_settings.wlan_on        = false;
   g_settings.wlan_auto_conn = false;
   g_settings.saved_count    = 0;
+  g_settings.time_auto_sync = true;
+  g_settings.time_style_24h = true;
   LOG_D("SMGR", "Defaults loaded");
 }
 
@@ -131,6 +133,12 @@ void SM_Saved_Del(uint8_t idx) {
   g_settings.saved_count--;
   SM_Save();
 }
+
+/* --- Time --- */
+bool SM_Time_AutoSync(void)        { return g_settings.time_auto_sync; }
+void SM_Time_SetAutoSync(bool v)   { g_settings.time_auto_sync = v; SM_Save(); }
+bool SM_Time_Style24h(void)        { return g_settings.time_style_24h; }
+void SM_Time_SetStyle24h(bool v)   { g_settings.time_style_24h = v; SM_Save(); }
 
 /* --- Hotspot --- */
 const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }
