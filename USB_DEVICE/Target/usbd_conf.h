@@ -69,19 +69,20 @@
 /*---------- -----------*/
 #define USBD_MAX_STR_DESC_SIZ     512U
 /*---------- -----------*/
-#define USBD_SUPPORT_USER_STRING_DESC     1U
-/*---------- -----------*/
 #define USBD_DEBUG_LEVEL     0U
 /*---------- -----------*/
 #define USBD_LPM_ENABLED     0U
 /*---------- -----------*/
 #define USBD_SELF_POWERED     1U
 /*---------- -----------*/
-#define USBD_DFU_MAX_ITF_NUM     1U
+#define USBD_CUSTOMHID_OUTREPORT_BUF_SIZE     2U
 /*---------- -----------*/
-#define USBD_DFU_XFER_SIZE     1024U
+#define USBD_CUSTOM_HID_REPORT_DESC_SIZE     63U
 /*---------- -----------*/
-#define USBD_DFU_APP_DEFAULT_ADD     0x08000000U
+#define CUSTOM_HID_FS_BINTERVAL     0x5U
+/* Keyboard input report is 8 bytes: modifier, reserved, 6 keycodes. */
+#define CUSTOM_HID_EPIN_SIZE     8U
+#define CUSTOM_HID_EPOUT_SIZE    2U
 
 /****************************************/
 /* #define for FS and HS identification */
