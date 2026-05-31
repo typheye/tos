@@ -140,6 +140,31 @@ void TRTC::setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday) {
          month, date, weekday);
 }
 
+void TRTC::setDateTime(uint8_t year, uint8_t month, uint8_t date,
+                       uint8_t weekday, uint8_t hours, uint8_t minutes,
+                       uint8_t seconds) {
+  if (!initialized)
+    init();
+
+  sTime.Hours = hours;
+  sTime.Minutes = minutes;
+  sTime.Seconds = seconds;
+  sTime.TimeFormat = RTC_HOURFORMAT_24;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+
+  sDate.Year = year;
+  sDate.Month = month;
+  sDate.Date = date;
+  sDate.WeekDay = weekday;
+
+  syncToHAL();
+  syncFromHAL();
+
+  LOG_I("RTC", "DateTime set to %04d-%02d-%02d %02d:%02d:%02d (weekday=%d)",
+         2000 + year, month, date, hours, minutes, seconds, weekday);
+}
+
 void TRTC::getTime(Time_t *time) {
   if (!initialized)
     init();

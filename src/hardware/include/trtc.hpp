@@ -28,6 +28,8 @@ public:
   void init();
   void setTime(uint8_t hours, uint8_t minutes, uint8_t seconds);
   void setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday);
+  void setDateTime(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday,
+                   uint8_t hours, uint8_t minutes, uint8_t seconds);
   void getTime(Time_t *time);
   void getDate(Date_t *date);
   void getDateTime(Time_t *time, Date_t *date);

@@ -28,7 +28,16 @@ struct SysDateTime {
   int second;
 };
 
+struct TimeSample {
+  SysDateTime dt;
+  uint32_t tick_ms;
+  bool precise_tick;
+};
+
 static const size_t AT_RX_SIZE = 512;
+static const uint32_t RTC_SET_ADVANCE_MS = 2;
+
+static bool parse_any_datetime(const char *buf, SysDateTime *out);
 
 static char *at_rx_buf(void) {
   return (char *)esp8266_global_buffer;
@@ -80,7 +89,7 @@ static void raw_append(char c, char *out, size_t out_sz, size_t *len) {
 
 static bool raw_collect(char *out, size_t out_sz, const char *expected,
                         uint32_t timeout_ms, uint32_t settle_ms,
-                        bool closed_is_done) {
+                        bool closed_is_done, uint32_t *last_rx_tick) {
   uint32_t start = HAL_GetTick();
   uint32_t last_rx = start;
   size_t len = strlen(out);
@@ -95,10 +104,12 @@ static bool raw_collect(char *out, size_t out_sz, const char *expected,
       raw_append(c, out, out_sz, &len);
       got = true;
       last_rx = HAL_GetTick();
+      if (last_rx_tick) *last_rx_tick = last_rx;
     }
     if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_ORE) != RESET) {
       __HAL_UART_CLEAR_OREFLAG(&huart2);
       last_rx = HAL_GetTick();
+      if (last_rx_tick) *last_rx_tick = last_rx;
     }
 
     if (got) {
@@ -118,7 +129,8 @@ static bool raw_collect(char *out, size_t out_sz, const char *expected,
 
 static bool raw_at_command(const char *cmd, const char *expected,
                            uint32_t timeout_ms, uint32_t settle_ms,
-                           char *out, size_t out_sz) {
+                           char *out, size_t out_sz,
+                           uint32_t *last_rx_tick = 0) {
   char tx[128];
   int n = snprintf(tx, sizeof(tx), "%s\r\n", cmd);
 
@@ -126,7 +138,8 @@ static bool raw_at_command(const char *cmd, const char *expected,
 
   raw_at_begin();
   HAL_UART_Transmit(&huart2, (uint8_t *)tx, (uint16_t)n, 1000);
-  bool ok = raw_collect(out, out_sz, expected, timeout_ms, settle_ms, false);
+  bool ok = raw_collect(out, out_sz, expected, timeout_ms, settle_ms, false,
+                        last_rx_tick);
   raw_at_end();
   return ok;
 }
@@ -378,6 +391,59 @@ static bool parse_any_datetime(const char *buf, SysDateTime *out) {
   return false;
 }
 
+static uint32_t datetime_to_seconds(const SysDateTime &dt) {
+  uint32_t days = 0;
+
+  for (int y = 2000; y < dt.year; ++y) {
+    days += is_leap_year(y) ? 366U : 365U;
+  }
+
+  for (int m = 1; m < dt.month; ++m) {
+    days += (uint32_t)days_in_month(dt.year, m);
+  }
+
+  days += (uint32_t)(dt.day - 1);
+  return days * 86400U + (uint32_t)dt.hour * 3600U +
+         (uint32_t)dt.minute * 60U + (uint32_t)dt.second;
+}
+
+static void seconds_to_datetime(uint32_t seconds, SysDateTime *dt) {
+  uint32_t days = seconds / 86400U;
+  uint32_t rem = seconds % 86400U;
+  int year = 2000;
+  int month = 1;
+
+  while (1) {
+    uint32_t yd = is_leap_year(year) ? 366U : 365U;
+    if (days < yd) break;
+    days -= yd;
+    ++year;
+  }
+
+  while (1) {
+    uint32_t md = (uint32_t)days_in_month(year, month);
+    if (days < md) break;
+    days -= md;
+    ++month;
+  }
+
+  dt->year = year;
+  dt->month = month;
+  dt->day = (int)days + 1;
+  dt->hour = (int)(rem / 3600U);
+  rem %= 3600U;
+  dt->minute = (int)(rem / 60U);
+  dt->second = (int)(rem % 60U);
+}
+
+static void add_seconds(SysDateTime *dt, uint32_t seconds) {
+  seconds_to_datetime(datetime_to_seconds(*dt) + seconds, dt);
+}
+
+static int32_t tick_delta(uint32_t a, uint32_t b) {
+  return (int32_t)(a - b);
+}
+
 static uint8_t weekday_monday_1(int year, int month, int day) {
   static const int offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
 
@@ -390,10 +456,41 @@ static uint8_t weekday_monday_1(int year, int month, int day) {
 static void apply_datetime_to_rtc(const SysDateTime &dt) {
   uint8_t weekday = weekday_monday_1(dt.year, dt.month, dt.day);
 
-  boardTRTC.setTime((uint8_t)dt.hour, (uint8_t)dt.minute,
-                    (uint8_t)dt.second);
-  boardTRTC.setDate((uint8_t)(dt.year - 2000), (uint8_t)dt.month,
-                    (uint8_t)dt.day, weekday);
+  boardTRTC.setDateTime((uint8_t)(dt.year - 2000), (uint8_t)dt.month,
+                        (uint8_t)dt.day, weekday, (uint8_t)dt.hour,
+                        (uint8_t)dt.minute, (uint8_t)dt.second);
+}
+
+static SysDateTime align_and_apply_sample(const TimeSample &sample) {
+  uint32_t now = HAL_GetTick();
+  uint32_t elapsed = now - sample.tick_ms;
+  uint32_t target_seconds = elapsed / 1000U + 1U;
+  uint32_t target_tick = sample.tick_ms + target_seconds * 1000U;
+  uint32_t wait_ms = target_tick - now;
+  if (wait_ms < 100U) {
+    ++target_seconds;
+    target_tick += 1000U;
+    wait_ms += 1000U;
+  }
+  uint32_t apply_tick =
+      target_tick > RTC_SET_ADVANCE_MS ? target_tick - RTC_SET_ADVANCE_MS
+                                       : target_tick;
+  SysDateTime target = sample.dt;
+
+  add_seconds(&target, target_seconds);
+
+  LOG_D("SYTM", "RTC align: age=%lums wait=%lums precise=%d",
+        (unsigned long)elapsed, (unsigned long)wait_ms,
+        sample.precise_tick ? 1 : 0);
+
+  while (tick_delta(apply_tick, HAL_GetTick()) > 3) {
+    HAL_Delay(1);
+  }
+  while (tick_delta(apply_tick, HAL_GetTick()) > 0) {
+  }
+
+  apply_datetime_to_rtc(target);
+  return target;
 }
 
 static bool station_has_ip(void) {
@@ -427,7 +524,7 @@ static void prepare_esp_client_mode(void) {
   }
 }
 
-static bool query_sntp(SysDateTime *dt) {
+static bool query_sntp(TimeSample *sample) {
   char *buf = at_rx_buf();
   const char *cfg_with_servers =
       "AT+CIPSNTPCFG=1,8,\"ntp.aliyun.com\",\"cn.ntp.org.cn\",\"pool.ntp.org\"";
@@ -447,15 +544,44 @@ static bool query_sntp(SysDateTime *dt) {
     return false;
   }
 
-  for (int i = 0; i < 12; ++i) {
-    HAL_Delay(1000);
+  TimeSample prev;
+  bool have_prev = false;
+  uint32_t start = HAL_GetTick();
+  int attempts = 0;
 
-    bool ok = raw_at_command("AT+CIPSNTPTIME?", "OK", 3000, 80,
-                             buf, AT_RX_SIZE);
+  while (HAL_GetTick() - start < 9000U) {
+    SysDateTime dt;
+    TimeSample cur;
+    uint32_t rx_tick = 0;
+    bool ok = raw_at_command("AT+CIPSNTPTIME?", "OK", 1200, 25,
+                             buf, AT_RX_SIZE, &rx_tick);
+    ++attempts;
 
-    if (parse_any_datetime(buf, dt)) {
-      LOG_I("SYTM", "SNTP response parsed");
-      return true;
+    if (parse_any_datetime(buf, &dt)) {
+      cur.dt = dt;
+      cur.tick_ms = rx_tick ? rx_tick : HAL_GetTick();
+      cur.precise_tick = false;
+
+      if (have_prev) {
+        uint32_t prev_sec = datetime_to_seconds(prev.dt);
+        uint32_t cur_sec = datetime_to_seconds(cur.dt);
+
+        if (cur_sec > prev_sec) {
+          uint32_t gap = cur.tick_ms - prev.tick_ms;
+
+          if (cur_sec - prev_sec == 1U && gap <= 1500U) {
+            cur.tick_ms = prev.tick_ms + gap / 2U;
+            cur.precise_tick = true;
+          }
+
+          *sample = cur;
+          LOG_I("SYTM", "SNTP second edge captured");
+          return true;
+        }
+      }
+
+      prev = cur;
+      have_prev = true;
     }
 
     if (!ok && buf && strstr(buf, "ERROR")) {
@@ -464,10 +590,18 @@ static bool query_sntp(SysDateTime *dt) {
       return false;
     }
 
-    if ((i % 3) == 2) {
+    if ((attempts % 10) == 0) {
       log_response_summary("SNTP raw", buf);
-      LOG_D("SYTM", "Waiting for SNTP time (%d/12)", i + 1);
+      LOG_D("SYTM", "Waiting for SNTP second edge (%d)", attempts);
     }
+
+    HAL_Delay(have_prev ? 80U : 250U);
+  }
+
+  if (have_prev) {
+    *sample = prev;
+    LOG_W("SYTM", "SNTP edge not captured, using last sample");
+    return true;
   }
 
   LOG_W("SYTM", "SNTP did not return a valid time");
@@ -489,10 +623,12 @@ static bool tcp_start(const char *host, uint16_t port) {
 }
 
 static bool raw_http_request(const char *host, const char *path,
-                             SysDateTime *dt) {
+                             TimeSample *sample) {
   char *buf = at_rx_buf();
   char request[192];
   char cmd[32];
+  SysDateTime dt;
+  uint32_t rx_tick = 0;
   int len = snprintf(request, sizeof(request),
                      "GET %s HTTP/1.0\r\n"
                      "Host: %s\r\n"
@@ -509,7 +645,7 @@ static bool raw_http_request(const char *host, const char *path,
   char tx[40];
   int tx_len = snprintf(tx, sizeof(tx), "%s\r\n", cmd);
   HAL_UART_Transmit(&huart2, (uint8_t *)tx, (uint16_t)tx_len, 1000);
-  bool prompt = raw_collect(buf, AT_RX_SIZE, ">", 3000, 20, false);
+  bool prompt = raw_collect(buf, AT_RX_SIZE, ">", 3000, 20, false, 0);
   if (!prompt) {
     log_response_summary("CIPSEND", buf);
     raw_at_end();
@@ -518,15 +654,20 @@ static bool raw_http_request(const char *host, const char *path,
 
   memset(buf, 0, AT_RX_SIZE);
   HAL_UART_Transmit(&huart2, (uint8_t *)request, (uint16_t)len, 2000);
-  raw_collect(buf, AT_RX_SIZE, "CLOSED", 6000, 120, true);
-  bool parsed = parse_any_datetime(buf, dt);
+  raw_collect(buf, AT_RX_SIZE, "CLOSED", 6000, 120, true, &rx_tick);
+  bool parsed = parse_any_datetime(buf, &dt);
   if (!parsed) log_response_summary("HTTP raw", buf);
 
   raw_at_end();
+  if (parsed) {
+    sample->dt = dt;
+    sample->tick_ms = rx_tick ? rx_tick : HAL_GetTick();
+    sample->precise_tick = false;
+  }
   return parsed;
 }
 
-static bool query_http_time(SysDateTime *dt) {
+static bool query_http_time(TimeSample *sample) {
   struct Endpoint {
     const char *host;
     const char *path;
@@ -546,7 +687,7 @@ static bool query_http_time(SysDateTime *dt) {
       continue;
     }
 
-    if (raw_http_request(endpoints[i].host, endpoints[i].path, dt)) {
+    if (raw_http_request(endpoints[i].host, endpoints[i].path, sample)) {
       raw_at_command("AT+CIPCLOSE", "CLOSED", 1500, 40,
                      at_rx_buf(), AT_RX_SIZE);
       LOG_I("SYTM", "HTTP response parsed");
@@ -561,7 +702,8 @@ static bool query_http_time(SysDateTime *dt) {
 }
 
 bool SysTime_Sync(void) {
-  SysDateTime dt;
+  TimeSample sample;
+  SysDateTime synced;
 
   LOG_I("SYTM", "ESP8266 time sync...");
 
@@ -577,16 +719,17 @@ bool SysTime_Sync(void) {
     return false;
   }
 
-  if (!query_sntp(&dt)) {
+  if (!query_sntp(&sample)) {
     LOG_W("SYTM", "SNTP failed, trying HTTP");
-    if (!query_http_time(&dt)) {
+    if (!query_http_time(&sample)) {
       LOG_E("SYTM", "Time sync failed");
       return false;
     }
   }
 
-  apply_datetime_to_rtc(dt);
+  synced = align_and_apply_sample(sample);
   LOG_I("SYTM", "Synced: %04d-%02d-%02d %02d:%02d:%02d",
-        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
+        synced.year, synced.month, synced.day, synced.hour, synced.minute,
+        synced.second);
   return true;
 }
