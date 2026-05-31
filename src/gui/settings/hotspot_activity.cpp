@@ -375,6 +375,12 @@ static void hs_start(void) {
     ESP8266_SendCommand(cmd, "OK", 5000);
   }
   hs_enable_softap_dhcp();
+  /* Set AP IP address */
+  {
+    char ip_cmd[48];
+    snprintf(ip_cmd, sizeof(ip_cmd), "AT+CIPAP=\"%s\"", hs_ip);
+    ESP8266_SendCommand(ip_cmd, "OK", 3000);
+  }
   ESP8266_SendCommand("AT+CIPMUX=1", "OK", 2000);
   ESP8266_SendCommand("AT+CIPSERVER=1,80", "OK", 3000);
   ESP8266_SendCommand("AT+CIPSTO=60", "OK", 2000);
@@ -501,8 +507,10 @@ static int hs_main_loop(void) {
       } else if (sel == 1) {
         hs_edit = true;
       } else if (hs_on && sel == 2) {
-        bool can = SM_Wlan_On() && ESP8266_IsConnected();
-        if (can) hs_edit = true;
+        /* Only respond if WLAN is ON and connected */
+        if (SM_Wlan_On() && ESP8266_IsConnected()) {
+          hs_edit = true;
+        }
       } else if (hs_on && sel == 3) {
         return 3; // SSID & Password
       } else if (hs_on && sel == 4) {
