@@ -13,7 +13,6 @@
 #include "include/libpd.h"
 #include "include/pot_activity.hpp"
 #include "core/include/systime.h"
-#include "gui/superapp/file_manager/app.h"
 #include "include/sd_activity.hpp"
 #include "include/sn74hc00n_activity.hpp"
 #include "include/tcs3472_activity.hpp"
@@ -21,11 +20,6 @@
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
-
-// Menu arrays in REGULAR RAM (NOT CCMRAM — PD access from menu context crashes
-// CCMRAM)
-#define TOS_ITEMS 3
-static const char *tos_m[TOS_ITEMS] = {"00 Return", "01 Settings", "02 File Manager"};
 
 #define DEMO_ITEMS 12
 static const char *demo_m[DEMO_ITEMS] = {
@@ -128,23 +122,6 @@ static int menu_loop(const char *title, const char **items, int count,
       draw_menu(title, items, count, sel);
     }
     HAL_Delay(20);
-  }
-}
-
-int demo_activity_run(void) {
-  static int sel = 0;
-  while (1) {
-    sel = menu_loop("TOS", tos_m, TOS_ITEMS, sel);
-    if (sel == 0)
-      return 1;
-    if (sel == 1) {
-      settings_run();
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
-    }
-    if (sel == 2) {
-      file_manager_run();
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
-    }
   }
 }
 
