@@ -273,6 +273,16 @@ static void hs_refresh_clients(void) {
     if (hs_client_count > 0) strcpy(hs_client_diag, "TCP fallback");
   }
 
+  /* Filter out clients without MAC (stale CIPSTATUS-only entries) */
+  int real = 0;
+  for (int i = 0; i < hs_client_count; i++) {
+    if (hs_clients[i].mac[0] && !hs_clients[i].tcp_only) {
+      if (real != i) hs_clients[real] = hs_clients[i];
+      real++;
+    }
+  }
+  hs_client_count = real;
+
   LOG_I("HOTS", "%d client(s) found", hs_client_count);
 }
 
@@ -417,7 +427,8 @@ static void draw_hs_main(int sel) {
       draw_card(idx, sel, cy, "02 SSID & Password", false);
       break;
     case 3:
-      draw_card(idx, sel, cy, "03 Info", false);
+      char cb[32]; snprintf(cb, sizeof(cb), "03 Connected (%d)", hs_client_count);
+      draw_card(idx, sel, cy, cb, false);
       break;
     }
   }
@@ -428,7 +439,7 @@ static void draw_hs_main(int sel) {
 static int hs_main_loop(void) {
   static int sel = 0;
   uint8_t le = 0;
-  uint32_t lu = 0;
+  uint32_t lu = 0, lq = 0;
   if (sel >= hs_item_count())
     sel = hs_item_count() - 1;
   hs_edit = false;
@@ -473,6 +484,11 @@ static int hs_main_loop(void) {
       }
     }
     le = ce;
+    /* Periodic client refresh when hotspot ON */
+    if (hs_on && HAL_GetTick() - lq > 3000) {
+      lq = HAL_GetTick();
+      hs_refresh_clients();
+    }
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
       draw_hs_main(sel);
@@ -552,43 +568,70 @@ static void ssidpwd_run(void) {
   }
 }
 
-// ============ Hotspot Info page ============
+// ============ Connected clients page ============
 
 static void connected_page(void) {
-  int sel = 0; uint32_t lu = 0; uint32_t lq = 0;
+  /* Loading screen */
+  boardLCD.fillScreen(LCD_COLOR_BLACK);
+  draw_frame_title("HOTS");
+  PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Querying..."); LCD_Flush();
   hs_refresh_clients();
+
+  int n = hs_client_count + 1, sel = 0;
+  uint8_t le = 0; uint32_t lu = 0; uint32_t lq = 0;
+
   while (1) {
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED) return;
-    if (HAL_GetTick() - lq > 1500) {
+
+    if (keyManager.collision_A8.getState() == KEY_PRESSED)
+    { sel = (sel + 1) % n; HAL_Delay(100); }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED)
+    { sel = (sel - 1 + n) % n; HAL_Delay(100); }
+
+    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    if (ce && !le) {
+      if (sel == 0) return;
+      /* Show client detail */
+      HsClient *c = &hs_clients[sel - 1];
+      char msg[96];
+      snprintf(msg, sizeof(msg), "MAC:\n%s\nIP:\n%s",
+               c->mac[0] ? c->mac : "-",
+               c->ip[0] ? c->ip : "-");
+      alert_show("HOTS", msg);
+    }
+    le = ce;
+
+    /* Periodic refresh every 2s */
+    if (HAL_GetTick() - lq > 2000) {
       lq = HAL_GetTick();
       hs_refresh_clients();
+      n = hs_client_count + 1;
+      if (sel >= n) sel = n - 1;
     }
+
     if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick();
       draw_frame_title("HOTS"); PD_SetFont(FONT_ASCII_16);
-      draw_card(0, sel, 33, "00 Return", false);
-      PD_SetColor(TOS_TEXT_SEC);
-      char buf[48];
-      snprintf(buf, sizeof(buf), "AP: %s", ap_ip[0] ? ap_ip : "N/A");
-      PD_DrawString(26, 60, buf);
-      snprintf(buf, sizeof(buf), "Clients: %d", hs_client_count);
-      PD_DrawString(26, 82, buf);
-      if (hs_client_count == 0) {
-        snprintf(buf, sizeof(buf), "%s", hs_client_diag);
-        PD_DrawString(26, 104, buf);
-        PD_DrawString(26, 126, "No clients");
-      } else {
-        for (int i = 0; i < hs_client_count && i < 3; ++i) {
-          int y = 104 + i * 36;
-          snprintf(buf, sizeof(buf), "%d %.15s", i + 1, hs_clients[i].ip);
-          PD_DrawString(26, y, buf);
-          snprintf(buf, sizeof(buf), "%.17s",
-                   hs_clients[i].mac[0] ? hs_clients[i].mac : "-");
-          PD_DrawString(42, y + 16, buf);
+      int vis = n < 7 ? n : 7;
+      int start = sel - vis / 2;
+      if (start < 0) start = 0;
+      if (start + vis > n) start = n - vis;
+
+      for (int i = 0; i < vis; i++) {
+        int idx = start + i; if (idx >= n) break;
+        int cy = 33 + i * 25;
+        if (idx == 0) {
+          draw_card(0, sel, cy, "00 Return", false);
+        } else {
+          HsClient *c = &hs_clients[idx - 1];
+          char b[40];
+          snprintf(b, sizeof(b), " - %s", c->mac[0] ? c->mac : "-");
+          draw_card(idx, sel, cy, b, false);
         }
       }
-      PD_DrawFooterCenter("ENTER", NULL, NULL); LCD_Flush(); }
-    HAL_Delay(20);
+      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush(); }
+    HAL_Delay(10);
   }
 }
 
