@@ -24,13 +24,17 @@ extern uint8_t esp8266_data_ready;
 }
 
 static bool hs_on = false;
-static bool hs_share_wlan = false;
+static bool hs_auto_close = true;
 static bool hs_edit = false;
-static bool hs_nat_active = false;
+static uint32_t hs_idle_since = 0; /* tick when last client disconnected */
 static char hs_ssid[24] = "";
 static char hs_pwd[32] = "";
 static char hs_ip[16] = "";
 static char ap_ip[24] = "";
+
+/* Forward declarations */
+static void hs_stop(void);
+static void hs_start(void);
 
 struct HsClient {
   char ip[16];
@@ -324,6 +328,30 @@ static void hs_refresh_clients(void) {
   }
   hs_client_count = real;
 
+  /* Auto-close timer: require 3 consecutive zero-counts before starting */
+  static int zero_streak = 0;
+  if (hs_on && hs_auto_close) {
+    if (hs_client_count > 0) {
+      zero_streak = 0;
+      hs_idle_since = 0;
+    } else {
+      zero_streak++;
+      if (zero_streak >= 3) {
+        if (hs_idle_since == 0)
+          hs_idle_since = HAL_GetTick();
+        else if (HAL_GetTick() - hs_idle_since > 300000) {
+          LOG_I("HOTS", "Auto-close: idle timeout");
+          hs_stop();
+          hs_on = false;
+          return;
+        }
+      }
+    }
+  } else {
+    zero_streak = 0;
+    hs_idle_since = 0;
+  }
+
   LOG_I("HOTS", "%d client(s) found", hs_client_count);
 }
 
@@ -345,11 +373,6 @@ static bool hs_enable_softap_dhcp(void) {
   return false;
 }
 
-static bool hs_can_share_wlan(void) {
-  const char *ssid = SM_Wlan_SSID();
-  return SM_Wlan_On() && ssid && ssid[0];
-}
-
 static void hs_configure_dhcp_range(void) {
   int a, b, c, d;
   char cmd[96];
@@ -364,61 +387,6 @@ static void hs_configure_dhcp_range(void) {
   if (!hs_at_command(cmd, "OK", 2500, 80, hs_at_buf(), HS_AT_RX_SIZE)) {
     hs_log_response("CWDHCPS fail", hs_at_buf());
   }
-}
-
-static bool hs_station_has_ip(void) {
-  char *buf = hs_at_buf();
-
-  if (!hs_at_command("AT+CIFSR", "OK", 2500, 80, buf, HS_AT_RX_SIZE)) {
-    hs_log_response("CIFSR fail", buf);
-    return false;
-  }
-
-  hs_log_response("CIFSR", buf);
-  return strstr(buf, "STAIP") && !strstr(buf, "\"0.0.0.0\"");
-}
-
-static bool hs_restore_station(void) {
-  const char *ssid = SM_Wlan_SSID();
-  const char *pwd = SM_Wlan_PWD();
-  char cmd[96];
-
-  if (hs_station_has_ip()) return true;
-  if (!ssid || !ssid[0]) return false;
-
-  LOG_I("HOTS", "Restoring STA: %s", ssid);
-  int n = snprintf(cmd, sizeof(cmd), "AT+CWJAP=\"%s\",\"%s\"", ssid,
-                   pwd ? pwd : "");
-  if (n <= 0 || n >= (int)sizeof(cmd)) return false;
-
-  if (!hs_at_command(cmd, "OK", 15000, 120, hs_at_buf(), HS_AT_RX_SIZE)) {
-    hs_log_response("CWJAP fail", hs_at_buf());
-    return false;
-  }
-
-  HAL_Delay(500);
-  return hs_station_has_ip();
-}
-
-static bool hs_enable_nat(bool enable) {
-  char *buf = hs_at_buf();
-  const char *cmd = enable ? "AT+CIPNAT=1" : "AT+CIPNAT=0";
-
-  if (hs_at_command(cmd, "OK", 3000, 80, buf, HS_AT_RX_SIZE)) {
-    LOG_I("HOTS", "NAT %s", enable ? "enabled" : "disabled");
-    return true;
-  }
-
-  hs_log_response(enable ? "CIPNAT enable fail" : "CIPNAT disable fail", buf);
-  if (enable && hs_at_command("AT+IP_NAPT=1", "OK", 3000, 80, buf,
-                              HS_AT_RX_SIZE)) {
-    LOG_I("HOTS", "NAPT enabled");
-    return true;
-  }
-  if (enable) {
-    hs_log_response("IP_NAPT enable fail", buf);
-  }
-  return false;
 }
 
 // ============ Draw helpers ============
@@ -473,27 +441,12 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 
 static void hs_start(void) {
   LOG_I("HOTS", "Starting hotspot: %s", hs_ssid);
-  bool share = hs_share_wlan && hs_can_share_wlan();
-  hs_nat_active = false;
-  LOG_I("HOTS", "Share WLAN cfg=%d can=%d esp_state=%d",
-        hs_share_wlan ? 1 : 0, hs_can_share_wlan() ? 1 : 0,
-        ESP8266_GetState());
-  ESP8266_SendCommand(share ? "AT+CWMODE=3" : "AT+CWMODE=2", "OK", 3000);
+  ESP8266_SendCommand("AT+CWMODE=2", "OK", 3000);
   HAL_Delay(200);
-
-  if (share && !hs_restore_station()) {
-    LOG_W("HOTS", "STA restore failed; starting AP without WLAN sharing");
-    share = false;
-  }
-
-  if (hs_share_wlan && !share) {
-    alert_show("HOTS", "Share WLAN failed.\nCheck WLAN connection.");
-  }
 
   char cmd[96];
   if (strlen(hs_pwd) < 8)
     strcpy(hs_pwd, "12345678");
-  /* Set AP IP address before DHCP leases are issued. */
   {
     char ip_cmd[48];
     snprintf(ip_cmd, sizeof(ip_cmd), "AT+CIPAP=\"%s\"", hs_ip);
@@ -509,14 +462,6 @@ static void hs_start(void) {
     LOG_W("HOTS", "SoftAP DHCP enable failed; CWLIF may stay empty");
   }
   hs_configure_dhcp_range();
-  if (share && !hs_enable_nat(true)) {
-    LOG_W("HOTS", "NAT unsupported by ESP8266 AT firmware");
-    hs_share_wlan = false;
-    SM_Hotspot_SetShareWlan(false);
-    alert_show("HOTS", "Share WLAN needs NAT-capable ESP AT firmware.");
-  } else if (share) {
-    hs_nat_active = true;
-  }
   ESP8266_SendCommand("AT+CIPMUX=1", "OK", 2000);
   ESP8266_SendCommand("AT+CIPSERVER=1,80", "OK", 3000);
   ESP8266_SendCommand("AT+CIPSTO=60", "OK", 2000);
@@ -527,10 +472,6 @@ static void hs_start(void) {
 
 static void hs_stop(void) {
   LOG_I("HOTS", "Stopping hotspot");
-  if (hs_nat_active) {
-    hs_enable_nat(false);
-    hs_nat_active = false;
-  }
   ESP8266_SendCommand("AT+CIPSERVER=0", "OK", 2000);
   ESP8266_SendCommand("AT+CIPMUX=0", "OK", 2000);
   ESP8266_SendCommand("AT+CWMODE=1", "OK", 2000); // back to STA mode
@@ -580,19 +521,18 @@ static void draw_hs_main(int sel) {
       break;
     }
     case 2: {
-      bool can_share = hs_can_share_wlan();
-      if (can_share) {
+      bool can_use = hs_on && (hs_client_count == 0);
+      if (can_use) {
         char b[32];
-        snprintf(b, sizeof(b), "   Share WLAN");
-        draw_card_r(idx, sel, cy, b, hs_share_wlan ? "ON" : "OFF",
+        snprintf(b, sizeof(b), "   Auto Close");
+        draw_card_r(idx, sel, cy, b, hs_auto_close ? "ON" : "OFF",
                     hs_edit && (sel == 2));
       } else {
-        /* Grey, no ON/OFF, no flash */
         bool s = (idx == sel);
         uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
         PD_DrawAngledCard(14, cy, 212, 20, 5, cc);
         PD_SetColor(TOS_GREY);
-        PD_DrawString(26, cy + 2, "   Share WLAN");
+        PD_DrawString(26, cy + 2, "   Auto Close");
       }
       break;
     }
@@ -635,8 +575,8 @@ static int hs_main_loop(void) {
         if (sel == 1) {
           hs_on = !hs_on;
         } else if (sel == 2) {
-          hs_share_wlan = !hs_share_wlan;
-          SM_Hotspot_SetShareWlan(hs_share_wlan);
+          hs_auto_close = !hs_auto_close;
+          SM_Hotspot_SetAutoClose(hs_auto_close);
         }
       } else
         sel = (sel + 1) % hs_item_count();
@@ -647,8 +587,8 @@ static int hs_main_loop(void) {
         if (sel == 1) {
           hs_on = !hs_on;
         } else if (sel == 2) {
-          hs_share_wlan = !hs_share_wlan;
-          SM_Hotspot_SetShareWlan(hs_share_wlan);
+          hs_auto_close = !hs_auto_close;
+          SM_Hotspot_SetAutoClose(hs_auto_close);
         }
       } else
         sel = (sel - 1 + hs_item_count()) % hs_item_count();
@@ -668,15 +608,15 @@ static int hs_main_loop(void) {
         } else if (sel == 2 && hs_on) {
           hs_stop();
           hs_start();
-          LOG_I("HOTS", "Share WLAN %s", hs_share_wlan ? "ON" : "OFF");
+          LOG_I("HOTS", "Auto Close %s", hs_auto_close ? "ON" : "OFF");
         }
       } else if (sel == 0) {
         return 0;
       } else if (sel == 1) {
         hs_edit = true;
       } else if (hs_on && sel == 2) {
-        /* Only respond if WLAN is ON and connected */
-        if (hs_can_share_wlan()) {
+        /* Only if no clients connected */
+        if (hs_client_count == 0) {
           hs_edit = true;
         }
       } else if (hs_on && sel == 3) {
@@ -870,7 +810,7 @@ static void connected_page(void) {
 void hotspot_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   /* Load from Flash */
-  hs_share_wlan = SM_Hotspot_ShareWlan();
+  hs_auto_close = SM_Hotspot_AutoClose();
   hs_copy(hs_ip, sizeof(hs_ip), SM_Hotspot_IP());
   hs_copy(hs_ssid, sizeof(hs_ssid), SM_Hotspot_SSID());
   hs_copy(hs_pwd, sizeof(hs_pwd), SM_Hotspot_PWD());

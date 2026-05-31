@@ -56,7 +56,7 @@ static void defaults(void) {
   g_settings.saved_count    = 0;
   g_settings.time_auto_sync     = true;
   g_settings.time_style_24h     = true;
-  g_settings.hotspot_share_wlan = false;
+  g_settings.hotspot_auto_close = true;
   copy_str(g_settings.hotspot_ip, "192.168.4.1", sizeof(g_settings.hotspot_ip));
   LOG_D("SMGR", "Defaults loaded");
 }
@@ -177,8 +177,8 @@ bool SM_Time_Style24h(void)        { return g_settings.time_style_24h; }
 void SM_Time_SetStyle24h(bool v)   { g_settings.time_style_24h = v; SM_Save(); }
 
 /* --- Hotspot --- */
-bool SM_Hotspot_ShareWlan(void)        { return g_settings.hotspot_share_wlan; }
-void SM_Hotspot_SetShareWlan(bool v)   { g_settings.hotspot_share_wlan = v; SM_Save(); }
+bool SM_Hotspot_AutoClose(void)        { return g_settings.hotspot_auto_close; }
+void SM_Hotspot_SetAutoClose(bool v)   { g_settings.hotspot_auto_close = v; SM_Save(); }
 const char *SM_Hotspot_IP(void)        { return g_settings.hotspot_ip; }
 void SM_Hotspot_SetIP(const char *s)   { copy_str(g_settings.hotspot_ip, s, sizeof(g_settings.hotspot_ip)); SM_Save(); }
 const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }

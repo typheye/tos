@@ -54,7 +54,7 @@ typedef struct __attribute__((packed, aligned(4))) {
   bool     time_style_24h;   /* 24h (true) or 12h (false) */
 
   /* --- Hotspot settings --- */
-  bool     hotspot_share_wlan; /* share STA WiFi via hotspot */
+  bool     hotspot_auto_close; /* auto-close after 5min idle */
   char     hotspot_ip[16];     /* hotspot gateway IP, default 192.168.4.1 */
 
 } Settings_t;
@@ -99,8 +99,8 @@ bool SM_Time_Style24h(void);
 void SM_Time_SetStyle24h(bool v);
 
 /* --- Hotspot --- */
-bool SM_Hotspot_ShareWlan(void);
-void SM_Hotspot_SetShareWlan(bool v);
+bool SM_Hotspot_AutoClose(void);
+void SM_Hotspot_SetAutoClose(bool v);
 const char *SM_Hotspot_IP(void);
 void SM_Hotspot_SetIP(const char *s);
 const char *SM_Hotspot_SSID(void);
