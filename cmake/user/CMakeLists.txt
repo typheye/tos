@@ -9,6 +9,7 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/superapp/file_manager/
 )
 
 # 列出所有需要编译的自定义源文件
@@ -73,6 +74,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/sound_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/time_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/about_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/superapp/file_manager/app.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/keyboard.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/alert.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/confirm.cpp
