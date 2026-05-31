@@ -2,15 +2,15 @@
 #include "components/include/alert.hpp"
 #include "components/include/keyboard.hpp"
 #include "core/include/settings_manager.h"
+#include "core/include/systime.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
+#include "syslog.h"
 #include <cstdio>
 #include <cstring>
-#include "syslog.h"
-#include "core/include/systime.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -23,13 +23,13 @@ extern uint16_t esp8266_global_index;
 extern uint8_t esp8266_data_ready;
 }
 
-static bool hs_on        = false;
+static bool hs_on = false;
 static bool hs_share_wlan = false;
-static bool hs_edit       = false;
-static char hs_ssid[24]   = "";
-static char hs_pwd[32]    = "";
-static char hs_ip[16]     = "";
-static char ap_ip[24]     = "";
+static bool hs_edit = false;
+static char hs_ssid[24] = "";
+static char hs_pwd[32] = "";
+static char hs_ip[16] = "";
+static char ap_ip[24] = "";
 
 struct HsClient {
   char ip[16];
@@ -44,15 +44,15 @@ static char hs_client_diag[24] = "Not scanned";
 static const size_t HS_AT_RX_SIZE = 512;
 
 static void hs_copy(char *dst, size_t dst_sz, const char *src) {
-  if (!dst || dst_sz == 0) return;
-  if (!src) src = "";
+  if (!dst || dst_sz == 0)
+    return;
+  if (!src)
+    src = "";
   strncpy(dst, src, dst_sz - 1);
   dst[dst_sz - 1] = '\0';
 }
 
-static char *hs_at_buf(void) {
-  return (char *)esp8266_global_buffer;
-}
+static char *hs_at_buf(void) { return (char *)esp8266_global_buffer; }
 
 static void hs_at_reset(void) {
   esp8266_global_index = 0;
@@ -99,8 +99,8 @@ static void hs_at_append(char c, char *out, size_t out_sz, size_t *len) {
 }
 
 static bool hs_at_command(const char *cmd, const char *expected,
-                          uint32_t timeout_ms, uint32_t settle_ms,
-                          char *out, size_t out_sz) {
+                          uint32_t timeout_ms, uint32_t settle_ms, char *out,
+                          size_t out_sz) {
   char tx[128];
   int n = snprintf(tx, sizeof(tx), "%s\r\n", cmd);
   uint32_t start = HAL_GetTick();
@@ -109,7 +109,8 @@ static bool hs_at_command(const char *cmd, const char *expected,
   bool matched = false;
   bool failed = false;
 
-  if (n <= 0 || n >= (int)sizeof(tx)) return false;
+  if (n <= 0 || n >= (int)sizeof(tx))
+    return false;
 
   hs_at_begin();
   HAL_UART_Transmit(&huart2, (uint8_t *)tx, (uint16_t)n, 1000);
@@ -130,11 +131,14 @@ static bool hs_at_command(const char *cmd, const char *expected,
     }
 
     if (got) {
-      if (expected && strstr(out, expected)) matched = true;
-      if (strstr(out, "ERROR") || strstr(out, "FAIL")) failed = true;
+      if (expected && strstr(out, expected))
+        matched = true;
+      if (strstr(out, "ERROR") || strstr(out, "FAIL"))
+        failed = true;
     }
 
-    if ((matched || failed) && (HAL_GetTick() - last_rx >= settle_ms)) break;
+    if ((matched || failed) && (HAL_GetTick() - last_rx >= settle_ms))
+      break;
   }
 
   hs_at_end();
@@ -145,50 +149,55 @@ static void hs_log_response(const char *tag, const char *resp) {
   char summary[96];
   size_t j = 0;
 
-  if (!resp) resp = "";
+  if (!resp)
+    resp = "";
   for (size_t i = 0; resp[i] && j + 1 < sizeof(summary); ++i) {
     char c = resp[i];
-    if (c == '\r' || c == '\n' || c == '\t') c = ' ';
-    if ((unsigned char)c < 32 || (unsigned char)c > 126) c = '.';
+    if (c == '\r' || c == '\n' || c == '\t')
+      c = ' ';
+    if ((unsigned char)c < 32 || (unsigned char)c > 126)
+      c = '.';
     summary[j++] = c;
   }
   summary[j] = '\0';
   LOG_D("HOTS", "%s(%u): %s", tag, (unsigned)strlen(resp), summary);
 }
 
-static bool hs_ip_char(char c) {
-  return (c >= '0' && c <= '9') || c == '.';
-}
+static bool hs_ip_char(char c) { return (c >= '0' && c <= '9') || c == '.'; }
 
 static void hs_copy_token(char *dst, size_t dst_sz, const char *begin,
                           const char *end) {
-  while (begin < end && (*begin == ' ' || *begin == '"' || *begin == '\r' ||
-                         *begin == '\n')) {
+  while (begin < end &&
+         (*begin == ' ' || *begin == '"' || *begin == '\r' || *begin == '\n')) {
     ++begin;
   }
-  while (end > begin && (end[-1] == ' ' || end[-1] == '"' ||
-                         end[-1] == '\r' || end[-1] == '\n')) {
+  while (end > begin && (end[-1] == ' ' || end[-1] == '"' || end[-1] == '\r' ||
+                         end[-1] == '\n')) {
     --end;
   }
 
   size_t n = (size_t)(end - begin);
-  if (n >= dst_sz) n = dst_sz - 1;
+  if (n >= dst_sz)
+    n = dst_sz - 1;
   memcpy(dst, begin, n);
   dst[n] = '\0';
 }
 
 static bool hs_client_exists(const char *ip) {
   for (int i = 0; i < hs_client_count; ++i) {
-    if (strcmp(hs_clients[i].ip, ip) == 0) return true;
+    if (strcmp(hs_clients[i].ip, ip) == 0)
+      return true;
   }
   return false;
 }
 
 static void hs_add_client(const char *ip, const char *mac, bool tcp_only) {
-  if (!ip || !ip[0] || hs_client_count >= (int)(sizeof(hs_clients) / sizeof(hs_clients[0]))) {
+  if (!ip || !ip[0] ||
+      hs_client_count >= (int)(sizeof(hs_clients) / sizeof(hs_clients[0]))) {
     return;
   }
-  if (hs_client_exists(ip)) return;
+  if (hs_client_exists(ip))
+    return;
 
   hs_copy(hs_clients[hs_client_count].ip,
           sizeof(hs_clients[hs_client_count].ip), ip);
@@ -201,23 +210,28 @@ static void hs_add_client(const char *ip, const char *mac, bool tcp_only) {
 static void hs_parse_cwlif(const char *resp) {
   const char *p = resp;
 
-  while (p && *p && hs_client_count < (int)(sizeof(hs_clients) / sizeof(hs_clients[0]))) {
+  while (p && *p &&
+         hs_client_count < (int)(sizeof(hs_clients) / sizeof(hs_clients[0]))) {
     char ip[16];
     char mac[18];
     const char *line_end = strpbrk(p, "\r\n");
     const char *line = p;
     const char *comma;
 
-    if (!line_end) line_end = p + strlen(p);
-    while (line < line_end && (*line == ' ' || *line == '\t')) ++line;
-    if (strncmp(line, "+CWLIF:", 7) == 0) line += 7;
+    if (!line_end)
+      line_end = p + strlen(p);
+    while (line < line_end && (*line == ' ' || *line == '\t'))
+      ++line;
+    if (strncmp(line, "+CWLIF:", 7) == 0)
+      line += 7;
 
     comma = (const char *)memchr(line, ',', (size_t)(line_end - line));
     if (comma && line < comma && hs_ip_char(*line) &&
         (size_t)(comma - line) < sizeof(ip)) {
       hs_copy_token(ip, sizeof(ip), line, comma);
       hs_copy_token(mac, sizeof(mac), comma + 1, line_end);
-      if (strchr(ip, '.') && mac[0]) hs_add_client(ip, mac, false);
+      if (strchr(ip, '.') && mac[0])
+        hs_add_client(ip, mac, false);
     }
 
     p = (*line_end) ? line_end + 1 : line_end;
@@ -236,11 +250,13 @@ static void hs_parse_cipstatus(const char *resp) {
     const char *ip_begin = 0;
     const char *ip_end = 0;
 
-    if (!line_end) line_end = p + strlen(p);
+    if (!line_end)
+      line_end = p + strlen(p);
     while (q < line_end) {
       if (*q == '"') {
         ++quote_count;
-        if (quote_count == 3) ip_begin = q + 1;
+        if (quote_count == 3)
+          ip_begin = q + 1;
         else if (quote_count == 4) {
           ip_end = q;
           break;
@@ -251,7 +267,8 @@ static void hs_parse_cipstatus(const char *resp) {
 
     if (ip_begin && ip_end && (size_t)(ip_end - ip_begin) < sizeof(ip)) {
       hs_copy_token(ip, sizeof(ip), ip_begin, ip_end);
-      if (strchr(ip, '.')) hs_add_client(ip, "TCP session", true);
+      if (strchr(ip, '.'))
+        hs_add_client(ip, "TCP session", true);
     }
 
     p = (*line_end) ? line_end + 1 : line_end;
@@ -276,14 +293,16 @@ static void hs_refresh_clients(void) {
       hs_at_command("AT+CIPSTATUS", "OK", 2500, 80, buf, HS_AT_RX_SIZE)) {
     hs_log_response("CIPSTATUS", buf);
     hs_parse_cipstatus(buf);
-    if (hs_client_count > 0) strcpy(hs_client_diag, "TCP fallback");
+    if (hs_client_count > 0)
+      strcpy(hs_client_diag, "TCP fallback");
   }
 
   /* Filter out clients without MAC (stale CIPSTATUS-only entries) */
   int real = 0;
   for (int i = 0; i < hs_client_count; i++) {
     if (hs_clients[i].mac[0] && !hs_clients[i].tcp_only) {
-      if (real != i) hs_clients[real] = hs_clients[i];
+      if (real != i)
+        hs_clients[real] = hs_clients[i];
       real++;
     }
   }
@@ -368,7 +387,8 @@ static void hs_start(void) {
     LOG_W("HOTS", "SoftAP DHCP enable failed; CWLIF may stay empty");
   }
   char cmd[96];
-  if (strlen(hs_pwd) < 8) strcpy(hs_pwd, "12345678");
+  if (strlen(hs_pwd) < 8)
+    strcpy(hs_pwd, "12345678");
   snprintf(cmd, sizeof(cmd), "AT+CWSAP=\"%s\",\"%s\",6,3,4,0", hs_ssid, hs_pwd);
   if (!ESP8266_SendCommand(cmd, "OK", 5000)) {
     snprintf(cmd, sizeof(cmd), "AT+CWSAP=\"%s\",\"%s\",6,3", hs_ssid, hs_pwd);
@@ -404,7 +424,12 @@ static void hs_stop(void) {
 
 static int hs_item_count(void) {
   int n = 2; // Return + toggle
-  if (hs_on) { n++; n++; n++; n++; } // ShareWLAN + SSID&PWD + IP + Connected
+  if (hs_on) {
+    n++;
+    n++;
+    n++;
+    n++;
+  } // ShareWLAN + SSID&PWD + IP + Connected
   return n;
 }
 
@@ -437,11 +462,17 @@ static void draw_hs_main(int sel) {
     case 2: {
       bool can_share = SM_Wlan_On() && ESP8266_IsConnected();
       if (can_share) {
-        char b[32]; snprintf(b, sizeof(b), "   Share WLAN");
+        char b[32];
+        snprintf(b, sizeof(b), "   Share WLAN");
         draw_card_r(idx, sel, cy, b, hs_share_wlan ? "ON" : "OFF",
-                    hs_edit && (idx == 2));
+                    hs_edit && (sel == 2));
       } else {
-        draw_card(idx, sel, cy, "   Share WLAN", true);
+        /* Grey, no ON/OFF, no flash */
+        bool s = (idx == sel);
+        uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
+        PD_DrawAngledCard(14, cy, 212, 20, 5, cc);
+        PD_SetColor(TOS_GREY);
+        PD_DrawString(26, cy + 2, "   Share WLAN");
       }
       break;
     }
@@ -449,12 +480,14 @@ static void draw_hs_main(int sel) {
       draw_card(idx, sel, cy, "02 SSID & Password", false);
       break;
     case 4: {
-      char b[32]; snprintf(b, sizeof(b), "03 IP");
+      char b[32];
+      snprintf(b, sizeof(b), "03 IP");
       draw_card_r(idx, sel, cy, b, hs_ip, hs_edit && (idx == 4));
       break;
     }
     case 5: {
-      char cb[32]; snprintf(cb, sizeof(cb), "04 Connected (%d)", hs_client_count);
+      char cb[32];
+      snprintf(cb, sizeof(cb), "04 Connected (%d)", hs_client_count);
       draw_card(idx, sel, cy, cb, false);
       break;
     }
@@ -479,18 +512,26 @@ static int hs_main_loop(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       if (hs_edit) {
-        if (sel == 1)        { hs_on = !hs_on;  }
-        else if (sel == 2)   { hs_share_wlan = !hs_share_wlan;
-                               SM_Hotspot_SetShareWlan(hs_share_wlan); }
-      } else sel = (sel + 1) % hs_item_count();
+        if (sel == 1) {
+          hs_on = !hs_on;
+        } else if (sel == 2) {
+          hs_share_wlan = !hs_share_wlan;
+          SM_Hotspot_SetShareWlan(hs_share_wlan);
+        }
+      } else
+        sel = (sel + 1) % hs_item_count();
       HAL_Delay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (hs_edit) {
-        if (sel == 1)        { hs_on = !hs_on;  }
-        else if (sel == 2)   { hs_share_wlan = !hs_share_wlan;
-                               SM_Hotspot_SetShareWlan(hs_share_wlan); }
-      } else sel = (sel - 1 + hs_item_count()) % hs_item_count();
+        if (sel == 1) {
+          hs_on = !hs_on;
+        } else if (sel == 2) {
+          hs_share_wlan = !hs_share_wlan;
+          SM_Hotspot_SetShareWlan(hs_share_wlan);
+        }
+      } else
+        sel = (sel - 1 + hs_item_count()) % hs_item_count();
       HAL_Delay(150);
     }
 
@@ -499,7 +540,10 @@ static int hs_main_loop(void) {
       if (hs_edit) {
         hs_edit = false;
         if (sel == 1) {
-          if (hs_on) hs_start(); else hs_stop();
+          if (hs_on)
+            hs_start();
+          else
+            hs_stop();
           LOG_I("HOTS", "Set %s", hs_on ? "ON" : "OFF");
         }
       } else if (sel == 0) {
@@ -518,10 +562,13 @@ static int hs_main_loop(void) {
         keyboard_open("IP (192.168.x.1)", hs_ip, 15);
         /* Validate: must be 192.168.X.1 where X in 1-255 */
         int a, b, c, d;
-        if (sscanf(hs_ip, "%d.%d.%d.%d", &a, &b, &c, &d) == 4 &&
-            a == 192 && b == 168 && c >= 1 && c <= 255 && d == 1) {
+        if (sscanf(hs_ip, "%d.%d.%d.%d", &a, &b, &c, &d) == 4 && a == 192 &&
+            b == 168 && c >= 1 && c <= 255 && d == 1) {
           SM_Hotspot_SetIP(hs_ip);
-          if (hs_on) { hs_stop(); hs_start(); }
+          if (hs_on) {
+            hs_stop();
+            hs_start();
+          }
         } else {
           strcpy(hs_ip, "192.168.4.1");
           SM_Hotspot_SetIP(hs_ip);
@@ -555,13 +602,6 @@ static void draw_ssidpwd(int sel) {
   draw_card(0, sel, 33, "00 Return", false);
   draw_card(1, sel, 58, "01 Edit SSID", false);
   draw_card(2, sel, 83, "02 Edit Password", false);
-
-  PD_SetColor(TOS_TEXT_SEC);
-  char buf[48];
-  snprintf(buf, sizeof(buf), "SSID:%s", hs_ssid);
-  PD_DrawString(26, 115, buf);
-  snprintf(buf, sizeof(buf), "PWD: %s", hs_pwd);
-  PD_DrawString(26, 135, buf);
 
   PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
   LCD_Flush();
@@ -623,30 +663,38 @@ static void connected_page(void) {
   /* Loading screen */
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   draw_frame_title("HOTS");
-  PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Querying..."); LCD_Flush();
+  PD_SetColor(TOS_TEXT);
+  PD_DrawString(26, 33, "Querying...");
+  LCD_Flush();
   hs_refresh_clients();
 
   int n = hs_client_count + 1, sel = 0;
-  uint8_t le = 0; uint32_t lu = 0; uint32_t lq = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0;
+  uint32_t lq = 0;
 
   while (1) {
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED)
-    { sel = (sel + 1) % n; HAL_Delay(100); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED)
-    { sel = (sel - 1 + n) % n; HAL_Delay(100); }
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+      sel = (sel + 1) % n;
+      HAL_Delay(100);
+    }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+      sel = (sel - 1 + n) % n;
+      HAL_Delay(100);
+    }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
-      if (sel == 0) return;
+      if (sel == 0)
+        return;
       /* Show client detail */
       HsClient *c = &hs_clients[sel - 1];
       char msg[96];
-      snprintf(msg, sizeof(msg), "MAC:\n%s\nIP:\n%s",
-               c->mac[0] ? c->mac : "-",
+      snprintf(msg, sizeof(msg), "MAC:\n%s\nIP:\n%s", c->mac[0] ? c->mac : "-",
                c->ip[0] ? c->ip : "-");
       alert_show("HOTS", msg);
     }
@@ -657,18 +705,25 @@ static void connected_page(void) {
       lq = HAL_GetTick();
       hs_refresh_clients();
       n = hs_client_count + 1;
-      if (sel >= n) sel = n - 1;
+      if (sel >= n)
+        sel = n - 1;
     }
 
-    if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick();
-      draw_frame_title("HOTS"); PD_SetFont(FONT_ASCII_16);
+    if (HAL_GetTick() - lu > 100) {
+      lu = HAL_GetTick();
+      draw_frame_title("HOTS");
+      PD_SetFont(FONT_ASCII_16);
       int vis = n < 7 ? n : 7;
       int start = sel - vis / 2;
-      if (start < 0) start = 0;
-      if (start + vis > n) start = n - vis;
+      if (start < 0)
+        start = 0;
+      if (start + vis > n)
+        start = n - vis;
 
       for (int i = 0; i < vis; i++) {
-        int idx = start + i; if (idx >= n) break;
+        int idx = start + i;
+        if (idx >= n)
+          break;
         int cy = 33 + i * 25;
         if (idx == 0) {
           draw_card(0, sel, cy, "00 Return", false);
@@ -679,7 +734,9 @@ static void connected_page(void) {
           draw_card(idx, sel, cy, b, false);
         }
       }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush(); }
+      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      LCD_Flush();
+    }
     HAL_Delay(10);
   }
 }
@@ -693,9 +750,12 @@ void hotspot_activity_run(void) {
   hs_copy(hs_ip, sizeof(hs_ip), SM_Hotspot_IP());
   hs_copy(hs_ssid, sizeof(hs_ssid), SM_Hotspot_SSID());
   hs_copy(hs_pwd, sizeof(hs_pwd), SM_Hotspot_PWD());
-  if (!hs_ip[0])   strcpy(hs_ip,   "192.168.4.1");
-  if (!hs_ssid[0]) strcpy(hs_ssid, "TOS-Hotspot");
-  if (!hs_pwd[0])  strcpy(hs_pwd,  "12345678");
+  if (!hs_ip[0])
+    strcpy(hs_ip, "192.168.4.1");
+  if (!hs_ssid[0])
+    strcpy(hs_ssid, "TOS-Hotspot");
+  if (!hs_pwd[0])
+    strcpy(hs_pwd, "12345678");
 
   while (1) {
     int act = hs_main_loop();

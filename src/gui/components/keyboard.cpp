@@ -44,7 +44,8 @@ static const KbKey row3[] = {
 };
 static const KbKey row4[] = {
     KL(".", ".", '.', '.'), KL("-", "-", '-', '-'), KL("_", "_", '_', '_'),
-    KL("/", "/", '/', '/'), KL(" ", " ", ' ', ' '), KS("OK", "OK"),
+    KL("/", "/", '/', '/'), KL(":", ":", ':', ':'),
+    KL(" ", " ", ' ', ' '), KS("OK", "OK"),
 };
 
 struct KbRow {
@@ -52,7 +53,7 @@ struct KbRow {
   int n;
 };
 static const KbRow rows[] = {
-    {row0, 10}, {row1, 9}, {row2, 9}, {row3, 10}, {row4, 6},
+    {row0, 10}, {row1, 9}, {row2, 9}, {row3, 10}, {row4, 7},
 };
 #define N_ROWS 5
 
@@ -143,8 +144,7 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
 
 bool keyboard_open(const char *title, char *out, int max_len) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  int len = 0;
-  memset(out, 0, max_len + 1);
+  int len = (int)strlen(out); /* preserve initial value */
   bool shift = true;
   int total = flat_n();
   // Init sel from pot to avoid double-highlight on first frame
