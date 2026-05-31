@@ -1,0 +1,8 @@
+{
+  "flash_base": "0x08000000",
+  "flash_size": "0x00100000",
+  "dfu_vid_pid": "0483:df11",
+  "dfu_alt": "0",
+  "dfu_util_path": "",
+  "stm32_cli_path": ""
+}
