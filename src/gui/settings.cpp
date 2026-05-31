@@ -10,6 +10,7 @@
 #include "settings/include/display_activity.hpp"
 #include "settings/include/sound_activity.hpp"
 #include "settings/include/time_activity.hpp"
+#include "settings/include/about_activity.hpp"
 #include <cstdio>
 #include "syslog.h"
 #include "core/include/systime.h"
@@ -20,7 +21,7 @@ extern LCD boardLCD;
 #define SET_N 10
 static const char *set_m[SET_N] = {
     "00 Return", "01 WLAN", "02 Hotspot", "03 Storage", "04 Display",
-    "05 Sound",  "06 Date & Time", "07 About",   "08 Restore", "09 Debugs",
+    "05 Sound & GFX", "06 Date & Time", "07 About", "08 Restore", "09 Debugs",
 };
 #define DBG_N 2
 static const char *dbg_m[DBG_N] = {"00 Return", "01 Run Demo"};
@@ -133,6 +134,10 @@ void settings_run(void) {
     }
     if (sel == 6) {
       time_activity_run();
+      boardLCD.fillScreen(LCD_COLOR_BLACK);
+    }
+    if (sel == 7) {
+      about_activity_run();
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     if (sel == 9) {

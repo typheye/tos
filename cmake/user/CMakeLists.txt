@@ -71,6 +71,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/display_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/sound_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/time_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/about_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/keyboard.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/alert.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/status_icons.cpp
