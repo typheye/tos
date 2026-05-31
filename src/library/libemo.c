@@ -19,7 +19,28 @@ static uint16_t rgb565(uint32_t c) {
   return (uint16_t)(((c >> 19) << 11) | (((c >> 10) & 0x3F) << 5) | ((c >> 3) & 0x1F));
 }
 
+static uint32_t mix_rgb(uint32_t a, uint32_t b, float t) {
+  if (t < 0.0f) t = 0.0f;
+  if (t > 1.0f) t = 1.0f;
+  uint8_t ar = (uint8_t)((a >> 16) & 0xFF);
+  uint8_t ag = (uint8_t)((a >> 8) & 0xFF);
+  uint8_t ab = (uint8_t)(a & 0xFF);
+  uint8_t br = (uint8_t)((b >> 16) & 0xFF);
+  uint8_t bg = (uint8_t)((b >> 8) & 0xFF);
+  uint8_t bb = (uint8_t)(b & 0xFF);
+  uint8_t r = (uint8_t)((float)ar + ((float)br - (float)ar) * t);
+  uint8_t g = (uint8_t)((float)ag + ((float)bg - (float)ag) * t);
+  uint8_t bl = (uint8_t)((float)ab + ((float)bb - (float)ab) * t);
+  return ((uint32_t)r << 16) | ((uint32_t)g << 8) | bl;
+}
+
 #define FB(x,y)  g_fb[(y) * g_w + (x)]
+
+static void set_px(int16_t x, int16_t y, uint32_t color) {
+  if (!g_fb) return;
+  if (x < 0 || y < 0 || x >= (int16_t)g_w || y >= (int16_t)g_h) return;
+  FB(x, y) = rgb565(color);
+}
 
 void EMO_Init(void) {
   g_fb = LCD_GetFrameBuffer();
@@ -63,19 +84,19 @@ void EMO_FillCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color) {
 
 void EMO_DrawCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color) {
   if (!g_fb || r <= 0) return;
-  uint16_t c = rgb565(color);
   int16_t x = r, y = 0, err = 0;
   while (x >= y) {
-    FB(cx + x, cy + y) = c; FB(cx + y, cy + x) = c;
-    FB(cx - y, cy + x) = c; FB(cx - x, cy + y) = c;
-    FB(cx - x, cy - y) = c; FB(cx - y, cy - x) = c;
-    FB(cx + y, cy - x) = c; FB(cx + x, cy - y) = c;
+    set_px(cx + x, cy + y, color); set_px(cx + y, cy + x, color);
+    set_px(cx - y, cy + x, color); set_px(cx - x, cy + y, color);
+    set_px(cx - x, cy - y, color); set_px(cx - y, cy - x, color);
+    set_px(cx + y, cy - x, color); set_px(cx + x, cy - y, color);
     if (err <= 0) { y++; err += 2 * y + 1; }
     if (err > 0)  { x--; err -= 2 * x + 1; }
   }
 }
 
 void EMO_DrawHLine(int16_t x, int16_t y, int16_t len, int16_t t, uint32_t color) {
+  if (!g_fb || len <= 0 || t <= 0) return;
   uint16_t c = rgb565(color);
   int16_t y0 = y - t / 2;
   for (int16_t dy = 0; dy < t; dy++) {
@@ -104,36 +125,56 @@ void EMO_DrawThickArc(int16_t cx, int16_t cy, int16_t r, float s_deg, float e_de
   }
 }
 
-// ============ Eye drawing (with eyelid + pupil) ============
+// ============ Small local helpers ============
+
+static float clampf_emo(float v, float lo, float hi) {
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
+}
+
+static void draw_sparkle(int16_t x, int16_t y, int16_t s, uint32_t color) {
+  EMO_DrawHLine(x - s, y, s * 2 + 1, 1, color);
+  for (int16_t i = -s; i <= s; i++) set_px(x, y + i, color);
+}
+
+// ============ Eye drawing (soft sclera + pupil + eyelids) ============
 
 static void draw_eye(int16_t cx, int16_t cy, float blink, float lx, float ly) {
   int16_t r = EMO_EYE_R;
-  if (blink < 0.0f) blink = 0.0f;
-  if (blink > 1.0f) blink = 1.0f;
+  blink = clampf_emo(blink, 0.0f, 1.0f);
+  lx = clampf_emo(lx, -1.0f, 1.0f);
+  ly = clampf_emo(ly, -1.0f, 1.0f);
 
-  // White sclera
-  if (blink < 0.99f) {
+  if (blink < 0.98f) {
+    // Soft outside shadow makes the eye feel less flat.
+    EMO_FillCircle(cx + 1, cy + 2, r + 1, 0x1A1A1A);
     EMO_FillCircle(cx, cy, r, EMO_WHITE);
-    // Pupil (black dot + highlight, only if eye is sufficiently open)
-    if (blink < 0.7f) {
-      int16_t px = cx + (int16_t)(lx * 6.0f);
-      int16_t py = cy + (int16_t)(ly * 5.0f);
-      int16_t max_off = r - EMO_PUPIL_R - 2;
-      if (px < cx - max_off) px = cx - max_off;
-      if (px > cx + max_off) px = cx + max_off;
-      if (py < cy - max_off) py = cy - max_off;
-      if (py > cy + max_off) py = cy + max_off;
+    EMO_FillCircle(cx - r / 3, cy - r / 3, r / 3, 0xF4FBFF);
+
+    if (blink < 0.76f) {
+      int16_t max_off_x = r - EMO_PUPIL_R - 3;
+      int16_t max_off_y = r - EMO_PUPIL_R - 4;
+      int16_t px = cx + (int16_t)(lx * (float)max_off_x);
+      int16_t py = cy + (int16_t)(ly * (float)max_off_y);
+      EMO_FillCircle(px, py, EMO_PUPIL_R + 1, 0x101018);
       EMO_FillCircle(px, py, EMO_PUPIL_R, EMO_BLACK);
-      EMO_FillCircle(px - 2, py - 2, 2, EMO_WHITE);
+      EMO_FillCircle(px - 3, py - 3, 3, EMO_WHITE);
+      EMO_FillCircle(px + 3, py + 2, 1, 0xC7D9FF);
     }
-    // Eyelid cover — drawn LAST so it covers pupil too
-    int16_t cover_h = (int16_t)(blink * r * 2.2f);
-    if (cover_h > 0) {
-      EMO_FillRect(cx - r - 2, cy - r - 1, r * 2 + 4, cover_h, EMO_BLACK);
+
+    // Upper eyelid and lower squeeze.  Drawing these last fixes pupil bleed.
+    int16_t cover_top = (int16_t)(blink * r * 2.05f);
+    if (cover_top > 0) {
+      EMO_FillRect(cx - r - 2, cy - r - 1, r * 2 + 4, cover_top, EMO_BLACK);
+    }
+    int16_t cover_bottom = (int16_t)(blink * r * 0.40f);
+    if (cover_bottom > 0) {
+      EMO_FillRect(cx - r - 1, cy + r - cover_bottom, r * 2 + 2, cover_bottom + 2, EMO_BLACK);
     }
   } else {
-    // Fully closed: thin horizontal line spanning eye width
-    EMO_DrawHLine(cx - r, cy + r, r * 2, 2, EMO_WHITE);
+    EMO_DrawHLine(cx - r + 2, cy, r * 2 - 4, 3, EMO_WHITE);
+    EMO_DrawHLine(cx - r + 6, cy + 3, r * 2 - 12, 1, 0x444444);
   }
 }
 
@@ -143,74 +184,91 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
                   float look_x, float look_y, float cheek, float brow_y) {
   if (!g_fb) return;
 
-  // Clamp
-  #define CLAMP(v,lo,hi) do{if((v)<(lo))(v)=(lo);if((v)>(hi))(v)=(hi);}while(0)
-  CLAMP(blink_l, 0, 1); CLAMP(blink_r, 0, 1);
-  CLAMP(mouth_open, 0, 1); CLAMP(cheek, 0, 1); CLAMP(brow_y, -1, 1);
-  CLAMP(look_x, -1, 1); CLAMP(look_y, -1, 1);
+  blink_l = clampf_emo(blink_l, 0.0f, 1.0f);
+  blink_r = clampf_emo(blink_r, 0.0f, 1.0f);
+  mouth_open = clampf_emo(mouth_open, 0.0f, 1.0f);
+  cheek = clampf_emo(cheek, 0.0f, 1.0f);
+  brow_y = clampf_emo(brow_y, -1.0f, 1.0f);
+  look_x = clampf_emo(look_x, -1.0f, 1.0f);
+  look_y = clampf_emo(look_y, -1.0f, 1.0f);
 
   EMO_FillScreen(EMO_BLACK);
 
-  // --- Eyebrows (shallow upward arcs) ---
-  // Arc centre sits below eye; large radius produces a gentle curve above the eye.
-  int16_t brow_arc_r   = 55;                        // large radius → shallow curve
-  int16_t brow_thick   = 3;
-  int16_t brow_base_cy = EMO_LEFT_EYE_Y + 30;       // arc centre below eye
-  int16_t brow_dy = (int16_t)(-brow_y * 6.0f);      // raise = shift centre up (lower y)
-
-  // Left brow: arc through top of circle (70°→110°), centred above left eye
-  {
-    int16_t cy = brow_base_cy + brow_dy;
-    EMO_DrawThickArc(EMO_LEFT_EYE_X, cy, brow_arc_r, 70.0f, 110.0f, brow_thick, EMO_BROW);
+  // --- Square-screen friendly ambient shade ---
+  // Avoid large circular rings; the physical screen is square, so a frame-like
+  // shade looks cleaner and does not fight the panel shape.
+  uint32_t glow = mix_rgb(0x03070D, 0x101A2A, cheek * 0.45f + mouth_open * 0.12f);
+  if (cheek > 0.02f || mouth_open > 0.18f) {
+    EMO_FillRect(0, 0, g_w, 14, glow);
+    EMO_FillRect(0, g_h - 16, g_w, 16, glow);
+    EMO_FillRect(0, 0, 10, g_h, glow);
+    EMO_FillRect(g_w - 10, 0, 10, g_h, glow);
   }
-  // Right brow: same arc, centred above right eye
-  {
-    int16_t cy = brow_base_cy + brow_dy;
-    EMO_DrawThickArc(EMO_RIGHT_EYE_X, cy, brow_arc_r, 70.0f, 110.0f, brow_thick, EMO_BROW);
+
+  // --- Eyebrows ---
+  int16_t brow_arc_r = 55;
+  int16_t brow_thick = 3;
+  int16_t brow_base_cy = EMO_LEFT_EYE_Y + 30;
+  int16_t brow_dy = (int16_t)(-brow_y * 7.0f);
+  float mood_tilt = look_x * 6.0f;
+
+  EMO_DrawThickArc(EMO_LEFT_EYE_X, brow_base_cy + brow_dy + (int16_t)mood_tilt,
+                   brow_arc_r, 68.0f, 112.0f, brow_thick, EMO_BROW);
+  EMO_DrawThickArc(EMO_RIGHT_EYE_X, brow_base_cy + brow_dy - (int16_t)mood_tilt,
+                   brow_arc_r, 68.0f, 112.0f, brow_thick, EMO_BROW);
+
+  if (brow_y > 0.75f && mouth_open > 0.65f) {
+    draw_sparkle(42, 48, 5, 0x9FD7FF);
+    draw_sparkle(196, 50, 4, 0x9FD7FF);
   }
 
   // --- Eyes ---
-  draw_eye(EMO_LEFT_EYE_X,  EMO_LEFT_EYE_Y,  blink_l, look_x, look_y);
+  draw_eye(EMO_LEFT_EYE_X, EMO_LEFT_EYE_Y, blink_l, look_x, look_y);
   draw_eye(EMO_RIGHT_EYE_X, EMO_RIGHT_EYE_Y, blink_r, look_x, look_y);
 
-  // --- Cheek blush (outside & below eyes) ---
+  // --- Cheek blush ---
   if (cheek > 0.01f) {
-    uint32_t blush = 0xFFAAAA;
-    uint8_t rr = (uint8_t)(((blush >> 16) & 0xFF) * cheek);
-    uint8_t gg = (uint8_t)(((blush >> 8)  & 0xFF) * cheek * 0.5f);
-    uint8_t bb = (uint8_t)(( blush        & 0xFF) * cheek * 0.5f);
-    uint32_t bc = ((uint32_t)rr << 16) | ((uint32_t)gg << 8) | bb;
-    int16_t cr = 8 + (int16_t)(cheek * 5.0f);
+    uint32_t bc = mix_rgb(0x22080C, 0xFF9FAF, cheek);
+    int16_t cr = 7 + (int16_t)(cheek * 7.0f);
     int16_t cheek_y = EMO_LEFT_EYE_Y + EMO_EYE_R + 14;
-    // Outer side of each eye
-    EMO_FillCircle(EMO_LEFT_EYE_X  - EMO_EYE_R - 6, cheek_y, cr, bc);
-    EMO_FillCircle(EMO_RIGHT_EYE_X + EMO_EYE_R + 6, cheek_y, cr, bc);
+    EMO_FillCircle(EMO_LEFT_EYE_X - EMO_EYE_R - 8, cheek_y, cr, bc);
+    EMO_FillCircle(EMO_RIGHT_EYE_X + EMO_EYE_R + 8, cheek_y, cr, bc);
+    EMO_DrawHLine(EMO_LEFT_EYE_X - EMO_EYE_R - 18, cheek_y - 3, 16, 1, 0xFFD1D8);
+    EMO_DrawHLine(EMO_RIGHT_EYE_X + EMO_EYE_R + 2, cheek_y - 3, 16, 1, 0xFFD1D8);
   }
 
   // --- Mouth ---
   int16_t mcx = EMO_MOUTH_CX;
   int16_t mcy = EMO_MOUTH_CY;
-  int16_t mr  = EMO_MOUTH_R;
+  int16_t mr = EMO_MOUTH_R;
 
   if (mouth_open < 0.15f) {
-    // Neutral: thin clean arc smile
-    EMO_DrawThickArc(mcx, mcy, mr, 208.0f, 332.0f, 3, EMO_MOUTH);
+    if (brow_y < -0.42f) {
+      // Frown for cold/annoyed states.
+      EMO_DrawThickArc(mcx, mcy + 30, mr - 6, 30.0f, 150.0f, 3, EMO_MOUTH);
+    } else {
+      EMO_DrawThickArc(mcx, mcy, mr, 208.0f, 332.0f, 3, EMO_MOUTH);
+      EMO_DrawThickArc(mcx, mcy + 1, mr - 4, 218.0f, 322.0f, 1, 0x6F7FA8);
+    }
   } else if (mouth_open < 0.5f) {
-    // Happy: wider arc, smoothly transitioning
     float t = (mouth_open - 0.15f) / 0.35f;
-    int16_t adj_r = mr - (int16_t)(t * 5.0f);
-    float half_span = 64.0f - t * 16.0f;
-    EMO_DrawThickArc(mcx, mcy, adj_r, 270.0f - half_span, 270.0f + half_span, 3, EMO_MOUTH);
+    int16_t adj_r = mr - (int16_t)(t * 7.0f);
+    float half_span = 66.0f - t * 18.0f;
+    EMO_DrawThickArc(mcx, mcy, adj_r, 270.0f - half_span, 270.0f + half_span, 4, EMO_MOUTH);
+    if (t > 0.55f) {
+      EMO_DrawThickArc(mcx, mcy + 2, adj_r - 4, 250.0f, 290.0f, 2, 0xFFE0E8);
+    }
   } else {
-    // Surprised: tall pill shape (vertical rounded rect)
     float t = (mouth_open - 0.5f) / 0.5f;
-    int16_t om_w = 14 + (int16_t)(t * 6.0f);   // width 14~20
-    int16_t om_h = 20 + (int16_t)(t * 10.0f);  // height 20~30 (taller than wide)
-    int16_t om_y = mcy + mr - 16;
+    int16_t om_w = 13 + (int16_t)(t * 9.0f);
+    int16_t om_h = 20 + (int16_t)(t * 13.0f);
+    int16_t om_y = mcy + mr - 17;
     int16_t om_x = mcx - om_w / 2;
-    int16_t om_r = om_w / 2;                   // end-cap radius
+    int16_t om_r = om_w / 2;
+    EMO_FillCircle(om_x + om_r + 1, om_y + om_r + 2, om_r, 0x1E1E2A);
     EMO_FillCircle(om_x + om_r, om_y + om_r, om_r, EMO_MOUTH);
     EMO_FillCircle(om_x + om_r, om_y + om_h - om_r, om_r, EMO_MOUTH);
     EMO_FillRect(om_x, om_y + om_r, om_w, om_h - om_r * 2, EMO_MOUTH);
+    EMO_FillCircle(mcx + 2, om_y + om_h - 7, om_r / 2, 0xFFC0CB);
   }
 }
