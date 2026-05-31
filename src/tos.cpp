@@ -1,5 +1,4 @@
 #include "include/tos.hpp"
-#include "syslog.h"
 #include "core/include/settings_manager.h"
 #include "core/include/systime.h"
 #include "demo/include/bmp_activity.hpp"
@@ -9,6 +8,7 @@
 #include "demo/include/key_activity.hpp"
 #include "demo/include/sd_activity.hpp"
 #include "include/lcd.h"
+#include "syslog.h"
 
 extern "C" {
 #include "include/lib3dox.h"
@@ -67,7 +67,8 @@ void TOS::init() {
   SM_Init();
   boardLCD.setAutoBrightness(SM_Disp_Auto());
   boardLCD.setRotation(SM_Disp_Dir());
-  if (!SM_Disp_Auto()) boardLCD.setBrightness((uint16_t)SM_Disp_Bright() * 100);
+  if (!SM_Disp_Auto())
+    boardLCD.setBrightness((uint16_t)SM_Disp_Bright() * 100);
 
   initialized_ = true;
   boardLed.off();
@@ -94,8 +95,10 @@ void TOS::init() {
       bool ok = false;
       for (int i = 0; i < saved; i++) {
         const SM_SavedNet_t *net = SM_Saved_Get(i);
-        if (!net || !net->ssid[0]) continue;
-        LOG_I("MAIN", "Auto-connect: trying %s (round %d)...", net->ssid, round + 1);
+        if (!net || !net->ssid[0])
+          continue;
+        LOG_I("MAIN", "Auto-connect: trying %s (round %d)...", net->ssid,
+              round + 1);
         if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
           HAL_Delay(500);
           if (ESP8266_IsConnected()) {
@@ -108,9 +111,14 @@ void TOS::init() {
         }
         HAL_Delay(300);
       }
-      if (ok) break;
+      if (ok)
+        break;
     }
+  }
 
+  /* Background NTP sync — won't block UI */
+  if (SM_Wlan_On() && ESP8266_IsConnected()) {
+    SysTime_Sync();
   }
 
   SysUI::init();
@@ -131,11 +139,6 @@ void TOS::start() {
   PD_SplashFinish(100);
 
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-
-  /* Background NTP sync — won't block UI */
-  if (SM_Wlan_On() && ESP8266_IsConnected()) {
-    SysTime_Sync();
-  }
 
   // 设置默认界面为启动器
   SysUI::setActivity(UI_PET);
