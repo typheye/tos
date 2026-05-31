@@ -77,12 +77,9 @@
 /*---------- -----------*/
 #define USBD_CUSTOMHID_OUTREPORT_BUF_SIZE     2U
 /*---------- -----------*/
-#define USBD_CUSTOM_HID_REPORT_DESC_SIZE     63U
+#define USBD_CUSTOM_HID_REPORT_DESC_SIZE     2U
 /*---------- -----------*/
 #define CUSTOM_HID_FS_BINTERVAL     0x5U
-/* Keyboard input report is 8 bytes: modifier, reserved, 6 keycodes. */
-#define CUSTOM_HID_EPIN_SIZE     8U
-#define CUSTOM_HID_EPOUT_SIZE    2U
 
 /****************************************/
 /* #define for FS and HS identification */

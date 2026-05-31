@@ -104,9 +104,7 @@ extern USBD_CUSTOM_HID_ItfTypeDef USBD_CustomHID_fops_FS;
   */
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-int8_t HID_Keyboard_WaitReady(uint32_t timeout_ms);
-int8_t HID_Keyboard_SendKey(uint8_t modifier, uint8_t keycode);
-int8_t HID_Keyboard_SendWinLock(void);
+
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

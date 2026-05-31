@@ -65,10 +65,10 @@
 #define USBD_VID     1155
 #define USBD_LANGID_STRING     1033
 #define USBD_MANUFACTURER_STRING     "STMicroelectronics"
-#define USBD_PID_FS     22353
-#define USBD_PRODUCT_STRING_FS     "TOS HID Keyboard"
+#define USBD_PID_FS     22352
+#define USBD_PRODUCT_STRING_FS     "STM32 Custom Human interface"
 #define USBD_CONFIGURATION_STRING_FS     "Custom HID Config"
-#define USBD_INTERFACE_STRING_FS     "HID Keyboard Interface"
+#define USBD_INTERFACE_STRING_FS     "Custom HID Interface"
 
 #define USB_SIZ_BOS_DESC            0x0C
 

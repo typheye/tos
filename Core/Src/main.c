@@ -35,7 +35,6 @@
 
 #include "hardware/include/esp8266.hpp" // 确保 ESP8266 函数可用
 #include <stdio.h>                      // 添加这个头文件 for printf
-#include "usbd_custom_hid_if.h"
 
 /* USER CODE END Includes */
 
@@ -118,9 +117,6 @@ int main(void)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
-
-  /* HID demo: after USB enumeration, send Win+L once to lock Windows. */
-  (void)HID_Keyboard_SendWinLock();
 
   start_tos();
   /* USER CODE END 2 */

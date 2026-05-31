@@ -91,45 +91,13 @@
 __ALIGN_BEGIN static uint8_t CUSTOM_HID_ReportDesc_FS[USBD_CUSTOM_HID_REPORT_DESC_SIZE] __ALIGN_END =
 {
   /* USER CODE BEGIN 0 */
-  0x05, 0x01,                    /* Usage Page (Generic Desktop) */
-  0x09, 0x06,                    /* Usage (Keyboard) */
-  0xA1, 0x01,                    /* Collection (Application) */
-  0x05, 0x07,                    /*   Usage Page (Keyboard/Keypad) */
-  0x19, 0xE0,                    /*   Usage Minimum (Left Control) */
-  0x29, 0xE7,                    /*   Usage Maximum (Right GUI) */
-  0x15, 0x00,                    /*   Logical Minimum (0) */
-  0x25, 0x01,                    /*   Logical Maximum (1) */
-  0x75, 0x01,                    /*   Report Size (1) */
-  0x95, 0x08,                    /*   Report Count (8) */
-  0x81, 0x02,                    /*   Input (Data,Var,Abs) - modifier byte */
-  0x95, 0x01,                    /*   Report Count (1) */
-  0x75, 0x08,                    /*   Report Size (8) */
-  0x81, 0x01,                    /*   Input (Const,Array,Abs) - reserved byte */
-  0x95, 0x05,                    /*   Report Count (5) */
-  0x75, 0x01,                    /*   Report Size (1) */
-  0x05, 0x08,                    /*   Usage Page (LEDs) */
-  0x19, 0x01,                    /*   Usage Minimum (Num Lock) */
-  0x29, 0x05,                    /*   Usage Maximum (Kana) */
-  0x91, 0x02,                    /*   Output (Data,Var,Abs) - LED report */
-  0x95, 0x01,                    /*   Report Count (1) */
-  0x75, 0x03,                    /*   Report Size (3) */
-  0x91, 0x01,                    /*   Output (Const,Array,Abs) - LED padding */
-  0x95, 0x06,                    /*   Report Count (6) */
-  0x75, 0x08,                    /*   Report Size (8) */
-  0x15, 0x00,                    /*   Logical Minimum (0) */
-  0x25, 0x65,                    /*   Logical Maximum (101) */
-  0x05, 0x07,                    /*   Usage Page (Keyboard/Keypad) */
-  0x19, 0x00,                    /*   Usage Minimum (Reserved) */
-  0x29, 0x65,                    /*   Usage Maximum (Keyboard Application) */
-  0x81, 0x00,                    /*   Input (Data,Array,Abs) - key array */
-  0xC0                           /* End Collection */
+  0x00,
   /* USER CODE END 0 */
+  0xC0    /*     END_COLLECTION	             */
 };
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-#define HID_KEYBOARD_REPORT_LEN 8U
-#define HID_MOD_LEFT_GUI        0x08U
-#define HID_KEY_L               0x0FU
+
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -223,87 +191,17 @@ static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
 
 /* USER CODE BEGIN 7 */
 /**
-  * @brief  Send the report to the Host.
-  * @param  report: The report to be sent.
-  * @param  len: The report length.
-  * @retval USBD_OK if all operations are OK else USBD_FAIL/BUSY.
+  * @brief  Send the report to the Host
+  * @param  report: The report to be sent
+  * @param  len: The report length
+  * @retval USBD_OK if all operations are OK else USBD_FAIL
   */
+/*
 static int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
 {
-  return (int8_t)USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
+  return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
 }
-
-static int8_t HID_Keyboard_SendReport_Blocking(uint8_t modifier, uint8_t keycode)
-{
-  uint8_t report[HID_KEYBOARD_REPORT_LEN] = {0};
-  uint32_t start = HAL_GetTick();
-
-  report[0] = modifier;
-  report[2] = keycode;
-
-  while (USBD_CUSTOM_HID_SendReport_FS(report, sizeof(report)) == (int8_t)USBD_BUSY)
-  {
-    if ((HAL_GetTick() - start) > 100U)
-    {
-      return (int8_t)USBD_BUSY;
-    }
-    HAL_Delay(1U);
-  }
-
-  return (int8_t)USBD_OK;
-}
-
-int8_t HID_Keyboard_SendKey(uint8_t modifier, uint8_t keycode)
-{
-  uint8_t release[HID_KEYBOARD_REPORT_LEN] = {0};
-
-  if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
-  {
-    return (int8_t)USBD_FAIL;
-  }
-
-  if (HID_Keyboard_SendReport_Blocking(modifier, keycode) != (int8_t)USBD_OK)
-  {
-    return (int8_t)USBD_FAIL;
-  }
-
-  HAL_Delay(80U);
-
-  if (USBD_CUSTOM_HID_SendReport_FS(release, sizeof(release)) == (int8_t)USBD_BUSY)
-  {
-    HAL_Delay(10U);
-    (void)USBD_CUSTOM_HID_SendReport_FS(release, sizeof(release));
-  }
-
-  return (int8_t)USBD_OK;
-}
-
-int8_t HID_Keyboard_WaitReady(uint32_t timeout_ms)
-{
-  uint32_t start = HAL_GetTick();
-
-  while (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
-  {
-    if ((HAL_GetTick() - start) >= timeout_ms)
-    {
-      return (int8_t)USBD_FAIL;
-    }
-    HAL_Delay(10U);
-  }
-
-  HAL_Delay(300U);
-  return (int8_t)USBD_OK;
-}
-
-int8_t HID_Keyboard_SendWinLock(void)
-{
-  if (HID_Keyboard_WaitReady(5000U) != (int8_t)USBD_OK)
-  {
-    return (int8_t)USBD_FAIL;
-  }
-
-  return HID_Keyboard_SendKey(HID_MOD_LEFT_GUI, HID_KEY_L);
-}
+*/
 /* USER CODE END 7 */
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
