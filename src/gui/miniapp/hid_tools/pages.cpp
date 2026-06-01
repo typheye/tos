@@ -322,13 +322,12 @@ void hid_tools_gyro_mouse_page(void) {
   if (!boardJY901S.isInitialized())
     boardJY901S.init();
   if (!boardHID.isConfigured()) {
-    show_message("Gyro Mouse", "USB not configured", "Reconnect USB first",
-                 nullptr, 1200);
+    show_message("HID", "USB not configured", "Reconnect USB first", nullptr,
+                 1200);
     return;
   }
 
-  show_message("Gyro Mouse", "Move by JY901S gyro", "A8=L  D0=R", "ENTER exits",
-               1000);
+  show_message("HID", "Move by JY901S gyro", "A8=L  D0=R", "ENTER exits", 1000);
 
   float smooth_x = 0.0f, smooth_z = 0.0f;
   float frac_x = 0.0f, frac_y = 0.0f;
@@ -341,7 +340,7 @@ void hid_tools_gyro_mouse_page(void) {
     if (keyManager.btn_enter.getState() == KEY_PRESSED) {
       if (boardHID.isConfigured())
         (void)boardHID.releaseMouse();
-      show_message("Gyro Mouse", "Stopped", "Mouse released", nullptr, 500);
+      show_message("HID", "Stopped", "Mouse released", nullptr, 500);
       return;
     }
 
