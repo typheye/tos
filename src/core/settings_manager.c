@@ -8,7 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
-static Settings_t g_settings;
+#define CCMRAM __attribute__((section(".ccmram")))
+static CCMRAM Settings_t g_settings;
 
 static void copy_str(char *dst, const char *src, size_t cap) {
   if (!dst || cap == 0) return;

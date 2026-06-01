@@ -8,6 +8,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#define CCMRAM __attribute__((section(".ccmram")))
+
 /* ========== 向量和矩阵 ========== */
 typedef struct {
   float x, y, z;
@@ -22,44 +24,44 @@ typedef struct {
 } triangle_t;
 
 /* ========== 全局状态 ========== */
-static mat4_t T;
-static mat4_t view;
-static triangle_t triangles[32];
+static CCMRAM mat4_t T;
+static CCMRAM mat4_t view;
+static CCMRAM triangle_t triangles[32];
 static int triangles_ok = 0;
 
-static vec3_t bbmin, bbmax;
-static vec3_t eye, center, up;
-static vec3_t view_x, view_y, view_z;
-static vec3_t lightColor;
+static CCMRAM vec3_t bbmin, bbmax;
+static CCMRAM vec3_t eye, center, up;
+static CCMRAM vec3_t view_x, view_y, view_z;
+static CCMRAM vec3_t lightColor;
 
 static int current_x = 0, current_y = 0, frame_count = 0;
 
 static float pixel_accum_r, pixel_accum_g, pixel_accum_b;
 static int pixel_accum_count;
 
-static vec3_t t0, t1, temp;
+static CCMRAM vec3_t t0, t1, temp;
 static float tt;
 static float u0, u1, u2;
 static int8_t lightIdx;
-static vec3_t light_pos;
-static vec3_t radiance;
+static CCMRAM vec3_t light_pos;
+static CCMRAM vec3_t radiance;
 
-static vec3_t linear_r, linear_x, linear_y, linear_z, linear_t;
+static CCMRAM vec3_t linear_r, linear_x, linear_y, linear_z, linear_t;
 
-static struct {
+static CCMRAM struct {
   int8_t i;
   float t;
 } intersection;
-static struct {
+static CCMRAM struct {
   vec3_t start, direction, inv_direction;
 } ray;
-static struct {
+static CCMRAM struct {
   int8_t i;
   float t;
   triangle_t *surface;
   vec3_t position, normal;
 } interaction;
-static vec3_t reflectance, bsdf_absIdotN;
+static CCMRAM vec3_t reflectance, bsdf_absIdotN;
 static float bsdf_pdf;
 
 volatile int render_progress = 0;

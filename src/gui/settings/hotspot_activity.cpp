@@ -12,6 +12,8 @@
 #include <cstdio>
 #include <cstring>
 
+#define CCMRAM __attribute__((section(".ccmram")))
+
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern ESP8266 esp8266;
@@ -27,10 +29,10 @@ static bool hs_on = false;
 static bool hs_auto_close = true;
 static bool hs_edit = false;
 static uint32_t hs_idle_since = 0; /* tick when last client disconnected */
-static char hs_ssid[24] = "";
-static char hs_pwd[32] = "";
-static char hs_ip[16] = "";
-static char ap_ip[24] = "";
+static CCMRAM char hs_ssid[24] = "";
+static CCMRAM char hs_pwd[32] = "";
+static CCMRAM char hs_ip[16] = "";
+static CCMRAM char ap_ip[24] = "";
 
 /* Forward declarations */
 static void hs_stop(void);
@@ -42,9 +44,9 @@ struct HsClient {
   bool tcp_only;
 };
 
-static HsClient hs_clients[4];
+static CCMRAM HsClient hs_clients[4];
 static int hs_client_count = 0;
-static char hs_client_diag[24] = "Not scanned";
+static CCMRAM char hs_client_diag[24] = "Not scanned";
 
 static const size_t HS_AT_RX_SIZE = 512;
 

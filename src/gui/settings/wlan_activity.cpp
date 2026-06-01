@@ -28,6 +28,7 @@ extern KeyManager keyManager;
 extern LCD boardLCD;
 extern ESP8266 esp8266;
 
+#define CCMRAM __attribute__((section(".ccmram")))
 #define MAX_APS 20
 #define SSID_LEN 24
 
@@ -81,9 +82,9 @@ static void wlan_load_state(void) {
  *  WiFi scan
  * ================================================================== */
 
-static char ap_ssid[MAX_APS][SSID_LEN];
-static int  ap_rssi[MAX_APS];
-static int  ap_enc [MAX_APS];
+static CCMRAM char ap_ssid[MAX_APS][SSID_LEN];
+static CCMRAM int  ap_rssi[MAX_APS];
+static CCMRAM int  ap_enc [MAX_APS];
 static int  ap_count = 0;
 
 static bool do_scan(void) {
