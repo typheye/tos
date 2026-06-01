@@ -110,7 +110,59 @@ const Diskio_drvTypeDef  SD_Driver =
 };
 
 /* USER CODE BEGIN beforeFunctionSection */
-/* can be used to modify / undefine following code or add new code */
+/*
+ * TOS patch: use polling writes for FatFs write path.
+ *
+ * The CubeMX DMA template is fine for normal short file access, but f_mkfs()
+ * can issue a long stream of metadata writes.  On this board the DMA write
+ * completion flag may occasionally never be observed during format, causing
+ * SD_write() to wait for SD_TIMEOUT (30 s) and return RES_ERROR.
+ *
+ * This wrapper keeps the public DiskIO function unchanged, but internally
+ * routes write transfers through BSP_SD_WriteBlocks() and marks WriteStatus as
+ * complete so the generated wait loop below can continue normally. Reads still
+ * use DMA.  Put this in a USER CODE section so CubeMX regeneration preserves it.
+ */
+#include <stdio.h>
+#include "syslog.h"
+
+#ifndef SFHD_SD_USE_POLLING_WRITE
+#define SFHD_SD_USE_POLLING_WRITE 1
+#endif
+
+#if SFHD_SD_USE_POLLING_WRITE
+static uint8_t SFHD_SD_WriteBlocks_Polling(uint32_t *pData,
+                                           uint32_t WriteAddr,
+                                           uint32_t NumOfBlocks)
+{
+  uint32_t start = HAL_GetTick();
+  uint8_t ret = BSP_SD_WriteBlocks(pData, WriteAddr, NumOfBlocks, SD_TIMEOUT);
+  if (ret != MSD_OK)
+  {
+    LOG_E("SDIO", "poll write failed: sector=%lu count=%lu ret=%u state=%u",
+          (unsigned long)WriteAddr, (unsigned long)NumOfBlocks,
+          (unsigned)ret, (unsigned)BSP_SD_GetCardState());
+    return ret;
+  }
+
+  while ((HAL_GetTick() - start) < SD_TIMEOUT)
+  {
+    if (BSP_SD_GetCardState() == SD_TRANSFER_OK)
+    {
+      WriteStatus = 1;
+      return MSD_OK;
+    }
+  }
+
+  LOG_E("SDIO", "poll write state timeout: sector=%lu count=%lu state=%u",
+        (unsigned long)WriteAddr, (unsigned long)NumOfBlocks,
+        (unsigned)BSP_SD_GetCardState());
+  return MSD_ERROR;
+}
+
+#define BSP_SD_WriteBlocks_DMA(pData, WriteAddr, NumOfBlocks) \
+  SFHD_SD_WriteBlocks_Polling((pData), (WriteAddr), (NumOfBlocks))
+#endif
 /* USER CODE END beforeFunctionSection */
 
 /* Private functions ---------------------------------------------------------*/

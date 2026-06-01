@@ -126,6 +126,47 @@ uint32_t Flash_CRC32(const uint32_t *pData, uint32_t size);
  */
 void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize);
 
+
+
+/* ==================================================================
+ * SD/FatFs helper API
+ * ================================================================== */
+
+#include "ff.h"
+
+typedef void (*SFHD_SD_ProgressCallback)(const char *step, FRESULT result,
+                                         void *user);
+
+typedef struct {
+  SFHD_SD_ProgressCallback progress;
+  void *user;
+} SFHD_SD_FormatOptions_t;
+
+/**
+ * @brief  Format SD card and create the TOS root filesystem layout.
+ * @note   This helper uses FatFs f_mkfs() with explicit FM_FAT/FM_FAT32
+ *         options. It first tries partitioned FAT, then retries SFD
+ *         super-floppy layout. It also emits detailed logs through syslog.
+ * @param  options Optional progress callback. Can be NULL.
+ * @retval FatFs FRESULT.
+ */
+FRESULT SFHD_SD_FormatAndInit(const SFHD_SD_FormatOptions_t *options);
+
+/**
+ * @brief  Convert FatFs result to readable text for UI/logs.
+ */
+const char *SFHD_FResultName(FRESULT res);
+
+/**
+ * @brief  Convert FatFs result to system exception code.
+ */
+uint32_t SFHD_FResultToSysError(FRESULT res);
+
+/**
+ * @brief  Dump SD status and geometry to syslog.
+ */
+void SFHD_SD_DebugProbe(const char *tag);
+
 #ifdef __cplusplus
 }
 #endif

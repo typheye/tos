@@ -19,6 +19,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sysfonts.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syscalls_override.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syshandle.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/settings_manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syslog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/systime.cpp
