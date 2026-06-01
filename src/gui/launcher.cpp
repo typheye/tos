@@ -74,10 +74,15 @@ static CCMRAM uint32_t sensor_timer = 0;
 static CCMRAM uint32_t sensor_expr_start = 0;
 static CCMRAM uint32_t sensor_cooldown_until = 0;
 static CCMRAM int prev_pet_state = ANIM_IDLE;
+static CCMRAM float pet_touch_mood = 0.0f;
+static CCMRAM float pet_touch_mood_target = 0.0f;
+static CCMRAM uint32_t pet_touch_mood_since = 0;
 
-#define SENSOR_MAX_HOLD  5200U
-#define SENSOR_REST_MS   180U
-#define SENSOR_POLL_MS   90U
+#define SENSOR_MAX_HOLD       5200U
+#define SENSOR_REST_MS        180U
+#define SENSOR_POLL_MS        90U
+#define SENSOR_MOTION_MIN_MS  1600U
+#define TOUCH_STYLE_KEEP_MS   4300U
 
 // Triple-press ENTER to exit
 static CCMRAM uint32_t enter_tm[3] = {0};
@@ -143,6 +148,13 @@ static void trace_state(uint32_t now) {
         EHW_GetExpr());
   last_logged_state = pet_state;
   state_since_tm = now;
+}
+
+static void choose_touch_style(uint32_t now) {
+  if (now - pet_touch_mood_since < TOUCH_STYLE_KEEP_MS) return;
+  pet_touch_mood_target = (rnd(100U) < 32U) ? 1.0f : 0.0f; // 0=blush smile, 1=pout
+  pet_touch_mood_since = now;
+  LOG_D("PET", "touch style=%s", pet_touch_mood_target > 0.5f ? "pout" : "smile");
 }
 
 // ============ Easing ============
@@ -235,6 +247,7 @@ static void update_sensor(void) {
 
   if (anim < 0) {
     if (is_sensor_anim(pet_state)) {
+      if (is_motion_anim(pet_state) && now - sensor_expr_start < SENSOR_MOTION_MIN_MS) return;
       release_sensor_expression(now);
     }
     return;
@@ -249,9 +262,19 @@ static void update_sensor(void) {
   if (now - last_activity_tm >= IDLE_NAP_MS && !is_motion_anim(anim)) return;
 
   if (pet_state != anim) {
+    if (is_motion_anim(pet_state) && !is_motion_anim(anim)) {
+      if (now - sensor_expr_start < SENSOR_MOTION_MIN_MS) return;
+      release_sensor_expression(now);
+      return;
+    }
+    if (pet_state == ANIM_DIZZY && anim == ANIM_PETTED &&
+        now - sensor_expr_start < SENSOR_MOTION_MIN_MS) {
+      return;
+    }
     if (!is_sensor_anim(pet_state)) prev_pet_state = pet_state;
     bool wake_from_sleep = (pet_state == ANIM_NAP || pet_state == ANIM_WAKE);
     if (anim == ANIM_DIZZY || wake_from_sleep) mark_activity(now, "imu", false);
+    if (anim == ANIM_PETTED) choose_touch_style(now);
     pet_state = anim;
     sensor_expr_start = now;
     anim_start_tm = now;
@@ -617,13 +640,31 @@ static void update_animation(void) {
   case ANIM_PETTED:
     {
       float br = (float)(now % 4200U) / 4200.0f * 6.28318f;
-      pet_blink_l = 0.28f + sinf(br * 1.3f) * 0.10f;
-      pet_blink_r = 0.28f + sinf(br * 1.5f) * 0.10f;
-      pet_mouth = 0.34f + sinf(br * 0.9f) * 0.04f;
+      uint32_t elapsed = now - sensor_expr_start;
+      if (pet_touch_mood_target > 0.5f && elapsed > 2600U) {
+        pet_touch_mood_target = 0.0f;
+      }
+      pet_touch_mood = lerp(pet_touch_mood, pet_touch_mood_target, 0.035f);
+      float pout = pet_touch_mood;
+      float smile = 1.0f - pout;
+      float wave = sinf(br * 0.9f);
+      float blink_target = smile * (0.28f + sinf(br * 1.3f) * 0.10f) +
+                           pout * (0.10f + fabsf(wave) * 0.06f);
+      float mouth_target = smile * (0.34f + wave * 0.04f) +
+                           pout * (0.54f + sinf(br * 1.6f) * 0.025f);
+      float brow_target = smile * (0.55f + sinf(br * 0.7f) * 0.16f) +
+                          pout * (0.08f + sinf(br * 0.6f) * 0.05f);
+      float look_x_target = smile * (sinf(br * 0.7f) * 0.52f) +
+                            pout * (sinf(br * 0.55f) * 0.18f);
+      float look_y_target = smile * (-0.18f + cosf(br * 0.9f) * 0.22f) +
+                            pout * (0.02f + cosf(br * 0.8f) * 0.05f);
+      pet_blink_l = lerp(pet_blink_l, blink_target, 0.10f);
+      pet_blink_r = lerp(pet_blink_r, blink_target + sinf(br * 1.5f) * 0.025f, 0.10f);
+      pet_mouth = lerp(pet_mouth, mouth_target, 0.08f);
       pet_cheek = lerp(pet_cheek, 0.95f, 0.12f);
-      pet_brow_y = 0.55f + sinf(br * 0.7f) * 0.16f;
-      pet_look_x = sinf(br * 0.7f) * 0.52f;
-      pet_look_y = -0.18f + cosf(br * 0.9f) * 0.22f;
+      pet_brow_y = lerp(pet_brow_y, brow_target, 0.08f);
+      pet_look_x = lerp(pet_look_x, look_x_target, 0.08f);
+      pet_look_y = lerp(pet_look_y, look_y_target, 0.08f);
     }
     break;
 
@@ -736,6 +777,9 @@ void pet_launcher_run(void) {
   pet_brow_y = 0.0f;
   pet_state = ANIM_IDLE;
   prev_pet_state = ANIM_IDLE;
+  pet_touch_mood = 0.0f;
+  pet_touch_mood_target = 0.0f;
+  pet_touch_mood_since = 0;
 
   LOG_I("PET", "Launcher started - triple-press ENTER to exit");
 

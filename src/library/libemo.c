@@ -230,6 +230,8 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
   uint8_t is_warm_or_dizzy = (mouth_open > 0.50f && closed > 0.28f && look_y > 0.12f);
   uint8_t is_tense = (brow_y < -0.50f && mouth_open < 0.18f);
   uint8_t is_searching = (brow_y > 0.62f && mouth_open < 0.22f && closed < 0.20f);
+  uint8_t is_pout = (mouth_open > 0.48f && mouth_open < 0.68f &&
+                     cheek > 0.62f && closed < 0.28f && brow_y < 0.28f);
 
   EMO_FillScreen(EMO_BLACK);
 
@@ -302,7 +304,14 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
   int16_t mcy = EMO_MOUTH_CY;
   int16_t mr = EMO_MOUTH_R;
 
-  if (mouth_open < 0.15f) {
+  if (is_pout) {
+    int16_t lip_y = (int16_t)(mcy + mr - 12);
+    EMO_FillCircle((int16_t)(mcx - 5), lip_y, 6, 0xFFE0EA);
+    EMO_FillCircle((int16_t)(mcx + 5), lip_y, 6, 0xFFE0EA);
+    EMO_FillCircle(mcx, (int16_t)(lip_y + 1), 7, EMO_MOUTH);
+    EMO_FillCircle(mcx, (int16_t)(lip_y + 1), 3, 0x0A0A12);
+    EMO_FillCircle((int16_t)(mcx - 3), (int16_t)(lip_y - 3), 1, 0xFFFFFF);
+  } else if (mouth_open < 0.15f) {
     if (brow_y < -0.42f) {
       // Frown for cold/annoyed states.
       EMO_DrawThickArc(mcx, mcy + 30, mr - 6, 30.0f, 150.0f, 3, EMO_MOUTH);

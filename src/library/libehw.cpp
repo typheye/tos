@@ -187,28 +187,41 @@ static EHW_Expr_t check_jy901s(void) {
           rest_valid ? 1 : 0);
   }
 
+  bool violent_motion = (smooth_motion > 0.46f || smooth_gyro > 95.0f ||
+                         smooth_tilt_rate > 170.0f || smooth_tilt > 70.0f ||
+                         (smooth_motion > 0.32f && smooth_gyro > 42.0f) ||
+                         (smooth_motion > 0.26f && smooth_tilt_rate > 105.0f) ||
+                         (smooth_gyro > 62.0f && smooth_tilt_rate > 95.0f));
+  bool dizzy_tail = (smooth_motion > 0.32f || smooth_gyro > 56.0f ||
+                     smooth_tilt_rate > 115.0f || smooth_tilt > 54.0f);
+  bool gentle_touch = (smooth_motion > 0.180f || smooth_gyro > 12.0f ||
+                       smooth_tilt_rate > 75.0f || smooth_tilt > 16.0f);
+  bool gentle_tail = (smooth_motion > 0.070f || smooth_gyro > 7.5f ||
+                      smooth_tilt_rate > 35.0f || smooth_tilt > 11.0f);
+
+  // Violent motion wins even while PETTED is stable.  The previous ordering
+  // let a shake be swallowed by the PETTED hysteresis branch.
+  if (violent_motion) {
+    return EHW_EXPR_DIZZY;
+  }
+
   // Hysteresis while an expression is active.  This avoids flicker but does not
   // block real gravity/IMU events behind the random emotion loop.
   if (stable_expr == EHW_EXPR_DIZZY) {
-    if (smooth_motion > 0.32f || smooth_gyro > 56.0f || smooth_tilt_rate > 115.0f || smooth_tilt > 54.0f) {
+    if (dizzy_tail) {
       return EHW_EXPR_DIZZY;
     }
   }
   if (stable_expr == EHW_EXPR_PETTED) {
-    if (smooth_motion > 0.070f || smooth_gyro > 7.5f || smooth_tilt_rate > 35.0f || smooth_tilt > 11.0f) {
+    if (gentle_tail && !dizzy_tail) {
       return EHW_EXPR_PETTED;
     }
-  }
-
-  // Violent shake / flip: dizzy.
-  if (smooth_motion > 0.56f || smooth_gyro > 130.0f || smooth_tilt_rate > 220.0f || smooth_tilt > 68.0f) {
-    return EHW_EXPR_DIZZY;
   }
 
   // Gentle tilt / touch / hand movement: petted.  Tilt is measured from the
   // learned rest posture, so a slightly angled installation does not trigger
   // forever, but a real hand tilt still feels immediate.
-  if (smooth_motion > 0.180f || smooth_gyro > 12.0f || smooth_tilt_rate > 75.0f || smooth_tilt > 16.0f) {
+  if (gentle_touch && !dizzy_tail) {
     return EHW_EXPR_PETTED;
   }
 
