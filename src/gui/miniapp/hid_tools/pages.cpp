@@ -169,9 +169,9 @@ void hid_tools_vendor_page(void) {
 static void send_hotkey(const char *name, uint8_t mod, uint8_t key) {
   char line[32];
   snprintf(line, sizeof(line), "Sending %s", name);
-  show_message("Quick Key", line, nullptr, nullptr, 250);
+  show_message("HID", line, nullptr, nullptr, 250);
   THID::Status st = boardHID.tapKey(mod, key, 40);
-  show_message("Quick Key", name, boardHID.statusText(st), nullptr, 800);
+  show_message("HID", name, boardHID.statusText(st), nullptr, 800);
 }
 
 void hid_tools_quickkeys_page(void) {
@@ -181,11 +181,11 @@ void hid_tools_quickkeys_page(void) {
 
   int sel = 0;
   while (1) {
-    sel = page_menu("Quick Keys", items, 8, sel);
+    sel = page_menu("HID", items, 8, sel);
     if (sel == 0)
       return;
     if (!boardHID.isConfigured()) {
-      show_message("Quick Key", "USB not configured", "Reconnect USB first",
+      show_message("HID", "USB not configured", "Reconnect USB first",
                    nullptr, 1000);
       continue;
     }
@@ -210,7 +210,7 @@ void hid_tools_quickkeys_page(void) {
       break;
     case 7: {
       THID::Status st = boardHID.typeAscii("TOS HID OK", 20);
-      show_message("Quick Key", "Typed TOS HID OK", boardHID.statusText(st),
+      show_message("HID", "Typed TOS HID OK", boardHID.statusText(st),
                    nullptr, 900);
       break;
     }
@@ -221,7 +221,7 @@ void hid_tools_quickkeys_page(void) {
 }
 
 static void mouse_wiggle(void) {
-  show_message("Mouse", "Wiggle pointer", nullptr, nullptr, 350);
+  show_message("HID", "Wiggle pointer", nullptr, nullptr, 350);
   THID::Status st = THID::OK;
   for (int i = 0; i < 8; i++) {
     st = boardHID.moveMouse(12, 0);
@@ -231,7 +231,7 @@ static void mouse_wiggle(void) {
     st = boardHID.moveMouse(-12, 0);
     HAL_Delay(18);
   }
-  show_message("Mouse", "Mouse test done", boardHID.statusText(st), nullptr,
+  show_message("HID", "Mouse test done", boardHID.statusText(st), nullptr,
                800);
 }
 
@@ -241,11 +241,11 @@ void hid_tools_mouse_page(void) {
                                 "04 Scroll Up",  "05 Scroll Down"};
   int sel = 0;
   while (1) {
-    sel = page_menu("Mouse Test", items, 6, sel);
+    sel = page_menu("HID", items, 6, sel);
     if (sel == 0)
       return;
     if (!boardHID.isConfigured()) {
-      show_message("Mouse", "USB not configured", "Reconnect USB first",
+      show_message("HID", "USB not configured", "Reconnect USB first",
                    nullptr, 1000);
       continue;
     }
@@ -261,7 +261,7 @@ void hid_tools_mouse_page(void) {
     else if (sel == 5)
       st = boardHID.scrollMouse(-4);
     if (sel != 1)
-      show_message("Mouse", "Action sent", boardHID.statusText(st), nullptr,
+      show_message("HID", "Action sent", boardHID.statusText(st), nullptr,
                    700);
   }
 }
