@@ -18,6 +18,7 @@ static CCMRAM uint32_t   last_poll     = 0;
 static CCMRAM uint32_t   expr_since    = 0;
 static CCMRAM uint32_t   cooldown_until = 0;
 static CCMRAM uint32_t   next_comfy_due = 0;
+static CCMRAM uint32_t   dizzy_ended_at = 0;
 static CCMRAM int        pending_cnt   = 0;
 static CCMRAM int        none_cnt      = 0;
 
@@ -26,10 +27,11 @@ static CCMRAM int        none_cnt      = 0;
 #define DEBOUNCE_OFF     3
 #define MIN_HOLD_MS      1200U
 #define MOTION_HOLD_MS   120U
-#define PETTED_HOLD_MS   360U
-#define PETTED_DEBOUNCE_ON 3
+#define PETTED_HOLD_MS   480U
+#define PETTED_DEBOUNCE_ON 5
 #define COOLDOWN_MS      1200U
 #define MOTION_COOLDOWN_MS 120U
+#define DIZZY_PET_SUPPRESS_MS 900U
 #define SENSOR_TO_MS     80U
 #define COMFY_PERIOD_MS  42000U
 #define COMFY_HOLD_MS    2600U
@@ -178,26 +180,30 @@ static EHW_Expr_t check_jy901s(void) {
       (stable_expr != EHW_EXPR_NONE || smooth_motion > 0.035f ||
        smooth_tilt > 8.0f || smooth_tilt_rate > 10.0f)) {
     next_imu_diag = now + 3000U;
-    LOG_D("EHW", "imu acc=%d lin=%d gyro=%d tilt=%d rate=%d rest=%d",
+    LOG_D("EHW", "imu acc=%d lin=%d gyro=%d rawg=%d tilt=%d rate=%d rest=%d",
           (int)(acc_mag * 100.0f),
           (int)(smooth_motion * 1000.0f),
           (int)(smooth_gyro * 10.0f),
+          (int)gyro_mag,
           (int)(smooth_tilt * 10.0f),
           (int)smooth_tilt_rate,
           rest_valid ? 1 : 0);
   }
 
-  bool violent_motion = (smooth_motion > 0.46f || smooth_gyro > 95.0f ||
-                         smooth_tilt_rate > 170.0f || smooth_tilt > 70.0f ||
-                         (smooth_motion > 0.32f && smooth_gyro > 42.0f) ||
-                         (smooth_motion > 0.26f && smooth_tilt_rate > 105.0f) ||
-                         (smooth_gyro > 62.0f && smooth_tilt_rate > 95.0f));
-  bool dizzy_tail = (smooth_motion > 0.32f || smooth_gyro > 56.0f ||
-                     smooth_tilt_rate > 115.0f || smooth_tilt > 54.0f);
-  bool gentle_touch = (smooth_motion > 0.180f || smooth_gyro > 12.0f ||
-                       smooth_tilt_rate > 75.0f || smooth_tilt > 16.0f);
-  bool gentle_tail = (smooth_motion > 0.070f || smooth_gyro > 7.5f ||
-                      smooth_tilt_rate > 35.0f || smooth_tilt > 11.0f);
+  // Thresholds calibrated against real JY901S data.
+  // Smoothed gyro converges too quickly (EMA α=0.42) to distinguish handling
+  // from shaking — both end up in the 3-7 range.  Raw gyro_mag (instantaneous,
+  // deg/s) spikes much higher during real shake, so violent detection uses it
+  // directly while gentle_touch still uses the smoothed values for stability.
+  bool violent_motion = (smooth_motion > 0.48f || gyro_mag > 180.0f ||
+                         smooth_tilt_rate > 175.0f ||
+                         (smooth_motion > 0.35f && smooth_tilt_rate > 120.0f));
+  bool dizzy_tail = (smooth_motion > 0.32f || smooth_gyro > 4.5f ||
+                     smooth_tilt_rate > 120.0f || gyro_mag > 100.0f);
+  bool gentle_touch = (smooth_motion > 0.22f || smooth_gyro > 3.5f ||
+                       smooth_tilt_rate > 80.0f || smooth_tilt > 3.5f);
+  bool gentle_tail = (smooth_motion > 0.13f || smooth_gyro > 2.8f ||
+                      smooth_tilt_rate > 50.0f || smooth_tilt > 2.6f);
 
   // Violent motion wins even while PETTED is stable.  The previous ordering
   // let a shake be swallowed by the PETTED hysteresis branch.
@@ -221,7 +227,11 @@ static EHW_Expr_t check_jy901s(void) {
   // Gentle tilt / touch / hand movement: petted.  Tilt is measured from the
   // learned rest posture, so a slightly angled installation does not trigger
   // forever, but a real hand tilt still feels immediate.
+  //
+  // After a shake ends, suppress PETTED briefly so the same handling that
+  // caused DIZZY doesn't immediately re-trigger a conflicting expression.
   if (gentle_touch && !dizzy_tail) {
+    if (now - dizzy_ended_at < DIZZY_PET_SUPPRESS_MS) return EHW_EXPR_NONE;
     return EHW_EXPR_PETTED;
   }
 
@@ -389,6 +399,7 @@ EHW_Expr_t EHW_Update(void) {
         pending_cnt = 0;
         expr_since = now;
         cooldown_until = now + (is_motion_expr(old_expr) ? MOTION_COOLDOWN_MS : COOLDOWN_MS);
+        if (old_expr == EHW_EXPR_DIZZY) dizzy_ended_at = now;
       }
     } else {
       none_cnt = 0;

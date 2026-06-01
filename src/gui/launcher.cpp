@@ -78,11 +78,24 @@ static CCMRAM float pet_touch_mood = 0.0f;
 static CCMRAM float pet_touch_mood_target = 0.0f;
 static CCMRAM uint32_t pet_touch_mood_since = 0;
 
+// Recovery blending after sensor-driven expressions release.
+// Captures the face parameters at release time and smoothly decays them
+// toward neutral so the transition doesn't snap to the idle blink cycle.
+static CCMRAM uint32_t sensor_recover_start = 0;
+static CCMRAM float recover_from_blink_l = 0.0f;
+static CCMRAM float recover_from_blink_r = 0.0f;
+static CCMRAM float recover_from_mouth   = 0.0f;
+static CCMRAM float recover_from_look_x  = 0.0f;
+static CCMRAM float recover_from_look_y  = 0.0f;
+static CCMRAM float recover_from_cheek   = 0.0f;
+static CCMRAM float recover_from_brow_y  = 0.0f;
+
 #define SENSOR_MAX_HOLD       5200U
 #define SENSOR_REST_MS        180U
 #define SENSOR_POLL_MS        90U
 #define SENSOR_MOTION_MIN_MS  1600U
 #define TOUCH_STYLE_KEEP_MS   4300U
+#define SENSOR_RECOVER_MS     620U
 
 // Triple-press ENTER to exit
 static CCMRAM uint32_t enter_tm[3] = {0};
@@ -224,11 +237,24 @@ static void update_idle_motion(void) {
 
 static void release_sensor_expression(uint32_t now) {
   int was_motion = is_motion_anim(pet_state);
+  // Capture current face parameters for smooth recovery blend.
+  // This prevents the jarring jump from dizzy/petted straight into
+  // the idle blink cycle — the face eases back to neutral instead.
+  recover_from_blink_l = pet_blink_l;
+  recover_from_blink_r = pet_blink_r;
+  recover_from_mouth   = pet_mouth;
+  recover_from_look_x  = pet_look_x;
+  recover_from_look_y  = pet_look_y;
+  recover_from_cheek   = pet_cheek;
+  recover_from_brow_y  = pet_brow_y;
+  sensor_recover_start = now;
   pet_state = ANIM_IDLE;
   prev_pet_state = ANIM_IDLE;
   // Keep motion/gravity highly responsive.  The old multi-second rest period
   // made random expressions look like they were stealing sensor events.
   sensor_cooldown_until = now + (was_motion ? SENSOR_REST_MS : 900U);
+  // Delay the first blink so recovery can finish before idle animation kicks in.
+  next_blink_tm = now + SENSOR_RECOVER_MS + 600U + rnd(1200U);
   reset_pose_soft();
 }
 
@@ -271,6 +297,12 @@ static void update_sensor(void) {
         now - sensor_expr_start < SENSOR_MOTION_MIN_MS) {
       return;
     }
+    // After DIZZY releases, block PETTED for the recovery window so the
+    // same handling that shook the device doesn't immediately re-trigger.
+    if (anim == ANIM_PETTED &&
+        now - sensor_recover_start < SENSOR_RECOVER_MS + 400U) {
+      return;
+    }
     if (!is_sensor_anim(pet_state)) prev_pet_state = pet_state;
     bool wake_from_sleep = (pet_state == ANIM_NAP || pet_state == ANIM_WAKE);
     if (anim == ANIM_DIZZY || wake_from_sleep) mark_activity(now, "imu", false);
@@ -288,6 +320,21 @@ static void update_animation(void) {
   update_idle_motion();
   update_sensor();
 
+  // Smooth recovery blend after sensor-driven expressions (DIZZY, PETTED, etc.)
+  // release.  The captured face parameters decay toward neutral over ~620ms so
+  // the transition doesn't snap jarringly into the idle blink cycle.
+  if (now - sensor_recover_start < SENSOR_RECOVER_MS) {
+    float raw_t = (float)(now - sensor_recover_start) / (float)SENSOR_RECOVER_MS;
+    float t = ease_inout(raw_t);
+    pet_blink_l = lerp(recover_from_blink_l, 0.0f, t);
+    pet_blink_r = lerp(recover_from_blink_r, 0.0f, t);
+    pet_mouth   = lerp(recover_from_mouth,   0.0f, t);
+    pet_look_x  = lerp(recover_from_look_x,  pet_look_tx, t);
+    pet_look_y  = lerp(recover_from_look_y,  0.0f, t);
+    pet_cheek   = lerp(recover_from_cheek,   0.0f, t);
+    pet_brow_y  = lerp(recover_from_brow_y,  0.0f, t);
+  }
+
   switch (pet_state) {
 
   case ANIM_IDLE:
@@ -299,6 +346,9 @@ static void update_animation(void) {
       LOG_I("PET", "Idle %lums, entering nap", (unsigned long)(now - last_activity_tm));
       break;
     }
+    // During sensor recovery the face is still blending toward neutral;
+    // don't interrupt it with a blink or random mood.
+    if (now - sensor_recover_start < SENSOR_RECOVER_MS) break;
     if (now >= next_blink_tm) {
       int r = rnd(12U);
       if (r < 2)      { pet_state = ANIM_WINK; anim_start_tm = now; blink_phase = 0; }
@@ -306,8 +356,11 @@ static void update_animation(void) {
       else            { pet_state = ANIM_BLINK; anim_start_tm = now; blink_phase = 0; }
     }
 
-    // Do not start a random mood while the sensor engine has an active event.
-    if (EHW_GetExpr() == EHW_EXPR_NONE && now - mood_timer > 6200U + rnd(7600U)) {
+    // Do not start a random mood while the sensor engine has an active event
+    // or while the face is still in post-sensor recovery.
+    if (EHW_GetExpr() == EHW_EXPR_NONE &&
+        now - sensor_recover_start >= SENSOR_RECOVER_MS &&
+        now - mood_timer > 6200U + rnd(7600U)) {
       mood_timer = now;
       int r = rnd(24U);
       if (r < 2)       pet_state = ANIM_SURPRISED;
@@ -760,6 +813,7 @@ void pet_launcher_run(void) {
   sensor_timer = 0;
   sensor_expr_start = 0;
   sensor_cooldown_until = 0;
+  sensor_recover_start = 0;
   enter_idx = 0;
   last_enter_pressed = 0;
   enter_tm[0] = enter_tm[1] = enter_tm[2] = 0;
