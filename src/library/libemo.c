@@ -1,6 +1,7 @@
 #include "include/libemo.h"
 #include "include/lcd.h"
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef M_PI
@@ -138,6 +139,38 @@ static void draw_sparkle(int16_t x, int16_t y, int16_t s, uint32_t color) {
   for (int16_t i = -s; i <= s; i++) set_px(x, y + i, color);
 }
 
+static void draw_soft_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+                           int16_t t, uint32_t color) {
+  int16_t dx = (int16_t)abs(x1 - x0);
+  int16_t sx = x0 < x1 ? 1 : -1;
+  int16_t dy = (int16_t)-abs(y1 - y0);
+  int16_t sy = y0 < y1 ? 1 : -1;
+  int16_t err = dx + dy;
+  while (1) {
+    EMO_FillCircle(x0, y0, t, color);
+    if (x0 == x1 && y0 == y1) break;
+    int16_t e2 = (int16_t)(2 * err);
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+
+static void draw_z_mark(int16_t x, int16_t y, int16_t s, uint32_t color) {
+  int16_t w = (int16_t)(s * 2);
+  EMO_DrawHLine(x, y, w, 2, color);
+  draw_soft_line((int16_t)(x + w - 1), (int16_t)(y + 1),
+                 x, (int16_t)(y + s + 2), 1, color);
+  EMO_DrawHLine(x, (int16_t)(y + s + 3), w, 2, color);
+}
+
+static void draw_sweat(int16_t x, int16_t y, int16_t s) {
+  uint32_t c = 0x7FD9FF;
+  EMO_FillCircle(x, (int16_t)(y + s), s, c);
+  draw_soft_line(x, y, (int16_t)(x - s), (int16_t)(y + s + 1), 1, c);
+  draw_soft_line(x, y, (int16_t)(x + s), (int16_t)(y + s + 1), 1, c);
+  EMO_FillCircle((int16_t)(x - s / 2), (int16_t)(y + s / 2), 1, 0xE7FBFF);
+}
+
 // ============ Eye drawing (soft sclera + pupil + eyelids) ============
 
 static void draw_eye(int16_t cx, int16_t cy, float blink, float lx, float ly) {
@@ -146,7 +179,7 @@ static void draw_eye(int16_t cx, int16_t cy, float blink, float lx, float ly) {
   lx = clampf_emo(lx, -1.0f, 1.0f);
   ly = clampf_emo(ly, -1.0f, 1.0f);
 
-  if (blink < 0.98f) {
+  if (blink < 0.90f) {
     // Soft outside shadow makes the eye feel less flat.
     EMO_FillCircle(cx + 1, cy + 2, r + 1, 0x1A1A1A);
     EMO_FillCircle(cx, cy, r, EMO_WHITE);
@@ -173,8 +206,8 @@ static void draw_eye(int16_t cx, int16_t cy, float blink, float lx, float ly) {
       EMO_FillRect(cx - r - 1, cy + r - cover_bottom, r * 2 + 2, cover_bottom + 2, EMO_BLACK);
     }
   } else {
-    EMO_DrawHLine(cx - r + 2, cy, r * 2 - 4, 3, EMO_WHITE);
-    EMO_DrawHLine(cx - r + 6, cy + 3, r * 2 - 12, 1, 0x444444);
+    EMO_DrawThickArc(cx, (int16_t)(cy - 4), (int16_t)(r - 1), 205.0f, 335.0f, 2, EMO_WHITE);
+    EMO_DrawHLine(cx - r + 7, cy + 3, r * 2 - 14, 1, 0x444444);
   }
 }
 
@@ -192,13 +225,21 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
   look_x = clampf_emo(look_x, -1.0f, 1.0f);
   look_y = clampf_emo(look_y, -1.0f, 1.0f);
 
+  float closed = (blink_l + blink_r) * 0.5f;
+  uint8_t is_napping = (closed > 0.86f && look_y > 0.58f && mouth_open > 0.06f && mouth_open < 0.32f);
+  uint8_t is_warm_or_dizzy = (mouth_open > 0.50f && closed > 0.28f && look_y > 0.12f);
+  uint8_t is_tense = (brow_y < -0.50f && mouth_open < 0.18f);
+  uint8_t is_searching = (brow_y > 0.62f && mouth_open < 0.22f && closed < 0.20f);
+
   EMO_FillScreen(EMO_BLACK);
 
   // --- Square-screen friendly ambient shade ---
   // Avoid large circular rings; the physical screen is square, so a frame-like
   // shade looks cleaner and does not fight the panel shape.
-  uint32_t glow = mix_rgb(0x03070D, 0x101A2A, cheek * 0.45f + mouth_open * 0.12f);
-  if (cheek > 0.02f || mouth_open > 0.18f) {
+  uint32_t glow = mix_rgb(is_napping ? 0x030408 : 0x03070D,
+                          is_napping ? 0x101424 : 0x101A2A,
+                          cheek * 0.45f + mouth_open * 0.12f + (is_napping ? 0.18f : 0.0f));
+  if (cheek > 0.02f || mouth_open > 0.18f || is_napping) {
     EMO_FillRect(0, 0, g_w, 14, glow);
     EMO_FillRect(0, g_h - 16, g_w, 16, glow);
     EMO_FillRect(0, 0, 10, g_h, glow);
@@ -226,6 +267,21 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
   draw_eye(EMO_LEFT_EYE_X, EMO_LEFT_EYE_Y, blink_l, look_x, look_y);
   draw_eye(EMO_RIGHT_EYE_X, EMO_RIGHT_EYE_Y, blink_r, look_x, look_y);
 
+  if (is_napping) {
+    draw_z_mark(177, 36, 5, 0xAFC6FF);
+    draw_z_mark(194, 24, 4, 0x6F86C8);
+    EMO_FillCircle(EMO_MOUTH_CX + 27, EMO_MOUTH_CY - 3, 2, 0x536080);
+    EMO_FillCircle(EMO_MOUTH_CX + 35, EMO_MOUTH_CY - 12, 1, 0x65749A);
+  } else if (is_searching) {
+    draw_sparkle(44, 42, 3, 0x7FCFFF);
+    draw_sparkle(198, 44, 2, 0x7FCFFF);
+  }
+
+  if (is_tense) {
+    draw_soft_line(49, 50, 42, 60, 1, 0x9A9A9A);
+    draw_soft_line(56, 48, 50, 59, 1, 0x787878);
+  }
+
   // --- Cheek blush ---
   if (cheek > 0.01f) {
     uint32_t bc = mix_rgb(0x22080C, 0xFF9FAF, cheek);
@@ -235,6 +291,10 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
     EMO_FillCircle(EMO_RIGHT_EYE_X + EMO_EYE_R + 8, cheek_y, cr, bc);
     EMO_DrawHLine(EMO_LEFT_EYE_X - EMO_EYE_R - 18, cheek_y - 3, 16, 1, 0xFFD1D8);
     EMO_DrawHLine(EMO_RIGHT_EYE_X + EMO_EYE_R + 2, cheek_y - 3, 16, 1, 0xFFD1D8);
+  }
+
+  if (is_warm_or_dizzy) {
+    draw_sweat(191, 72, 5);
   }
 
   // --- Mouth ---

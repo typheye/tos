@@ -13,6 +13,7 @@
 static CCMRAM EHW_Expr_t last_expr     = EHW_EXPR_NONE;
 static CCMRAM EHW_Expr_t stable_expr   = EHW_EXPR_NONE;
 static CCMRAM EHW_Expr_t pending_expr  = EHW_EXPR_NONE;
+static CCMRAM EHW_Expr_t last_raw_expr = EHW_EXPR_NONE;
 static CCMRAM uint32_t   last_poll     = 0;
 static CCMRAM uint32_t   expr_since    = 0;
 static CCMRAM uint32_t   cooldown_until = 0;
@@ -25,6 +26,8 @@ static CCMRAM int        none_cnt      = 0;
 #define DEBOUNCE_OFF     3
 #define MIN_HOLD_MS      1200U
 #define MOTION_HOLD_MS   120U
+#define PETTED_HOLD_MS   360U
+#define PETTED_DEBOUNCE_ON 3
 #define COOLDOWN_MS      1200U
 #define MOTION_COOLDOWN_MS 120U
 #define SENSOR_TO_MS     80U
@@ -47,7 +50,12 @@ static CCMRAM float smooth_tilt = 0.0f;
 static CCMRAM float smooth_tilt_rate = 0.0f;
 static CCMRAM float last_pitch = 0.0f;
 static CCMRAM float last_roll = 0.0f;
+static CCMRAM float rest_pitch = 0.0f;
+static CCMRAM float rest_roll = 0.0f;
+static CCMRAM uint32_t last_imu_sample = 0;
+static CCMRAM uint32_t next_imu_diag = 0;
 static CCMRAM bool  imu_valid = false;
+static CCMRAM bool  rest_valid = false;
 static CCMRAM bool  jy_warned = false;
 static CCMRAM bool  bmp_warned = false;
 static CCMRAM bool  tcs_warned = false;
@@ -72,14 +80,19 @@ static EHW_Expr_t check_jy901s(void) {
     return EHW_EXPR_NONE;
   }
 
-  uint32_t t0 = HAL_GetTick();
+  uint32_t now = HAL_GetTick();
+  uint32_t t0 = now;
   JY901S_Data_t d = boardJY901S.readData();
   uint32_t dt = HAL_GetTick() - t0;
   if (dt > SENSOR_TO_MS) LOG_W("EHW", "JY901S read took %lums", (unsigned long)dt);
 
   float acc_mag = sqrtf(d.acc_x * d.acc_x + d.acc_y * d.acc_y + d.acc_z * d.acc_z);
-  if (acc_mag < 0.05f || acc_mag > 8.0f) {
+  if (acc_mag < 0.001f || acc_mag > 400.0f) {
     // Bad read / disconnected bus burst. Decay instead of creating a fake mood.
+    if (now >= next_imu_diag) {
+      next_imu_diag = now + 3000U;
+      LOG_W("EHW", "IMU bad acc mag=%d", (int)(acc_mag * 100.0f));
+    }
     smooth_motion *= 0.55f;
     smooth_gyro *= 0.65f;
     smooth_tilt *= 0.88f;
@@ -94,68 +107,108 @@ static EHW_Expr_t check_jy901s(void) {
   float ny = d.acc_y / acc_mag;
   float nz = d.acc_z / acc_mag;
 
-  float roll;
-  float pitch;
+  uint32_t sample_dt_ms = last_imu_sample ? (now - last_imu_sample) : POLL_MS;
+  if (sample_dt_ms < 1U) sample_dt_ms = 1U;
+  if (sample_dt_ms > 500U) sample_dt_ms = 500U;
+  last_imu_sample = now;
+  float sample_dt_s = (float)sample_dt_ms * 0.001f;
+
+  float roll_acc = atan2f(ny, nz) * 57.29578f;
+  float pitch_acc = atan2f(-nx, sqrtf(ny * ny + nz * nz)) * 57.29578f;
+  float roll = roll_acc;
+  float pitch = pitch_acc;
+  if (fabsf(d.roll) <= 180.0f && fabsf(d.pitch) <= 180.0f &&
+      (fabsf(d.roll) > 0.01f || fabsf(d.pitch) > 0.01f)) {
+    // The module's angle estimate is steadier during gentle handling; keep a
+    // little accelerometer authority so gravity still wins after odd packets.
+    roll = d.roll * 0.70f + roll_acc * 0.30f;
+    pitch = d.pitch * 0.70f + pitch_acc * 0.30f;
+  }
+
+  float lin_mag = 0.0f;
   if (!imu_valid) {
     grav_x = nx;
     grav_y = ny;
     grav_z = nz;
-    roll = atan2f(grav_y, grav_z) * 57.29578f;
-    pitch = atan2f(-grav_x, sqrtf(grav_y * grav_y + grav_z * grav_z)) * 57.29578f;
     last_roll = roll;
     last_pitch = pitch;
+    rest_roll = roll;
+    rest_pitch = pitch;
+    rest_valid = true;
     imu_valid = true;
   } else {
-    // Low-pass gravity.  A faster alpha fixes the previous bug where static
-    // board tilt was treated as "nothing" after the first sample.
-    grav_x = grav_x * 0.76f + nx * 0.24f;
-    grav_y = grav_y * 0.76f + ny * 0.24f;
-    grav_z = grav_z * 0.76f + nz * 0.24f;
-    roll = atan2f(grav_y, grav_z) * 57.29578f;
-    pitch = atan2f(-grav_x, sqrtf(grav_y * grav_y + grav_z * grav_z)) * 57.29578f;
+    float lin_x = nx - grav_x;
+    float lin_y = ny - grav_y;
+    float lin_z = nz - grav_z;
+    lin_mag = sqrtf(lin_x * lin_x + lin_y * lin_y + lin_z * lin_z);
+
+    // A slow gravity low-pass keeps short bumps from becoming "new down".
+    float grav_alpha = lin_mag > 0.12f ? 0.08f : 0.18f;
+    grav_x = grav_x * (1.0f - grav_alpha) + nx * grav_alpha;
+    grav_y = grav_y * (1.0f - grav_alpha) + ny * grav_alpha;
+    grav_z = grav_z * (1.0f - grav_alpha) + nz * grav_alpha;
   }
 
-  float lin_x = nx - grav_x;
-  float lin_y = ny - grav_y;
-  float lin_z = nz - grav_z;
-  float lin_mag = sqrtf(lin_x * lin_x + lin_y * lin_y + lin_z * lin_z);
   float gyro_mag = sqrtf(d.gyro_x * d.gyro_x + d.gyro_y * d.gyro_y + d.gyro_z * d.gyro_z);
 
-  float tilt_rate = fabsf(angle_diff(roll, last_roll)) + fabsf(angle_diff(pitch, last_pitch));
+  float roll_delta = fabsf(angle_diff(roll, last_roll));
+  float pitch_delta = fabsf(angle_diff(pitch, last_pitch));
+  float tilt_rate = (roll_delta + pitch_delta) / sample_dt_s;
   last_roll = roll;
   last_pitch = pitch;
 
-  // Absolute tilt is the key part: holding the board tilted should still be
-  // sensed.  The previous version mostly used tilt_delta, so the expression
-  // disappeared as soon as the board stopped moving.
-  float tilt_abs = fmaxf(fabsf(roll), fabsf(pitch));
+  if (!rest_valid) {
+    rest_roll = roll;
+    rest_pitch = pitch;
+    rest_valid = true;
+  }
+  float tilt_from_rest = fmaxf(fabsf(angle_diff(roll, rest_roll)),
+                              fabsf(angle_diff(pitch, rest_pitch)));
+  if (lin_mag < 0.025f && gyro_mag < 2.8f && tilt_rate < 7.0f && tilt_from_rest < 10.0f) {
+    rest_roll = rest_roll * 0.998f + roll * 0.002f;
+    rest_pitch = rest_pitch * 0.998f + pitch * 0.002f;
+  }
 
   smooth_motion = smooth_motion * 0.62f + lin_mag * 0.38f;
   smooth_gyro = smooth_gyro * 0.58f + gyro_mag * 0.42f;
-  smooth_tilt = smooth_tilt * 0.70f + tilt_abs * 0.30f;
-  smooth_tilt_rate = smooth_tilt_rate * 0.50f + tilt_rate * 0.50f;
+  smooth_tilt = smooth_tilt * 0.72f + tilt_from_rest * 0.28f;
+  smooth_tilt_rate = smooth_tilt_rate * 0.58f + tilt_rate * 0.42f;
+
+  if (now >= next_imu_diag &&
+      (stable_expr != EHW_EXPR_NONE || smooth_motion > 0.035f ||
+       smooth_tilt > 8.0f || smooth_tilt_rate > 10.0f)) {
+    next_imu_diag = now + 3000U;
+    LOG_D("EHW", "imu acc=%d lin=%d gyro=%d tilt=%d rate=%d rest=%d",
+          (int)(acc_mag * 100.0f),
+          (int)(smooth_motion * 1000.0f),
+          (int)(smooth_gyro * 10.0f),
+          (int)(smooth_tilt * 10.0f),
+          (int)smooth_tilt_rate,
+          rest_valid ? 1 : 0);
+  }
 
   // Hysteresis while an expression is active.  This avoids flicker but does not
   // block real gravity/IMU events behind the random emotion loop.
   if (stable_expr == EHW_EXPR_DIZZY) {
-    if (smooth_motion > 0.34f || smooth_gyro > 68.0f || smooth_tilt_rate > 10.0f || smooth_tilt > 64.0f) {
+    if (smooth_motion > 0.32f || smooth_gyro > 56.0f || smooth_tilt_rate > 115.0f || smooth_tilt > 54.0f) {
       return EHW_EXPR_DIZZY;
     }
   }
   if (stable_expr == EHW_EXPR_PETTED) {
-    if (smooth_motion > 0.035f || smooth_gyro > 8.5f || smooth_tilt_rate > 1.8f || smooth_tilt > 13.5f) {
+    if (smooth_motion > 0.070f || smooth_gyro > 7.5f || smooth_tilt_rate > 35.0f || smooth_tilt > 11.0f) {
       return EHW_EXPR_PETTED;
     }
   }
 
   // Violent shake / flip: dizzy.
-  if (smooth_motion > 0.58f || smooth_gyro > 150.0f || smooth_tilt_rate > 22.0f || smooth_tilt > 78.0f) {
+  if (smooth_motion > 0.56f || smooth_gyro > 130.0f || smooth_tilt_rate > 220.0f || smooth_tilt > 68.0f) {
     return EHW_EXPR_DIZZY;
   }
 
-  // Gentle tilt / touch / hand movement: petted.  Absolute tilt makes the
-  // "gravity sensing" feel alive even if the module is held still.
-  if (smooth_motion > 0.055f || smooth_gyro > 12.0f || smooth_tilt_rate > 2.4f || smooth_tilt > 18.0f) {
+  // Gentle tilt / touch / hand movement: petted.  Tilt is measured from the
+  // learned rest posture, so a slightly angled installation does not trigger
+  // forever, but a real hand tilt still feels immediate.
+  if (smooth_motion > 0.180f || smooth_gyro > 12.0f || smooth_tilt_rate > 75.0f || smooth_tilt > 16.0f) {
     return EHW_EXPR_PETTED;
   }
 
@@ -259,6 +312,7 @@ void EHW_Init(void) {
   last_expr = EHW_EXPR_NONE;
   stable_expr = EHW_EXPR_NONE;
   pending_expr = EHW_EXPR_NONE;
+  last_raw_expr = EHW_EXPR_NONE;
   last_poll = 0;
   expr_since = HAL_GetTick();
   cooldown_until = 0;
@@ -275,14 +329,19 @@ void EHW_Init(void) {
   smooth_tilt_rate = 0.0f;
   last_pitch = 0.0f;
   last_roll = 0.0f;
+  rest_pitch = 0.0f;
+  rest_roll = 0.0f;
+  last_imu_sample = 0;
+  next_imu_diag = HAL_GetTick() + 3000U;
   imu_valid = false;
+  rest_valid = false;
   temp_valid = false;
   lux_valid = false;
   smooth_temp = 22.0f;
   smooth_lux = 100.0f;
   jy_warned = bmp_warned = tcs_warned = false;
 
-  LOG_I("EHW", "Init done");
+  LOG_I("EHW", "Init done, poll=%ums motion_hold=%ums", POLL_MS, MOTION_HOLD_MS);
 }
 
 EHW_Expr_t EHW_Update(void) {
@@ -298,6 +357,12 @@ EHW_Expr_t EHW_Update(void) {
   // preempt immediately; otherwise random moods can make the IMU feel broken.
   if (now < cooldown_until && raw != stable_expr && !is_motion_expr(raw)) {
     raw = EHW_EXPR_NONE;
+  }
+
+  if (raw != last_raw_expr) {
+    LOG_D("EHW", "raw: %d -> %d stable=%d pending=%d cnt=%d",
+          last_raw_expr, raw, stable_expr, pending_expr, pending_cnt);
+    last_raw_expr = raw;
   }
 
   if (raw == EHW_EXPR_NONE) {
@@ -327,8 +392,10 @@ EHW_Expr_t EHW_Update(void) {
     pending_cnt = 1;
   }
 
-  int need = (raw == EHW_EXPR_DIZZY || raw == EHW_EXPR_PETTED) ? 1 : DEBOUNCE_ON;
-  uint32_t hold_ms = is_motion_expr(raw) ? MOTION_HOLD_MS : MIN_HOLD_MS;
+  int need = raw == EHW_EXPR_DIZZY ? 1 :
+             (raw == EHW_EXPR_PETTED ? PETTED_DEBOUNCE_ON : DEBOUNCE_ON);
+  uint32_t hold_ms = raw == EHW_EXPR_DIZZY ? MOTION_HOLD_MS :
+                     (raw == EHW_EXPR_PETTED ? PETTED_HOLD_MS : MIN_HOLD_MS);
   if (pending_cnt >= need && raw != stable_expr && now - expr_since >= hold_ms) {
     LOG_I("EHW", "expr: %d -> %d (cnt=%d)", stable_expr, raw, pending_cnt);
     stable_expr = raw;

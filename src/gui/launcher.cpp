@@ -26,6 +26,16 @@ static CCMRAM float pet_brow_y  = 0.0f;
 static CCMRAM float pet_look_tx = 0.0f;
 static CCMRAM float pet_look_ty = 0.0f;
 static CCMRAM uint32_t next_saccade_tm = 0;
+static CCMRAM uint32_t last_activity_tm = 0;
+static CCMRAM uint32_t activity_pulse_until = 0;
+static CCMRAM uint32_t state_since_tm = 0;
+static CCMRAM int last_logged_state = -1;
+static CCMRAM uint8_t last_collision_active = 0;
+static CCMRAM uint8_t last_group1_cfg = 0;
+static CCMRAM uint8_t last_group2_cfg = 0;
+static CCMRAM uint8_t last_group3_cfg = 0;
+static CCMRAM uint8_t last_mute_state = 0;
+static CCMRAM uint8_t last_sd_state = 0;
 
 enum PetAnim {
   ANIM_IDLE = 0,
@@ -39,6 +49,11 @@ enum PetAnim {
   ANIM_SHY,
   ANIM_PROUD,
   ANIM_ANNOYED,
+  ANIM_GLANCE,
+  ANIM_GIGGLE,
+  ANIM_STRETCH,
+  ANIM_NAP,
+  ANIM_WAKE,
   // Sensor-driven expressions
   ANIM_DIZZY,
   ANIM_PETTED,
@@ -73,11 +88,61 @@ static CCMRAM uint8_t last_enter_pressed = 0;
 #define BLINK_DUR_MS    420U
 #define WINK_DUR_MS     380U
 #define DBLINK_DUR_MS   700U
+#define IDLE_NAP_MS     60000U
+#define ACTIVITY_PULSE_MS 700U
 
 static uint32_t rnd(uint32_t max) {
   static uint32_t seed = 0xBEEF;
   seed = seed * 1103515245U + 12345U;
   return max ? (seed % max) : 0U;
+}
+
+static const char *pet_anim_name(int s) {
+  switch (s) {
+  case ANIM_IDLE:      return "idle";
+  case ANIM_BLINK:     return "blink";
+  case ANIM_WINK:      return "wink";
+  case ANIM_DBLINK:    return "dblnk";
+  case ANIM_HAPPY:     return "happy";
+  case ANIM_SURPRISED: return "surprise";
+  case ANIM_CURIOUS:   return "curious";
+  case ANIM_SLEEPY:    return "sleepy";
+  case ANIM_SHY:       return "shy";
+  case ANIM_PROUD:     return "proud";
+  case ANIM_ANNOYED:   return "annoyed";
+  case ANIM_GLANCE:    return "glance";
+  case ANIM_GIGGLE:    return "giggle";
+  case ANIM_STRETCH:   return "stretch";
+  case ANIM_NAP:       return "nap";
+  case ANIM_WAKE:      return "wake";
+  case ANIM_DIZZY:     return "dizzy";
+  case ANIM_PETTED:    return "petted";
+  case ANIM_COLD:      return "cold";
+  case ANIM_COMFY:     return "comfy";
+  case ANIM_HOT:       return "hot";
+  case ANIM_DARK:      return "dark";
+  case ANIM_BRIGHT:    return "bright";
+  default:             return "?";
+  }
+}
+
+static void mark_activity(uint32_t now, const char *reason, bool log_it) {
+  last_activity_tm = now;
+  activity_pulse_until = now + ACTIVITY_PULSE_MS;
+  if (log_it) {
+    LOG_D("PET", "activity: %s @ %lums", reason, (unsigned long)now);
+  }
+}
+
+static void trace_state(uint32_t now) {
+  if (pet_state == last_logged_state) return;
+  LOG_D("PET", "state: %s -> %s, idle=%lums expr=%d",
+        last_logged_state < 0 ? "boot" : pet_anim_name(last_logged_state),
+        pet_anim_name(pet_state),
+        (unsigned long)(now - last_activity_tm),
+        EHW_GetExpr());
+  last_logged_state = pet_state;
+  state_since_tm = now;
 }
 
 // ============ Easing ============
@@ -179,8 +244,14 @@ static void update_sensor(void) {
   // Slow environment moods still respect a short cooldown to avoid flicker.
   if (now < sensor_cooldown_until && !is_motion_anim(anim)) return;
 
+  // Idle sleep is based on real user activity, not on ambient light/temp moods.
+  // Let the pet keep napping even if the room is bright or cold.
+  if (now - last_activity_tm >= IDLE_NAP_MS && !is_motion_anim(anim)) return;
+
   if (pet_state != anim) {
     if (!is_sensor_anim(pet_state)) prev_pet_state = pet_state;
+    bool wake_from_sleep = (pet_state == ANIM_NAP || pet_state == ANIM_WAKE);
+    if (anim == ANIM_DIZZY || wake_from_sleep) mark_activity(now, "imu", false);
     pet_state = anim;
     sensor_expr_start = now;
     anim_start_tm = now;
@@ -198,6 +269,13 @@ static void update_animation(void) {
 
   case ANIM_IDLE:
     if (pet_cheek > 0.0f) pet_cheek = lerp(pet_cheek, 0.0f, 0.06f);
+    if (now - last_activity_tm >= IDLE_NAP_MS) {
+      pet_state = ANIM_NAP;
+      anim_start_tm = now;
+      blink_phase = 0;
+      LOG_I("PET", "Idle %lums, entering nap", (unsigned long)(now - last_activity_tm));
+      break;
+    }
     if (now >= next_blink_tm) {
       int r = rnd(12U);
       if (r < 2)      { pet_state = ANIM_WINK; anim_start_tm = now; blink_phase = 0; }
@@ -208,14 +286,17 @@ static void update_animation(void) {
     // Do not start a random mood while the sensor engine has an active event.
     if (EHW_GetExpr() == EHW_EXPR_NONE && now - mood_timer > 6200U + rnd(7600U)) {
       mood_timer = now;
-      int r = rnd(16U);
+      int r = rnd(24U);
       if (r < 2)       pet_state = ANIM_SURPRISED;
       else if (r < 5)  pet_state = ANIM_HAPPY;
       else if (r < 8)  pet_state = ANIM_CURIOUS;
       else if (r < 10) pet_state = ANIM_SLEEPY;
       else if (r < 12) pet_state = ANIM_SHY;
       else if (r < 14) pet_state = ANIM_PROUD;
-      else             pet_state = ANIM_ANNOYED;
+      else if (r < 16) pet_state = ANIM_ANNOYED;
+      else if (r < 19) pet_state = ANIM_GLANCE;
+      else if (r < 22) pet_state = ANIM_GIGGLE;
+      else             pet_state = ANIM_STRETCH;
       anim_start_tm = now;
     }
     break;
@@ -404,6 +485,119 @@ static void update_animation(void) {
     }
     break;
 
+  case ANIM_GLANCE:
+    {
+      uint32_t elapsed = now - anim_start_tm;
+      int dir = ((anim_start_tm >> 3) & 1U) ? 1 : -1;
+      float t = elapsed < 520U ? (float)elapsed / 520.0f : 1.0f;
+      float settle = elapsed > 1600U ? (float)(elapsed - 1600U) / 620.0f : 0.0f;
+      if (settle > 1.0f) settle = 1.0f;
+      float target_x = (float)dir * (0.82f - settle * 0.82f);
+      pet_look_x = lerp(pet_look_x, target_x, 0.12f);
+      pet_look_y = lerp(pet_look_y, -0.10f + sinf((float)(now % 700U) / 700.0f * 6.28318f) * 0.06f, 0.08f);
+      pet_brow_y = lerp(pet_brow_y, 0.28f * (1.0f - settle), 0.08f);
+      pet_mouth = lerp(pet_mouth, 0.10f + t * 0.05f, 0.08f);
+      if (elapsed > 2300U) pet_state = ANIM_IDLE;
+    }
+    break;
+
+  case ANIM_GIGGLE:
+    {
+      uint32_t elapsed = now - anim_start_tm;
+      float wave = sinf((float)(now % 360U) / 360.0f * 6.28318f);
+      pet_cheek = lerp(pet_cheek, 0.96f, 0.15f);
+      pet_mouth = 0.36f + fabsf(wave) * 0.10f;
+      pet_brow_y = 0.38f + wave * 0.08f;
+      pet_blink_l = 0.34f + (wave > 0.0f ? 0.12f : 0.0f);
+      pet_blink_r = 0.28f + (wave < 0.0f ? 0.10f : 0.0f);
+      pet_look_x = lerp(pet_look_x, wave * 0.20f, 0.10f);
+      pet_look_y = lerp(pet_look_y, -0.12f, 0.09f);
+      if (elapsed > 1900U) pet_state = ANIM_IDLE;
+    }
+    break;
+
+  case ANIM_STRETCH:
+    {
+      uint32_t elapsed = now - anim_start_tm;
+      if (elapsed < 700U) {
+        float t = ease_inout((float)elapsed / 700.0f);
+        pet_blink_l = t * 0.82f;
+        pet_blink_r = t * 0.82f;
+        pet_mouth = 0.15f + t * 0.55f;
+        pet_brow_y = 0.35f + t * 0.36f;
+        pet_look_y = lerp(pet_look_y, 0.28f, 0.10f);
+      } else if (elapsed < 1550U) {
+        float wobble = sinf((float)(now % 520U) / 520.0f * 6.28318f);
+        pet_blink_l = 0.82f;
+        pet_blink_r = 0.82f;
+        pet_mouth = 0.62f + wobble * 0.07f;
+        pet_brow_y = 0.58f + wobble * 0.08f;
+        pet_look_x = wobble * 0.18f;
+        pet_look_y = 0.32f;
+      } else if (elapsed < 2300U) {
+        float t = ease_inout((float)(elapsed - 1550U) / 750.0f);
+        pet_blink_l = 0.82f * (1.0f - t);
+        pet_blink_r = 0.82f * (1.0f - t);
+        pet_mouth = 0.62f * (1.0f - t);
+        pet_brow_y = 0.58f * (1.0f - t);
+        pet_look_y = 0.32f * (1.0f - t);
+      } else {
+        pet_state = ANIM_IDLE;
+      }
+    }
+    break;
+
+  case ANIM_NAP:
+    {
+      uint32_t elapsed = now - anim_start_tm;
+      if (now < activity_pulse_until) {
+        pet_state = ANIM_WAKE;
+        anim_start_tm = now;
+        blink_phase = 0;
+        LOG_I("PET", "Wake from nap after %lums", (unsigned long)elapsed);
+        break;
+      }
+      float br = (float)(now % 3600U) / 3600.0f * 6.28318f;
+      float deep = elapsed < 1800U ? ease_inout((float)elapsed / 1800.0f) : 1.0f;
+      pet_blink_l = lerp(pet_blink_l, 0.96f, 0.10f);
+      pet_blink_r = lerp(pet_blink_r, 0.96f, 0.10f);
+      pet_mouth = 0.12f + (sinf(br) + 1.0f) * 0.045f * deep;
+      pet_cheek = lerp(pet_cheek, 0.18f, 0.04f);
+      pet_brow_y = lerp(pet_brow_y, 0.16f + sinf(br * 0.5f) * 0.08f, 0.05f);
+      pet_look_x = lerp(pet_look_x, sinf(br * 0.35f) * 0.06f, 0.03f);
+      pet_look_y = lerp(pet_look_y, 0.86f, 0.08f);
+    }
+    break;
+
+  case ANIM_WAKE:
+    {
+      uint32_t elapsed = now - anim_start_tm;
+      if (elapsed < 520U) {
+        float t = ease_inout((float)elapsed / 520.0f);
+        pet_blink_l = 0.96f - t * 0.42f;
+        pet_blink_r = 0.96f - t * 0.42f;
+        pet_mouth = 0.22f + t * 0.38f;
+        pet_brow_y = 0.15f + t * 0.26f;
+        pet_look_y = 0.80f - t * 0.42f;
+      } else if (elapsed < 1050U) {
+        float t = ease_inout((float)(elapsed - 520U) / 530.0f);
+        pet_blink_l = 0.54f * (1.0f - t);
+        pet_blink_r = 0.54f * (1.0f - t);
+        pet_mouth = 0.60f * (1.0f - t);
+        pet_brow_y = 0.40f * (1.0f - t);
+        pet_look_y = 0.38f * (1.0f - t);
+      } else {
+        pet_blink_l = 0.0f;
+        pet_blink_r = 0.0f;
+        pet_mouth = 0.0f;
+        pet_brow_y = 0.0f;
+        pet_state = ANIM_IDLE;
+        next_blink_tm = now + 1200U + rnd(1800U);
+        mood_timer = now + 4200U + rnd(4200U);
+      }
+    }
+    break;
+
   // --- Sensor-driven expressions (hold while sensor active) ---
 
   case ANIM_DIZZY:
@@ -501,7 +695,8 @@ static void update_animation(void) {
   }
 
   if (pet_state != ANIM_HAPPY && pet_state != ANIM_PETTED && pet_state != ANIM_COMFY &&
-      pet_state != ANIM_SHY && pet_cheek > 0.0f) {
+      pet_state != ANIM_SHY && pet_state != ANIM_GIGGLE && pet_state != ANIM_NAP &&
+      pet_cheek > 0.0f) {
     pet_cheek = lerp(pet_cheek, 0.0f, 0.05f);
     if (pet_cheek < 0.01f) pet_cheek = 0.0f;
   }
@@ -517,12 +712,22 @@ void pet_launcher_run(void) {
   next_blink_tm = now + 2300U + rnd(3000U);
   next_saccade_tm = now + 1000U;
   mood_timer = now + 5200U + rnd(5000U);
+  last_activity_tm = now;
+  activity_pulse_until = 0;
+  state_since_tm = now;
+  last_logged_state = -1;
   sensor_timer = 0;
   sensor_expr_start = 0;
   sensor_cooldown_until = 0;
   enter_idx = 0;
   last_enter_pressed = 0;
   enter_tm[0] = enter_tm[1] = enter_tm[2] = 0;
+  last_collision_active = keyManager.isAnyCollision() ? 1U : 0U;
+  last_group1_cfg = keyManager.getGroup1Config();
+  last_group2_cfg = keyManager.getGroup2Config();
+  last_group3_cfg = keyManager.getGroup3Config();
+  last_mute_state = keyManager.isMuted() ? 1U : 0U;
+  last_sd_state = keyManager.isSdCardInserted() ? 1U : 0U;
 
   pet_blink_l = 0.0f; pet_blink_r = 0.0f;
   pet_mouth = 0.0f; pet_cheek = 0.0f;
@@ -539,14 +744,18 @@ void pet_launcher_run(void) {
     now = HAL_GetTick();
     if (now - heartbeat > 5000U) {
       heartbeat = now;
-      LOG_D("PET", "alive @ %lums, state=%d, expr=%d", (unsigned long)now, pet_state, EHW_GetExpr());
+      LOG_D("PET", "alive @ %lums, state=%s, expr=%d, idle=%lums, state_age=%lums",
+            (unsigned long)now, pet_anim_name(pet_state), EHW_GetExpr(),
+            (unsigned long)(now - last_activity_tm),
+            (unsigned long)(now - state_since_tm));
     }
 
     // --- Input: triple-press ENTER to exit ---
     // Use edge detection. The old logic counted a long hold as multiple presses.
-    keyManager.btn_enter.tick();
+    keyManager.tick();
     uint8_t enter_pressed = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (enter_pressed && !last_enter_pressed) {
+      mark_activity(now, "enter", true);
       enter_tm[enter_idx % 3] = now;
       enter_idx++;
       if (enter_idx >= 3) {
@@ -562,9 +771,34 @@ void pet_launcher_run(void) {
     }
     last_enter_pressed = enter_pressed;
 
+    uint8_t collision_active = keyManager.isAnyCollision() ? 1U : 0U;
+    if (collision_active && !last_collision_active) {
+      mark_activity(now, "collision", true);
+    }
+    last_collision_active = collision_active;
+
+    uint8_t group1_cfg = keyManager.getGroup1Config();
+    uint8_t group2_cfg = keyManager.getGroup2Config();
+    uint8_t group3_cfg = keyManager.getGroup3Config();
+    uint8_t mute_state = keyManager.isMuted() ? 1U : 0U;
+    uint8_t sd_state = keyManager.isSdCardInserted() ? 1U : 0U;
+    if (group1_cfg != last_group1_cfg || group2_cfg != last_group2_cfg ||
+        group3_cfg != last_group3_cfg || mute_state != last_mute_state ||
+        sd_state != last_sd_state) {
+      mark_activity(now, "switch", true);
+      LOG_D("PET", "switch cfg g1=%u g2=%u g3=%u mute=%u sd=%u",
+            group1_cfg, group2_cfg, group3_cfg, mute_state, sd_state);
+      last_group1_cfg = group1_cfg;
+      last_group2_cfg = group2_cfg;
+      last_group3_cfg = group3_cfg;
+      last_mute_state = mute_state;
+      last_sd_state = sd_state;
+    }
+
     // --- Update & Draw ---
     boardLCD.updateAutoBrightness();
     update_animation();
+    trace_state(now);
     EMO_DrawFace(pet_blink_l, pet_blink_r, pet_mouth,
                  pet_look_x, pet_look_y, pet_cheek, pet_brow_y);
     LCD_Flush();
