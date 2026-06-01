@@ -5,10 +5,12 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/include/
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/miniapp/file_manager/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/miniapp/hid_tools/
 )
 
 # 列出所有需要编译的自定义源文件
@@ -50,19 +52,16 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libehw.cpp
     
     # Demo 活动文件
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/jyro_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/key_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/sd_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/i2c_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/display_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/bmp_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/3dox_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/esp8266_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/tcs3472_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/sn74hc00n_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/pot_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/demo_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/demo/hid_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/jyro_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/key_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/sd_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/i2c_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/bmp_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/3dox_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/tcs3472_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/sn74hc00n_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/pot_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/demo_activity.cpp
 
     # GUI文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/sysui.cpp
@@ -79,6 +78,8 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/alert.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/confirm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/components/status_icons.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/miniapp/file_manager/app.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/miniapp/hid_tools/app.cpp
 
 )
 

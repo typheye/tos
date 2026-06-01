@@ -2,7 +2,6 @@
 #include "core/include/settings_manager.h"
 #include "core/include/systime.h"
 #include "demo/include/bmp_activity.hpp"
-#include "demo/include/display_activity.hpp"
 #include "demo/include/i2c_activity.hpp"
 #include "demo/include/jyro_activity.hpp"
 #include "demo/include/key_activity.hpp"

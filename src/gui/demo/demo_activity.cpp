@@ -1,18 +1,16 @@
 #include "include/demo_activity.hpp"
+#include "core/include/systime.h"
 #include "gui/include/settings.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/trtc.hpp"
 #include "include/3dox_activity.hpp"
 #include "include/bmp_activity.hpp"
-#include "include/display_activity.hpp"
-#include "include/esp8266_activity.hpp"
 #include "include/i2c_activity.hpp"
 #include "include/jyro_activity.hpp"
 #include "include/key_activity.hpp"
 #include "include/libpd.h"
 #include "include/pot_activity.hpp"
-#include "core/include/systime.h"
 #include "include/sd_activity.hpp"
 #include "include/sn74hc00n_activity.hpp"
 #include "include/tcs3472_activity.hpp"
@@ -21,12 +19,12 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-#define DEMO_ITEMS 12
+#define DEMO_ITEMS 10
 static const char *demo_m[DEMO_ITEMS] = {
-    "00 Return",        "01 Key Test",       "02 SD Card Test",
-    "03 I2C Scan",      "04 JY901S Sensor",  "05 BMP180 Sensor",
-    "06 Display Tests", "07 3D Path Tracer", "08 ESP8266 Test",
-    "09 TCS3472 Test",  "10 SN74HC00N Test", "11 Pot Test",
+    "00 Return",         "01 Key Test",      "02 SD Card Test",
+    "03 I2C Scan",       "04 JY901S Sensor", "05 BMP180 Sensor",
+    "07 3D Path Tracer", "09 TCS3472 Test",  "10 SN74HC00N Test",
+    "11 Pot Test",
 };
 static void (*demo_f[DEMO_ITEMS])(void) = {
     NULL,
@@ -35,9 +33,7 @@ static void (*demo_f[DEMO_ITEMS])(void) = {
     i2c_scan_activity,
     jyro_activity,
     bmp180_activity,
-    display_test_menu_activity,
     render_3dox_activity_with_exit,
-    esp8266_test_activity,
     tcs3472_activity,
     hc00n_activity,
     pot_activity,
