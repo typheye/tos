@@ -1,4 +1,4 @@
-#include "include/hid_activity.hpp"
+#include "include/app.h"
 #include "core/include/systime.h"
 #include "hardware/include/jy901s.hpp"
 #include "hardware/include/key.hpp"
@@ -50,7 +50,7 @@ static void draw_frame_title(const char *title) {
 }
 
 static void draw_menu(int sel) {
-  draw_frame_title("HID");
+  draw_frame_title("HID Tools");
 
   int visible = HID_MENU_ITEMS < 7 ? HID_MENU_ITEMS : 7;
   int start = sel - visible / 2;
@@ -153,7 +153,7 @@ static void mouse_wiggle(void) {
 }
 
 #define GYRO_MOUSE_MAX_DELTA 120
-#define GYRO_MOUSE_SPEED_GAIN 2.00f  /* Previous value was 0.20f. 10x faster. */
+#define GYRO_MOUSE_SPEED_GAIN 2.00f
 
 static int8_t clamp_mouse_delta(int v) {
   if (v > GYRO_MOUSE_MAX_DELTA) {
@@ -266,11 +266,6 @@ static void gyro_mouse_activity(void) {
       smooth_y = smooth_y * 0.72f + data.gyro_y * 0.28f;
       smooth_z = smooth_z * 0.72f + data.gyro_z * 0.28f;
 
-      /* Default mapping:
-       *   yaw rate   gyro_z  -> mouse X
-       *   pitch rate -gyro_x -> mouse Y
-       * If your board orientation is different, swap/invert these two lines.
-       */
       int8_t dx = gyro_rate_to_delta(smooth_z, &frac_x);
       int8_t dy = gyro_rate_to_delta(-smooth_x, &frac_y);
 
@@ -301,7 +296,7 @@ static void gyro_mouse_activity(void) {
   }
 }
 
-void hid_test_activity_run(void) {
+void hid_tools_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
 
   int sel = 0;
