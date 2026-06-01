@@ -7,6 +7,7 @@
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define CCMRAM __attribute__((section(".ccmram")))
 
@@ -36,8 +37,7 @@ static CCMRAM vec3_t lightColor;
 
 static int current_x = 0, current_y = 0, frame_count = 0;
 
-static float pixel_accum_r, pixel_accum_g, pixel_accum_b;
-static int pixel_accum_count;
+static CCMRAM uint16_t pixel_history[RENDER_WIDTH * RENDER_HEIGHT];
 
 static CCMRAM vec3_t t0, t1, temp;
 static float tt;
@@ -428,6 +428,42 @@ static void init_scene(void) {
   triangles_ok = 1;
 }
 
+static uint32_t rgb565_to_rgb888(uint16_t c) {
+  uint32_t r = (uint32_t)((c >> 11) & 0x1F);
+  uint32_t g = (uint32_t)((c >> 5) & 0x3F);
+  uint32_t b = (uint32_t)(c & 0x1F);
+  r = (r * 255U + 15U) / 31U;
+  g = (g * 255U + 31U) / 63U;
+  b = (b * 255U + 15U) / 31U;
+  return (r << 16) | (g << 8) | b;
+}
+
+static uint16_t tone_to_history565(vec3_t sample, uint16_t prev, uint32_t prev_count) {
+  vec3_t one, mapped;
+  V3_ASSIGN_S(one, 1.0f);
+  V3_ADD(mapped, sample, one);
+  V3_DIV_ASSIGN(sample, mapped);
+
+  int r = (int)(sample.x * 31.0f);
+  int g = (int)(sample.y * 63.0f);
+  int b = (int)(sample.z * 31.0f);
+  if (r < 0) r = 0; else if (r > 31) r = 31;
+  if (g < 0) g = 0; else if (g > 63) g = 63;
+  if (b < 0) b = 0; else if (b > 31) b = 31;
+
+  if (prev_count > 0U) {
+    uint32_t pr = (prev >> 11) & 0x1F;
+    uint32_t pg = (prev >> 5) & 0x3F;
+    uint32_t pb = prev & 0x1F;
+    if (prev_count > 1024U) prev_count = 1024U;
+    r = (int)((pr * prev_count + (uint32_t)r) / (prev_count + 1U));
+    g = (int)((pg * prev_count + (uint32_t)g) / (prev_count + 1U));
+    b = (int)((pb * prev_count + (uint32_t)b) / (prev_count + 1U));
+  }
+
+  return (uint16_t)(((uint16_t)r << 11) | ((uint16_t)g << 5) | (uint16_t)b);
+}
+
 /* ========== 求交函数 ========== */
 static uint8_t bb_intersect(void) {
   V3_SUB(t0, bbmin, ray.start);
@@ -629,15 +665,14 @@ void render_init(void) {
   V3_ASSIGN_S3(view_y, view.m[1][0], view.m[1][1], view.m[1][2]);
   V3_ASSIGN_S3(view_z, view.m[2][0], view.m[2][1], view.m[2][2]);
   current_x = current_y = frame_count = 0;
-  pixel_accum_r = pixel_accum_g = pixel_accum_b = 0.0f;
-  pixel_accum_count = 0;
+  memset(pixel_history, 0, sizeof(pixel_history));
   srand(12345);
 }
 
 /* ========== 单步渲染 ========== */
 int render_step(pixel_callback_t pixel_cb) {
   int x = current_x, y = current_y;
-  int w = 240, h = 240;
+  int w = RENDER_WIDTH, h = RENDER_HEIGHT;
   float alpha_rad = radians(45);
   float Zc = -(h * 0.5f) / tanf(alpha_rad * 0.5f);
 
@@ -654,37 +689,16 @@ int render_step(pixel_callback_t pixel_cb) {
   V3_RCP(ray.inv_direction, ray.direction);
 
   vec3_t sp = sampleRay();
-
-  pixel_accum_count++;
-  float inv_n = 1.0f / (float)pixel_accum_count;
-  pixel_accum_r = (pixel_accum_r * (pixel_accum_count - 1) + sp.x) * inv_n;
-  pixel_accum_g = (pixel_accum_g * (pixel_accum_count - 1) + sp.y) * inv_n;
-  pixel_accum_b = (pixel_accum_b * (pixel_accum_count - 1) + sp.z) * inv_n;
-
-  float rr = pixel_accum_r, gg = pixel_accum_g, bb = pixel_accum_b;
-  rr = rr / (1 + rr);
-  gg = gg / (1 + gg);
-  bb = bb / (1 + bb);
-  rr = powf(rr, 0.4545f);
-  gg = powf(gg, 0.4545f);
-  bb = powf(bb, 0.4545f);
-  uint32_t R = (uint32_t)(rr * 255), G = (uint32_t)(gg * 255),
-           B = (uint32_t)(bb * 255);
-  if (R > 255)
-    R = 255;
-  if (G > 255)
-    G = 255;
-  if (B > 255)
-    B = 255;
-  pixel_cb(x, y, (R << 16) | (G << 8) | B);
+  int idx = y * w + x;
+  uint16_t avg = tone_to_history565(sp, pixel_history[idx], (uint32_t)frame_count);
+  pixel_history[idx] = avg;
+  if (pixel_cb) pixel_cb(x, y, rgb565_to_rgb888(avg));
 
   current_x++;
   if (current_x >= w) {
     current_x = 0;
     current_y++;
   }
-  pixel_accum_r = pixel_accum_g = pixel_accum_b = 0.0f;
-  pixel_accum_count = 0;
   int done = 0;
   if (current_y >= h) {
     current_y = 0;
@@ -696,3 +710,11 @@ int render_step(pixel_callback_t pixel_cb) {
 }
 
 int get_render_progress(void) { return render_progress; }
+
+uint16_t render_get_pixel565(int x, int y) {
+  if (x < 0 || x >= RENDER_WIDTH || y < 0 || y >= RENDER_HEIGHT)
+    return 0;
+  return pixel_history[y * RENDER_WIDTH + x];
+}
+
+int render_get_frame_count(void) { return frame_count; }

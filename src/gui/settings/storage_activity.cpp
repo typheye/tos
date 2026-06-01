@@ -15,7 +15,7 @@ extern TSDIO boardSDIO;
 
 static bool sd_present = false;
 static uint32_t sd_cap_kb = 0;
-static int sd_used_pct = 0;
+static int sd_free_pct = 0;
 static uint32_t builtin_cap_kb = 1024; // 1MB flash
 static int builtin_used_pct = 0;
 
@@ -45,7 +45,9 @@ static void draw_card(int idx, int sel, int cy, const char *text) {
   PD_SetColor(txt_c); PD_DrawString(26, cy + 2, text);
 }
 
-static void draw_progress(int x, int y, int w, int h, int pct) {
+static void draw_progress(int x, int y, int w, int h, int pct, const char *label) {
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
   PD_SetColor(TOS_CARD_BG); PD_SetFill(true);
   PD_DrawRect(x, y, w, h);
   int fill_w = pct > 0 ? (w - 4) * pct / 100 : 0;
@@ -53,7 +55,7 @@ static void draw_progress(int x, int y, int w, int h, int pct) {
   PD_SetFill(false);
   PD_SetColor(LV_BORDER); PD_DrawRect(x, y, w, h);
   PD_SetFont(FONT_ASCII_16); PD_SetColor(TOS_TEXT);
-  char buf[16]; snprintf(buf, sizeof(buf), "Used: %d%%", pct);
+  char buf[16]; snprintf(buf, sizeof(buf), "%s: %d%%", label, pct);
   PD_DrawStringCentered(x, y, w, h, buf);
 }
 
@@ -65,10 +67,10 @@ static const char *fmt_size(uint32_t kb) {
   return buf;
 }
 
-// ============ Get used % from FATFS ============
+// ============ Get free % from FATFS ============
 
-static bool get_fs_info(const char *path, int *used_pct, uint32_t *total_kb) {
-  *used_pct = 0; *total_kb = 0;
+static bool get_fs_info(const char *path, int *free_pct, uint32_t *total_kb) {
+  *free_pct = 0; *total_kb = 0;
   FATFS fs;
   FRESULT res = f_mount(&fs, path, 1);
   if (res != FR_OK) return false;
@@ -82,8 +84,13 @@ static bool get_fs_info(const char *path, int *used_pct, uint32_t *total_kb) {
   DWORD sec_per_cluster = fs_ptr->csize;
   if (total_clusters == 0) { f_mount(NULL, path, 0); return false; }
 
-  *total_kb = (uint32_t)total_clusters * sec_per_cluster / 2; // 512B sectors → KB
-  *used_pct = (int)((total_clusters - free_clusters) * 100 / total_clusters);
+  uint64_t total_kb64 = ((uint64_t)total_clusters * (uint64_t)sec_per_cluster) / 2U;
+  if (total_kb64 > 0xFFFFFFFFULL) total_kb64 = 0xFFFFFFFFULL;
+  *total_kb = (uint32_t)total_kb64;
+
+  *free_pct = (int)(((uint64_t)free_clusters * 100ULL + total_clusters / 2U) /
+                    (uint64_t)total_clusters);
+  if (*free_pct > 100) *free_pct = 100;
   f_mount(NULL, path, 0);
   return true;
 }
@@ -101,13 +108,14 @@ static void refresh(void) {
     sd_cap_kb = (uint32_t)info.capacity_mb * 1024;
     int pct; uint32_t total;
     if (get_fs_info("1:", &pct, &total)) {
-      sd_used_pct = pct;
+      if (total > 0) sd_cap_kb = total;
+      sd_free_pct = pct;
     } else {
-      sd_used_pct = 0;
+      sd_free_pct = 0;
     }
   } else {
     sd_cap_kb = 0;
-    sd_used_pct = 0;
+    sd_free_pct = 0;
   }
 }
 
@@ -129,7 +137,7 @@ static void draw_storage(int sel) {
     const char *sz = fmt_size(builtin_cap_kb);
     uint16_t sw = PD_GetStringWidth(sz);
     PD_DrawString(220 - sw, y, sz);
-    draw_progress(14, y + 22, 212, 22, builtin_used_pct);
+    draw_progress(14, y + 22, 212, 22, builtin_used_pct, "Used");
 
     // External Storage (only when card present)
     if (sd_present) {
@@ -139,7 +147,7 @@ static void draw_storage(int sel) {
       sz = fmt_size(sd_cap_kb);
       sw = PD_GetStringWidth(sz);
       PD_DrawString(220 - sw, y, sz);
-      draw_progress(14, y + 22, 212, 22, sd_used_pct);
+      draw_progress(14, y + 22, 212, 22, sd_free_pct, "Free");
     }
 
     PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
