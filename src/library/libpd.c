@@ -28,17 +28,24 @@ static CCMRAM uint16_t pd_char_buffer[1024]; // 2KB
 
 static char g_header_time[6] = "";
 
-// 帧缓冲区（直接使用 LCD 的缓冲区）
+// 帧缓冲区（指向 LCD tile buffer）
 static uint16_t *g_fb = NULL;
 static uint16_t g_fb_width = 0;
 static uint16_t g_fb_height = 0;
+static uint16_t g_tile_y = 0;
+static uint16_t g_tile_h = 0;
 
 // ==================== 内部函数 ====================
 
+static inline uint16_t *fb_get_ptr(int16_t x, int16_t y) {
+  if (!g_fb || x < 0 || x >= (int)g_fb_width || y < (int)g_tile_y || y >= (int)(g_tile_y + g_tile_h))
+    return NULL;
+  return &g_fb[(y - g_tile_y) * g_fb_width + x];
+}
+
 static inline void fb_set_pixel(int16_t x, int16_t y, uint16_t color_565) {
-  if (g_fb && x >= 0 && x < g_fb_width && y >= 0 && y < g_fb_height) {
-    g_fb[y * g_fb_width + x] = color_565;
-  }
+  uint16_t *p = fb_get_ptr(x, y);
+  if (p) *p = color_565;
 }
 
 static uint16_t color_to_565(uint32_t color) {
@@ -52,10 +59,17 @@ static uint16_t color_to_565(uint32_t color) {
 void PD_Init(void) {
   current_ascii_font = &ASCII_Font16;
 
-  // 获取 LCD 帧缓冲区
+  // 获取 LCD 分块帧缓冲区
   g_fb = LCD_GetFrameBuffer();
   g_fb_width = LCD_GetWidth();
-  g_fb_height = LCD_GetHeight();
+  g_fb_height = TILE_HEIGHT;
+  g_tile_y = LCD_GetTileY();
+  g_tile_h = LCD_GetTileH();
+}
+
+void PD_SetTileWindow(uint16_t y, uint16_t h) {
+  g_tile_y = y;
+  g_tile_h = h;
 }
 
 // ==================== 设置函数 ====================
@@ -116,7 +130,7 @@ void PD_DrawRect(int16_t x, int16_t y, int16_t w, int16_t h) {
 void PD_FillScreen(uint32_t color) {
   if (g_fb) {
     uint16_t color_565 = color_to_565(color);
-    for (uint32_t i = 0; i < g_fb_width * g_fb_height; i++) {
+    for (uint32_t i = 0; i < g_fb_width * g_tile_h; i++) {
       g_fb[i] = color_565;
     }
   }
@@ -199,14 +213,14 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
       if (disChar & 0x01) {
         buffer[i] = color_to_565(pd_color);
       } else {
-        // 读取原帧缓冲区的内容，保持背景不变
+        // 读取原帧缓冲区的内容，保持背景不变（tile-relative）
         uint8_t col = i % width;
         uint8_t row = i / width;
         int16_t px = x + col;
         int16_t py = y + row;
-        if (row < height && col < width &&
-            px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
-          buffer[i] = g_fb[py * g_fb_width + px];
+        uint16_t *bg = fb_get_ptr(px, py);
+        if (row < height && col < width && bg) {
+          buffer[i] = *bg;
         } else {
           buffer[i] = 0x0000;
         }
@@ -221,15 +235,15 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
     }
   }
 
-  // 写入帧缓冲区
+  // 写入帧缓冲区（tile-relative）
   for (uint16_t idx = 0; idx < width * height; idx++) {
     uint8_t col = idx % width;
     uint8_t row = idx / width;
     int16_t px = x + col;
     int16_t py = y + row;
-    if (row < height && col < width &&
-        px >= 0 && px < g_fb_width && py >= 0 && py < g_fb_height) {
-      g_fb[py * g_fb_width + px] = buffer[idx];
+    uint16_t *dst = fb_get_ptr(px, py);
+    if (row < height && col < width && dst) {
+      *dst = buffer[idx];
     }
   }
 }
@@ -535,8 +549,9 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
       }
     }
 
-    // 配对填充
-    if (y >= 0 && y < g_fb_height) {
+    // 配对填充（tile-relative）
+    if (y >= (int)g_tile_y && y < (int)(g_tile_y + g_tile_h)) {
+      uint16_t *row_start = &g_fb[(y - g_tile_y) * g_fb_width];
       for (uint16_t k = 0; k + 1 < int_count; k += 2) {
       int16_t x0 = intersections[k];
       int16_t x1 = intersections[k + 1];
@@ -547,7 +562,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
       if (x0 > x1)
         continue;
       for (int16_t x = x0; x <= x1; x++) {
-        g_fb[y * g_fb_width + x] = color_565;
+        row_start[x] = color_565;
       }
       }
     }
@@ -814,9 +829,9 @@ static uint16_t blend_rgb565(uint16_t color1, uint16_t color2, float ratio) {
   return (r << 11) | (g << 5) | b;
 }
 
-// ==================== 淡入动画（不等待，立即返回）====================
+// ==================== 淡入动画（非阻塞，分块渲染） ====================
 /**
- * @brief 显示启动 Logo 淡入动画（非阻塞）
+ * @brief 显示启动 Logo 淡入动画（非阻塞，分块无频闪）
  * @param fade_in_ms 淡入时长(毫秒)
  * @note 调用后立即返回，动画在后台进行
  */
@@ -843,16 +858,25 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   uint32_t steps = 30;
   uint32_t step_delay = fade_in_ms / steps;
 
-  // 淡入动画
+  // 淡入动画（分块渲染）
   for (uint32_t s = 0; s <= steps; s++) {
     float t = (float)s / steps;
     float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
 
-    for (uint32_t i = 0; i < splash_total_pixels; i++) {
-      g_fb[i] = blend_rgb565(0x0000, logo_data[i], ratio);
-    }
+    for (uint16_t ty = 0; ty < LOGO_HEIGHT; ty += TILE_HEIGHT) {
+      uint16_t h = (ty + TILE_HEIGHT <= LOGO_HEIGHT) ? TILE_HEIGHT : LOGO_HEIGHT - ty;
+      LCD_BeginTileRender(ty, h);
+      g_fb = LCD_GetFrameBuffer();
+      g_tile_y = ty;
+      g_tile_h = h;
 
-    LCD_Flush();
+      for (uint32_t i = 0; i < (uint32_t)LOGO_WIDTH * h; i++) {
+        uint32_t src_idx = (uint32_t)ty * LOGO_WIDTH + i;
+        g_fb[i] = blend_rgb565(0x0000, logo_data[src_idx], ratio);
+      }
+
+      LCD_EndTileRender();
+    }
 
     // 检查是否被中断
     if (splash_fade_out_requested) {
@@ -867,16 +891,23 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
 
   // 确保完全显示
   if (!splash_fade_out_requested) {
-    memcpy(g_fb, logo_data, splash_total_pixels * sizeof(uint16_t));
-    LCD_Flush();
+    for (uint16_t ty = 0; ty < LOGO_HEIGHT; ty += TILE_HEIGHT) {
+      uint16_t h = (ty + TILE_HEIGHT <= LOGO_HEIGHT) ? TILE_HEIGHT : LOGO_HEIGHT - ty;
+      LCD_BeginTileRender(ty, h);
+      g_fb = LCD_GetFrameBuffer();
+      g_tile_y = ty;
+      g_tile_h = h;
+      memcpy(g_fb, &logo_data[ty * LOGO_WIDTH], LOGO_WIDTH * h * sizeof(uint16_t));
+      LCD_EndTileRender();
+    }
   }
 
   LOG_I("PD", "Fade in complete, waiting for finish signal");
 }
 
-// ==================== 主动结束并淡出 ====================
+// ==================== 主动结束并淡出（分块渲染） ====================
 /**
- * @brief 结束启动画面，执行淡出动画
+ * @brief 结束启动画面，执行淡出动画（分块无频闪）
  * @param fade_out_ms 淡出时长(毫秒)
  */
 void PD_SplashFinish(uint32_t fade_out_ms) {
@@ -892,25 +923,44 @@ void PD_SplashFinish(uint32_t fade_out_ms) {
   uint32_t steps = 10;
   uint32_t step_delay = fade_out_ms / steps;
 
-  // 淡出动画
+  // 淡出动画（分块渲染）
   for (uint32_t s = 0; s <= steps; s++) {
     float t = (float)s / steps;
     float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
 
-    for (uint32_t i = 0; i < splash_total_pixels; i++) {
-      g_fb[i] = blend_rgb565(logo_data[i], 0x0000, ratio);
-    }
+    for (uint16_t ty = 0; ty < LOGO_HEIGHT; ty += TILE_HEIGHT) {
+      uint16_t h = (ty + TILE_HEIGHT <= LOGO_HEIGHT) ? TILE_HEIGHT : LOGO_HEIGHT - ty;
+      LCD_BeginTileRender(ty, h);
+      g_fb = LCD_GetFrameBuffer();
+      g_tile_y = ty;
+      g_tile_h = h;
 
-    LCD_Flush();
+      for (uint32_t i = 0; i < (uint32_t)LOGO_WIDTH * h; i++) {
+        uint32_t src_idx = (uint32_t)ty * LOGO_WIDTH + i;
+        g_fb[i] = blend_rgb565(logo_data[src_idx], 0x0000, ratio);
+      }
+
+      LCD_EndTileRender();
+    }
 
     if (step_delay > 0) {
       HAL_Delay(step_delay);
     }
   }
 
-  // 清屏
-  PD_FillScreen(LCD_COLOR_BLACK);
-  LCD_Flush();
+  // 清屏（分块）
+  for (uint16_t ty = 0; ty < LCD_HEIGHT; ty += TILE_HEIGHT) {
+    uint16_t h = (ty + TILE_HEIGHT <= LCD_HEIGHT) ? TILE_HEIGHT : LCD_HEIGHT - ty;
+    LCD_BeginTileRender(ty, h);
+    g_fb = LCD_GetFrameBuffer();
+    g_tile_y = ty;
+    g_tile_h = h;
+    uint16_t black = color_to_565(LCD_COLOR_BLACK);
+    for (uint32_t i = 0; i < (uint32_t)LCD_WIDTH * h; i++) {
+      g_fb[i] = black;
+    }
+    LCD_EndTileRender();
+  }
 
   splash_in_progress = 0;
   LOG_I("PD", "Fade out complete, splash finished");

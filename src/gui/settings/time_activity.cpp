@@ -73,14 +73,15 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 static bool do_sync(void) {
   /* Show "Syncing..." — alert-style (frame + left-aligned msg) */
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  PD_Init(); PD_FillScreen(TOS_BG);
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, "TIME");
-  PD_SetColor(TOS_TEXT);
-  PD_DrawString(26, 33, "Syncing...");
-  LCD_Flush();
+  LCD_FLUSH({
+    PD_Init(); PD_FillScreen(TOS_BG);
+    PD_DrawFrame();
+    PD_SetFont(FONT_ASCII_16);
+    PD_SetColor(TOS_ACCENT);
+    PD_DrawString(22, 5, "TIME");
+    PD_SetColor(TOS_TEXT);
+    PD_DrawString(26, 33, "Syncing...");
+  });
 
   uint32_t start = HAL_GetTick();
   bool ok = SysTime_Sync();
@@ -187,26 +188,27 @@ void time_activity_run(void) {
       snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d",
                t.hours, t.minutes, t.seconds);
 
-      draw_frame("TIME");
-      PD_SetFont(FONT_ASCII_16);
       bool sync_on = auto_sync;
-      for (int i = 0; i < 6; i++) {
-        int cy = 33 + i * 25;
-        switch (i) {
-        case 0: draw_card(0, sel, cy, "00 Return", false); break;
-        case 1: { char b[32]; snprintf(b,sizeof(b),"01 Auto Sync");
-          draw_card_r(1,sel,cy,b,auto_sync?"ON":"OFF",editing&&edit_sel==1,false); break; }
-        case 2: draw_card(2,sel,cy,"   Sync Now",!sync_on); break;
-        case 3: { char b[32]; snprintf(b,sizeof(b),"   Date");
-          draw_card_r(3,sel,cy,b,date_buf,false,sync_on); break; }
-        case 4: { char b[32]; snprintf(b,sizeof(b),"   Time");
-          draw_card_r(4,sel,cy,b,time_buf,false,sync_on); break; }
-        case 5: { char b[32]; snprintf(b,sizeof(b),"02 Style");
-          draw_card_r(5,sel,cy,b,style_24h?"24H":"12H",editing&&edit_sel==5,false); break; }
+      LCD_FLUSH({
+        draw_frame("TIME");
+        PD_SetFont(FONT_ASCII_16);
+        for (int i = 0; i < 6; i++) {
+          int cy = 33 + i * 25;
+          switch (i) {
+          case 0: draw_card(0, sel, cy, "00 Return", false); break;
+          case 1: { char b[32]; snprintf(b,sizeof(b),"01 Auto Sync");
+            draw_card_r(1,sel,cy,b,auto_sync?"ON":"OFF",editing&&edit_sel==1,false); break; }
+          case 2: draw_card(2,sel,cy,"   Sync Now",!sync_on); break;
+          case 3: { char b[32]; snprintf(b,sizeof(b),"   Date");
+            draw_card_r(3,sel,cy,b,date_buf,false,sync_on); break; }
+          case 4: { char b[32]; snprintf(b,sizeof(b),"   Time");
+            draw_card_r(4,sel,cy,b,time_buf,false,sync_on); break; }
+          case 5: { char b[32]; snprintf(b,sizeof(b),"02 Style");
+            draw_card_r(5,sel,cy,b,style_24h?"24H":"12H",editing&&edit_sel==5,false); break; }
+          }
         }
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
     HAL_Delay(10);
   }

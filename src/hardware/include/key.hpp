@@ -26,7 +26,11 @@ private:
   bool _initialized;
 };
 
+#define KEY_DEBOUNCE_CNT 2  // 连续 N 次采样确认（2=快速响应）
+
 // 按键类（碰撞开关、普通按键都用这个）
+#define KEY_SCAN_INTERVAL_MS 1U
+
 class Key {
 public:
   Key(GPIO_TypeDef *port, uint16_t pin, bool inverted = false);
@@ -38,6 +42,9 @@ public:
   void setLongPressTime(uint32_t ms);
 
 private:
+  bool rawPressed(void) const;
+  void latchEvent(KeyState_t event);
+
   GPIO_TypeDef *_port;
   uint16_t _pin;
   bool _inverted; // true: SET=按下, false: RESET=按下
@@ -45,6 +52,9 @@ private:
   bool _long_press_triggered;
   uint32_t _press_start_time;
   uint32_t _long_press_time;
+  uint32_t _last_sample_time;
+  uint8_t _debounce;     // 消抖计数器
+  KeyState_t _event;
   bool _initialized;
 };
 

@@ -27,45 +27,46 @@ static const char *tos_m[TOS_ITEMS] = {"00 Return", "01 Settings",
 
 static void draw_menu(const char *title, const char **items, int count,
                       int sel) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t lt = 0;
-  if (HAL_GetTick() - lt > 1000) {
-    lt = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-  int v = count < 7 ? count : 7;
-  int st = sel - v / 2;
-  if (st < 0)
-    st = 0;
-  if (st + v > count)
-    st = count - v;
-  for (int i = 0; i < v; i++) {
-    int idx = st + i;
-    if (idx >= count)
-      break;
-    int cy = 33 + i * 25;
-    if (idx == sel) {
-      PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
-      PD_SetColor(TOS_TEXT);
-    } else {
-      PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_CARD_BG);
-      PD_SetColor(TOS_TEXT_SEC);
+  LCD_FLUSH({
+    PD_Init();
+    PD_FillScreen(TOS_BG);
+    extern TRTC boardTRTC;
+    static uint32_t lt = 0;
+    if (HAL_GetTick() - lt > 1000) {
+      lt = HAL_GetTick();
+      Time_t t;
+      Date_t d;
+      boardTRTC.getDateTime(&t, &d);
+      char ts[8];
+      time_fmt(ts, sizeof(ts), t.hours, t.minutes);
+      PD_SetHeaderTime(ts);
     }
-    PD_DrawString(26, cy + 2, items[idx]);
-  }
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-  LCD_Flush();
+    PD_DrawFrame();
+    PD_SetFont(FONT_ASCII_16);
+    PD_SetColor(TOS_ACCENT);
+    PD_DrawString(22, 5, title);
+    int v = count < 7 ? count : 7;
+    int st = sel - v / 2;
+    if (st < 0)
+      st = 0;
+    if (st + v > count)
+      st = count - v;
+    for (int i = 0; i < v; i++) {
+      int idx = st + i;
+      if (idx >= count)
+        break;
+      int cy = 33 + i * 25;
+      if (idx == sel) {
+        PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
+        PD_SetColor(TOS_TEXT);
+      } else {
+        PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_CARD_BG);
+        PD_SetColor(TOS_TEXT_SEC);
+      }
+      PD_DrawString(26, cy + 2, items[idx]);
+    }
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 static int menu_loop(const char *title, const char **items, int count,
@@ -97,7 +98,7 @@ static int menu_loop(const char *title, const char **items, int count,
       lu = HAL_GetTick();
       draw_menu(title, items, count, sel);
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 

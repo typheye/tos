@@ -15,6 +15,8 @@
 static CCMRAM uint16_t *g_fb = NULL;
 static CCMRAM uint16_t g_w = 0;
 static CCMRAM uint16_t g_h = 0;
+static uint16_t g_tile_y = 0;
+static uint16_t g_tile_h = 0;
 
 static uint16_t rgb565(uint32_t c) {
   return (uint16_t)(((c >> 19) << 11) | (((c >> 10) & 0x3F) << 5) | ((c >> 3) & 0x1F));
@@ -35,33 +37,53 @@ static uint32_t mix_rgb(uint32_t a, uint32_t b, float t) {
   return ((uint32_t)r << 16) | ((uint32_t)g << 8) | bl;
 }
 
-#define FB(x,y)  g_fb[(y) * g_w + (x)]
+// Tile-relative pixel access: returns pointer or NULL if outside current tile
+static inline uint16_t *emo_px_ptr(int16_t x, int16_t y) {
+  if (!g_fb || x < 0 || x >= (int)g_w || y < (int)g_tile_y || y >= (int)(g_tile_y + g_tile_h))
+    return NULL;
+  return &g_fb[(y - g_tile_y) * g_w + x];
+}
+
+#define FB(x,y) g_fb[((y) - g_tile_y) * g_w + (x)]
 
 static void set_px(int16_t x, int16_t y, uint32_t color) {
-  if (!g_fb) return;
-  if (x < 0 || y < 0 || x >= (int16_t)g_w || y >= (int16_t)g_h) return;
-  FB(x, y) = rgb565(color);
+  uint16_t *p = emo_px_ptr(x, y);
+  if (p) *p = rgb565(color);
+}
+
+static inline int tile_intersects_y(int16_t y0, int16_t y1) {
+  return y1 >= (int16_t)g_tile_y && y0 < (int16_t)(g_tile_y + g_tile_h);
 }
 
 void EMO_Init(void) {
   g_fb = LCD_GetFrameBuffer();
   g_w  = LCD_GetWidth();
-  g_h  = LCD_GetHeight();
+  g_h  = TILE_HEIGHT;
+  g_tile_y = LCD_GetTileY();
+  g_tile_h = LCD_GetTileH();
+}
+
+void EMO_SetTileWindow(uint16_t y, uint16_t h) {
+  g_tile_y = y;
+  g_tile_h = h;
 }
 
 void EMO_FillScreen(uint32_t color) {
   if (!g_fb) return;
   uint16_t c = rgb565(color);
-  uint32_t n = (uint32_t)g_w * g_h;
+  uint32_t n = (uint32_t)g_w * g_tile_h;
   for (uint32_t i = 0; i < n; i++) g_fb[i] = c;
 }
 
 void EMO_FillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color) {
   if (!g_fb) return;
+  if (w <= 0 || h <= 0 || !tile_intersects_y(y, (int16_t)(y + h - 1))) return;
+  // Clip Y to current tile
+  if (y < (int)g_tile_y) { h -= (int)(g_tile_y - y); y = g_tile_y; }
+  if (y + h > (int)(g_tile_y + g_tile_h)) h = (int)(g_tile_y + g_tile_h) - y;
+  // Clip X
   if (x < 0) { w += x; x = 0; }
-  if (y < 0) { h += y; y = 0; }
   if (x + w > g_w) w = g_w - x;
-  if (y + h > g_h) h = g_h - y;
   if (w <= 0 || h <= 0) return;
   uint16_t c = rgb565(color);
   for (int16_t j = 0; j < h; j++)
@@ -71,11 +93,12 @@ void EMO_FillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color) {
 
 void EMO_FillCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color) {
   if (!g_fb || r <= 0) return;
+  if (!tile_intersects_y((int16_t)(cy - r), (int16_t)(cy + r))) return;
   uint16_t c = rgb565(color);
   int16_t r2 = r * r;
   for (int16_t dy = -r; dy <= r; dy++) {
     int16_t sy = cy + dy;
-    if (sy < 0 || sy >= g_h) continue;
+    if (sy < (int)g_tile_y || sy >= (int)(g_tile_y + g_tile_h)) continue;
     int16_t dx = (int16_t)sqrtf((float)(r2 - dy * dy));
     int16_t x0 = cx - dx; if (x0 < 0) x0 = 0;
     int16_t x1 = cx + dx; if (x1 >= g_w) x1 = g_w - 1;
@@ -85,6 +108,7 @@ void EMO_FillCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color) {
 
 void EMO_DrawCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color) {
   if (!g_fb || r <= 0) return;
+  if (!tile_intersects_y((int16_t)(cy - r), (int16_t)(cy + r))) return;
   int16_t x = r, y = 0, err = 0;
   while (x >= y) {
     set_px(cx + x, cy + y, color); set_px(cx + y, cy + x, color);
@@ -98,11 +122,12 @@ void EMO_DrawCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color) {
 
 void EMO_DrawHLine(int16_t x, int16_t y, int16_t len, int16_t t, uint32_t color) {
   if (!g_fb || len <= 0 || t <= 0) return;
+  if (!tile_intersects_y((int16_t)(y - t / 2), (int16_t)(y + (t + 1) / 2))) return;
   uint16_t c = rgb565(color);
   int16_t y0 = y - t / 2;
   for (int16_t dy = 0; dy < t; dy++) {
     int16_t sy = y0 + dy;
-    if (sy < 0 || sy >= g_h) continue;
+    if (sy < (int)g_tile_y || sy >= (int)(g_tile_y + g_tile_h)) continue;
     for (int16_t dx = 0; dx < len; dx++) {
       int16_t sx = x + dx;
       if (sx >= 0 && sx < g_w) FB(sx, sy) = c;
@@ -112,6 +137,7 @@ void EMO_DrawHLine(int16_t x, int16_t y, int16_t len, int16_t t, uint32_t color)
 
 void EMO_DrawThickArc(int16_t cx, int16_t cy, int16_t r, float s_deg, float e_deg, int16_t t, uint32_t color) {
   if (!g_fb || r <= 0 || t <= 0) return;
+  if (!tile_intersects_y((int16_t)(cy - r - t), (int16_t)(cy + r + t))) return;
   float sr = s_deg * M_PI / 180.0f;
   float er = e_deg * M_PI / 180.0f;
   if (er < sr) er += 2.0f * M_PI;
@@ -141,6 +167,9 @@ static void draw_sparkle(int16_t x, int16_t y, int16_t s, uint32_t color) {
 
 static void draw_soft_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
                            int16_t t, uint32_t color) {
+  int16_t min_y = y0 < y1 ? y0 : y1;
+  int16_t max_y = y0 > y1 ? y0 : y1;
+  if (!tile_intersects_y((int16_t)(min_y - t), (int16_t)(max_y + t))) return;
   int16_t dx = (int16_t)abs(x1 - x0);
   int16_t sx = x0 < x1 ? 1 : -1;
   int16_t dy = (int16_t)-abs(y1 - y0);
@@ -243,9 +272,9 @@ void EMO_DrawFace(float blink_l, float blink_r, float mouth_open,
                           cheek * 0.45f + mouth_open * 0.12f + (is_napping ? 0.18f : 0.0f));
   if (cheek > 0.02f || mouth_open > 0.18f || is_napping) {
     EMO_FillRect(0, 0, g_w, 14, glow);
-    EMO_FillRect(0, g_h - 16, g_w, 16, glow);
-    EMO_FillRect(0, 0, 10, g_h, glow);
-    EMO_FillRect(g_w - 10, 0, 10, g_h, glow);
+    EMO_FillRect(0, LCD_HEIGHT - 16, g_w, 16, glow);
+    EMO_FillRect(0, 0, 10, LCD_HEIGHT, glow);
+    EMO_FillRect(g_w - 10, 0, 10, LCD_HEIGHT, glow);
   }
 
   // --- Eyebrows ---

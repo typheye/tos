@@ -25,6 +25,7 @@ extern "C" {
 #define EMO_MOUTH_R      35
 
 void EMO_Init(void);
+void EMO_SetTileWindow(uint16_t y, uint16_t h);
 void EMO_FillScreen(uint32_t color);
 void EMO_FillCircle(int16_t cx, int16_t cy, int16_t r, uint32_t color);
 void EMO_FillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color);

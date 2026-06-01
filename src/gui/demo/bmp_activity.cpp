@@ -92,9 +92,11 @@ static void chart_line(float*d,int x,int y,int w,int h,float mx,float mn,uint32_
 void bmp180_display_activity(void){
   if(!boardBMP180.isInitialized()){boardBMP180.init();}
   if(!boardBMP180.isInitialized()){
-    PD_FillScreen(LV_BG_DARK);
-    PD_SetFont(FONT_ASCII_16);PD_SetColor(LV_ERROR);
-    PD_DrawString(20,80,"BMP180 Init Failed!");LCD_Flush();HAL_Delay(2000);return;
+    LCD_FLUSH({
+      PD_FillScreen(LV_BG_DARK);
+      PD_SetFont(FONT_ASCII_16);PD_SetColor(LV_ERROR);
+      PD_DrawString(20,80,"BMP180 Init Failed!");
+    });HAL_Delay(2000);return;
   }
   PD_FillScreen(LV_BG_DARK);
   uint32_t lu=HAL_GetTick();
@@ -104,34 +106,35 @@ void bmp180_display_activity(void){
     if(HAL_GetTick()-lu>200){lu=HAL_GetTick();
       BMP180_Data_t d=boardBMP180.readData(BMP180_MODE_STD);
       float alt=boardBMP180.calcAltitude(d.pressure,reference_pressure)-altitude_offset;
-      PD_FillScreen(LV_BG_DARK);bar("05");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);bar("05");
 
-      PD_DrawAngledCard(8,44,224,100,6,TOS_CARD_BG);
-      char f[16],db[64];PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(TOS_GREY);PD_DrawString(16,54,"Temperature");
-      float_to_str(d.temperature,f);sprintf(db,"%s C",f);
-      PD_SetColor(TOS_TEXT);PD_DrawString(152,54,db);
+        PD_DrawAngledCard(8,44,224,100,6,TOS_CARD_BG);
+        char f[16],db[64];PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(TOS_GREY);PD_DrawString(16,54,"Temperature");
+        float_to_str(d.temperature,f);sprintf(db,"%s C",f);
+        PD_SetColor(TOS_TEXT);PD_DrawString(152,54,db);
 
-      PD_SetColor(TOS_GREY);PD_DrawString(16,76,"Pressure");
-      float_to_str(d.pressure,f);sprintf(db,"%s hPa",f);
-      PD_SetColor(TOS_TEXT);PD_DrawString(152,76,db);
+        PD_SetColor(TOS_GREY);PD_DrawString(16,76,"Pressure");
+        float_to_str(d.pressure,f);sprintf(db,"%s hPa",f);
+        PD_SetColor(TOS_TEXT);PD_DrawString(152,76,db);
 
-      PD_SetColor(TOS_GREY);PD_DrawString(16,98,"Altitude");
-      float_to_str(alt,f);sprintf(db,"%s m",f);
-      PD_SetColor(TOS_ACCENT);PD_DrawString(152,98,db);
+        PD_SetColor(TOS_GREY);PD_DrawString(16,98,"Altitude");
+        float_to_str(alt,f);sprintf(db,"%s m",f);
+        PD_SetColor(TOS_ACCENT);PD_DrawString(152,98,db);
 
-      PD_SetFont(FONT_ASCII_12);PD_SetColor(TOS_GREY);
-      float_to_str(reference_pressure,f);sprintf(db,"Ref: %s hPa",f);
-      PD_DrawString(16,126,db);
+        PD_SetFont(FONT_ASCII_12);PD_SetColor(TOS_GREY);
+        float_to_str(reference_pressure,f);sprintf(db,"Ref: %s hPa",f);
+        PD_DrawString(16,126,db);
 
-      PD_DrawAngledCard(8,152,224,56,6,TOS_CARD_BG);
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(TOS_GREY);PD_DrawString(16,162,"Ref. Pressure");
-      float_to_str(reference_pressure,f);sprintf(db,"%s hPa",f);
-      PD_SetColor(TOS_TEXT);PD_DrawString(140,162,db);
+        PD_DrawAngledCard(8,152,224,56,6,TOS_CARD_BG);
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(TOS_GREY);PD_DrawString(16,162,"Ref. Pressure");
+        float_to_str(reference_pressure,f);sprintf(db,"%s hPa",f);
+        PD_SetColor(TOS_TEXT);PD_DrawString(140,162,db);
 
-      bbar("EXIT",NULL,NULL);
-      LCD_Flush();
+        bbar("EXIT",NULL,NULL);
+      });
     }
     HAL_Delay(50);
   }
@@ -154,23 +157,24 @@ void bmp180_chart_activity(void){
     BMP180_Data_t d=boardBMP180.readData(BMP180_MODE_STD);
     update_chart(d.temperature,d.pressure);
     if(HAL_GetTick()-lu>50){lu=HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      char t[32];snprintf(t,sizeof(t),chart_mode?"Pressure":"Temperature");bar(t);
-      int cx=10,cy=44,cw=220,ch=100;
-      if(chart_mode==0){chart_axes(cx,cy,cw,ch,temp_max,temp_min,"C");chart_line(chart_temp,cx,cy,cw,ch,temp_max,temp_min,LV_WARNING);}
-      else{chart_axes(cx,cy,cw,ch,press_max,press_min,"hPa");chart_line(chart_press,cx,cy,cw,ch,press_max,press_min,LV_ACCENT);}
-      PD_SetFont(FONT_ASCII_16);PD_SetColor(LV_TEXT_PRIMARY);
-      char db[64],f[16];
-      float_to_str(chart_mode?d.pressure:d.temperature,f);
-      snprintf(db,sizeof(db),"%s %s",f,chart_mode?"hPa":"C");
-      PD_DrawString(14,152,db);
-      PD_SetFont(FONT_ASCII_12);PD_SetColor(LV_TEXT_HINT);
-      snprintf(db,sizeof(db),"Range:%.0f-%.0f",chart_mode?press_min:temp_min,chart_mode?press_max:temp_max);
-      PD_DrawString(14,172,db);
-      PD_SetColor(LV_PRIMARY);PD_SetFill(true);
-      PD_DrawRoundRect(14,190,chart_mode?100:100,6,3);PD_SetFill(false);
-      bbar("EXIT",NULL,"UP/DOWN");
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        char t[32];snprintf(t,sizeof(t),chart_mode?"Pressure":"Temperature");bar(t);
+        int cx=10,cy=44,cw=220,ch=100;
+        if(chart_mode==0){chart_axes(cx,cy,cw,ch,temp_max,temp_min,"C");chart_line(chart_temp,cx,cy,cw,ch,temp_max,temp_min,LV_WARNING);}
+        else{chart_axes(cx,cy,cw,ch,press_max,press_min,"hPa");chart_line(chart_press,cx,cy,cw,ch,press_max,press_min,LV_ACCENT);}
+        PD_SetFont(FONT_ASCII_16);PD_SetColor(LV_TEXT_PRIMARY);
+        char db[64],f[16];
+        float_to_str(chart_mode?d.pressure:d.temperature,f);
+        snprintf(db,sizeof(db),"%s %s",f,chart_mode?"hPa":"C");
+        PD_DrawString(14,152,db);
+        PD_SetFont(FONT_ASCII_12);PD_SetColor(LV_TEXT_HINT);
+        snprintf(db,sizeof(db),"Range:%.0f-%.0f",chart_mode?press_min:temp_min,chart_mode?press_max:temp_max);
+        PD_DrawString(14,172,db);
+        PD_SetColor(LV_PRIMARY);PD_SetFill(true);
+        PD_DrawRoundRect(14,190,chart_mode?100:100,6,3);PD_SetFill(false);
+        bbar("EXIT",NULL,"UP/DOWN");
+      });
     }HAL_Delay(30);
   }
 }
@@ -189,24 +193,25 @@ void bmp180_calibrate_activity(void){
     if(HAL_GetTick()-lu>100){lu=HAL_GetTick();
       BMP180_Data_t d=boardBMP180.readData(BMP180_MODE_STD);
       float ca=boardBMP180.calcAltitude(d.pressure,nr);
-      PD_FillScreen(LV_BG_DARK);bar("Calibrate");
-      PD_SetFont(FONT_ASCII_16);
-      PD_DrawAngledCard(8,44,224,70,6,TOS_CARD_BG);
-      if(st==0){PD_SetColor(LV_WARNING);PD_DrawString(16,54,"Set MIN (rotate CCW)");}
-      else{PD_SetColor(LV_SUCCESS);PD_DrawString(16,54,"Set MAX (rotate CW)");}
-      char db[64],f[16];PD_SetColor(LV_TEXT_PRIMARY);
-      float_to_str(d.pressure,f);snprintf(db,sizeof(db),"Current: %s hPa",f);
-      PD_DrawString(16,78,db);
-      PD_DrawAngledCard(8,122,224,56,6,TOS_CARD_BG);
-      PD_SetColor(LV_ACCENT);
-      if(st==0)PD_DrawString(16,132,"Enter -> Set Reference");
-      else PD_DrawString(16,132,"Enter -> Save");
-      float_to_str(ca,f);
-      PD_SetFont(FONT_ASCII_12);PD_SetColor(LV_TEXT_HINT);
-      snprintf(db,sizeof(db),"Altitude: %s m",f);
-      PD_DrawString(16,155,db);
-      bbar("EXIT",NULL,NULL);
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);bar("Calibrate");
+        PD_SetFont(FONT_ASCII_16);
+        PD_DrawAngledCard(8,44,224,70,6,TOS_CARD_BG);
+        if(st==0){PD_SetColor(LV_WARNING);PD_DrawString(16,54,"Set MIN (rotate CCW)");}
+        else{PD_SetColor(LV_SUCCESS);PD_DrawString(16,54,"Set MAX (rotate CW)");}
+        char db[64],f[16];PD_SetColor(LV_TEXT_PRIMARY);
+        float_to_str(d.pressure,f);snprintf(db,sizeof(db),"Current: %s hPa",f);
+        PD_DrawString(16,78,db);
+        PD_DrawAngledCard(8,122,224,56,6,TOS_CARD_BG);
+        PD_SetColor(LV_ACCENT);
+        if(st==0)PD_DrawString(16,132,"Enter -> Set Reference");
+        else PD_DrawString(16,132,"Enter -> Save");
+        float_to_str(ca,f);
+        PD_SetFont(FONT_ASCII_12);PD_SetColor(LV_TEXT_HINT);
+        snprintf(db,sizeof(db),"Altitude: %s m",f);
+        PD_DrawString(16,155,db);
+        bbar("EXIT",NULL,NULL);
+      });
     }HAL_Delay(50);
   }
 }
@@ -221,9 +226,11 @@ void bmp180_activity(void){
     if(keyManager.collision_D0.getState()==KEY_PRESSED){if(menu_select>0)menu_select--;HAL_Delay(150);}
     uint8_t ce=(keyManager.btn_enter.getState()==KEY_PRESSED);
     if(ce&&!le){switch(menu_select){case 0:bmp180_display_activity();break;case 1:bmp180_chart_activity();break;case 2:bmp180_calibrate_activity();break;case 3:return;}PD_FillScreen(LV_BG_DARK);}le=ce;
-    if(HAL_GetTick()-lu>100){lu=HAL_GetTick();PD_FillScreen(LV_BG_DARK);bar("05");
+    if(HAL_GetTick()-lu>100){lu=HAL_GetTick();LCD_FLUSH({
+      PD_FillScreen(LV_BG_DARK);bar("05");
       PD_SetFont(FONT_ASCII_12);PD_SetColor(LV_TEXT_HINT);PD_DrawString(16,28,"Select Function:");
-      menu_cards(menu_select);bbar("ENTER",NULL,"UP/DOWN");LCD_Flush();
-    }HAL_Delay(20);
+      menu_cards(menu_select);bbar("ENTER",NULL,"UP/DOWN");
+    });
+    }HAL_Delay(1);
   }
 }

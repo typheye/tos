@@ -44,9 +44,25 @@ public:
 
   uint16_t rgb888_to_rgb565(uint32_t rgb888);
 
-  // 直接内存访问接口
+  // 分块帧缓冲接口
   uint16_t *getFrameBuffer(void);
-  void flush(void);
+  void beginTileRender(uint16_t y, uint16_t h);
+  void endTileRender(void);
+  void flushTiled(void (*render_cb)(void));
+
+  // C++ 模板版本：接受 lambda（支持捕获局部变量）
+  template <typename F>
+  void flushTiled(F &&render_cb) {
+    for (uint16_t y = 0; y < LCD_HEIGHT; y += TILE_HEIGHT) {
+      uint16_t h = (y + TILE_HEIGHT <= LCD_HEIGHT) ? TILE_HEIGHT : LCD_HEIGHT - y;
+      beginTileRender(y, h);
+      render_cb();
+      endTileRender();
+    }
+  }
+
+  // 全帧发送（启动画面用）
+  void flushFull(const uint16_t *data);
 
   // DMA 传输
   void drawDMA(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
@@ -56,14 +72,18 @@ public:
   void set_address(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
   void writeData(const uint8_t *data, uint32_t len);
 
+  uint16_t getTileY(void) const { return _tile_y; }
+  uint16_t getTileH(void) const { return _tile_h; }
+
 private:
   bool initialized;
   uint16_t current_color_565;
   uint16_t _rotation;
   uint16_t _brightness_pwm;
   bool _auto_brightness;
-  uint16_t *_framebuffer;
-  bool _use_framebuffer;
+  uint16_t _tile_y;
+  uint16_t _tile_h;
+  uint16_t _tile_buffer[LCD_WIDTH * TILE_HEIGHT];
 
   void write_cmd(uint8_t cmd);
   void write_data(uint8_t data);
@@ -74,5 +94,9 @@ private:
 };
 
 extern LCD boardLCD;
+
+// 便捷宏：自动捕获局部变量，一行完成迁移
+// 用法: LCD_FLUSH({ draw_stuff(); });
+#define LCD_FLUSH(...) boardLCD.flushTiled([&]() { __VA_ARGS__ })
 
 #endif

@@ -161,30 +161,31 @@ void sd_card_activity_gui(void) {
               }
               if (HAL_GetTick() - lfu > 200) {
                 lfu = HAL_GetTick();
-                PD_FillScreen(LV_BG_DARK);
-                bar("02");
+                LCD_FLUSH({
+                  PD_FillScreen(LV_BG_DARK);
+                  bar("02");
 
-                PD_DrawAngledCard(8, 44, 224, 160, 6, TOS_CARD_BG);
-                PD_SetFont(FONT_ASCII_16);
-                int y_pos = 52;
-                for (uint32_t i = 0; i < file_count && i < 14; i++) {
-                  if (y_pos > 195) break;
-                  PD_SetColor((i % 2 == 0) ? LV_TEXT_PRIMARY : LV_ACCENT);
-                  char display_name[28];
-                  if (strlen(file_list[i]) > 22) {
-                    strncpy(display_name, file_list[i], 19);
-                    display_name[19] = '\0';
-                    strcat(display_name, "...");
-                  } else {
-                    strcpy(display_name, file_list[i]);
+                  PD_DrawAngledCard(8, 44, 224, 160, 6, TOS_CARD_BG);
+                  PD_SetFont(FONT_ASCII_16);
+                  int y_pos = 52;
+                  for (uint32_t i = 0; i < file_count && i < 14; i++) {
+                    if (y_pos > 195) break;
+                    PD_SetColor((i % 2 == 0) ? LV_TEXT_PRIMARY : LV_ACCENT);
+                    char display_name[28];
+                    if (strlen(file_list[i]) > 22) {
+                      strncpy(display_name, file_list[i], 19);
+                      display_name[19] = '\0';
+                      strcat(display_name, "...");
+                    } else {
+                      strcpy(display_name, file_list[i]);
+                    }
+                    PD_DrawString(16, y_pos, display_name);
+                    y_pos += 15;
                   }
-                  PD_DrawString(16, y_pos, display_name);
-                  y_pos += 15;
-                }
-                bbar("EXIT", NULL, NULL);
-                LCD_Flush();
+                  bbar("EXIT", NULL, NULL);
+                });
               }
-              HAL_Delay(20);
+              HAL_Delay(1);
             }
           }
         }
@@ -199,14 +200,15 @@ void sd_card_activity_gui(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("02");
-      draw_sd_info();
-      menu_cards(sd_menu_select);
-      bbar("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("02");
+        draw_sd_info();
+        menu_cards(sd_menu_select);
+        bbar("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 

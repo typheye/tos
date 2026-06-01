@@ -52,41 +52,42 @@ void hc00n_monitor_activity(void) {
       lu = HAL_GetTick();
       uint8_t outputs = boardHC00N.readOutputByte();
 
-      PD_FillScreen(LV_BG_DARK);
-      bar("HC00N Monitor");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("HC00N Monitor");
 
-      PD_DrawAngledCard(8, 44, 224, 120, 6, TOS_CARD_BG);
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_TEXT_HINT);
-      PD_DrawString(16, 52, "Channel   Output");
-      PD_SetColor(LV_BORDER);
-      PD_DrawLine(16, 70, 220, 70);
+        PD_DrawAngledCard(8, 44, 224, 120, 6, TOS_CARD_BG);
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_TEXT_HINT);
+        PD_DrawString(16, 52, "Channel   Output");
+        PD_SetColor(LV_BORDER);
+        PD_DrawLine(16, 70, 220, 70);
 
-      for (int ch = 0; ch < 4; ch++) {
-        int y = 80 + ch * 20;
-        uint8_t actual = (outputs >> (3 - ch)) & 0x01;
+        for (int ch = 0; ch < 4; ch++) {
+          int y = 80 + ch * 20;
+          uint8_t actual = (outputs >> (3 - ch)) & 0x01;
 
-        PD_SetColor(LV_ACCENT);
-        char dbg[16];
-        snprintf(dbg, sizeof(dbg), "  CH%d", ch + 1);
-        PD_DrawString(20, y, dbg);
+          PD_SetColor(LV_ACCENT);
+          char dbg[16];
+          snprintf(dbg, sizeof(dbg), "  CH%d", ch + 1);
+          PD_DrawString(20, y, dbg);
 
-        if (actual) {
-          PD_SetColor(LV_ERROR);
-          PD_DrawString(140, y, "LOW");
-        } else {
-          PD_SetColor(LV_SUCCESS);
-          PD_DrawString(140, y, "HIGH");
+          if (actual) {
+            PD_SetColor(LV_ERROR);
+            PD_DrawString(140, y, "LOW");
+          } else {
+            PD_SetColor(LV_SUCCESS);
+            PD_DrawString(140, y, "HIGH");
+          }
         }
-      }
 
-      PD_SetFont(FONT_ASCII_12);
-      PD_SetColor(LV_TEXT_HINT);
-      PD_DrawString(16, 172, "Y = NOT (A AND B)");
-      PD_DrawString(16, 188, "Y=LOW only when A=H AND B=H");
+        PD_SetFont(FONT_ASCII_12);
+        PD_SetColor(LV_TEXT_HINT);
+        PD_DrawString(16, 172, "Y = NOT (A AND B)");
+        PD_DrawString(16, 188, "Y=LOW only when A=H AND B=H");
 
-      bbar("EXIT", NULL, NULL);
-      LCD_Flush();
+        bbar("EXIT", NULL, NULL);
+      });
     }
     HAL_Delay(50);
   }
@@ -113,38 +114,39 @@ void hc00n_truth_table_activity(void) {
     if (HAL_GetTick() - lu > 50) {
       lu = HAL_GetTick();
 
-      PD_FillScreen(LV_BG_DARK);
-      bar("NAND Truth Table");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("NAND Truth Table");
 
-      PD_DrawAngledCard(8, 44, 224, 130, 6, TOS_CARD_BG);
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_TEXT_HINT);
-      PD_DrawString(30, 52, "  A    B  |  Y");
-      PD_SetColor(LV_BORDER);
-      PD_DrawLine(24, 68, 210, 68);
+        PD_DrawAngledCard(8, 44, 224, 130, 6, TOS_CARD_BG);
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_TEXT_HINT);
+        PD_DrawString(30, 52, "  A    B  |  Y");
+        PD_SetColor(LV_BORDER);
+        PD_DrawLine(24, 68, 210, 68);
 
-      for (int i = 0; i < 4; i++) {
-        int y = 80 + i * 22;
-        uint8_t result = SN74HC00N::nandGate(combos[i][0], combos[i][1]);
+        for (int i = 0; i < 4; i++) {
+          int y = 80 + i * 22;
+          uint8_t result = SN74HC00N::nandGate(combos[i][0], combos[i][1]);
 
-        if (i == step) {
-          PD_DrawAngledCard(22, y - 2, 190, 20, 4, TOS_ACCENT);
-          PD_SetColor(TOS_TEXT);
-        } else {
-          PD_SetColor(LV_TEXT_PRIMARY);
+          if (i == step) {
+            PD_DrawAngledCard(22, y - 2, 190, 20, 4, TOS_ACCENT);
+            PD_SetColor(TOS_TEXT);
+          } else {
+            PD_SetColor(LV_TEXT_PRIMARY);
+          }
+
+          char dbg[32];
+          snprintf(dbg, sizeof(dbg), "  %d    %d    |    %d", combos[i][0], combos[i][1], result);
+          PD_DrawString(30, y + 1, dbg);
         }
 
-        char dbg[32];
-        snprintf(dbg, sizeof(dbg), "  %d    %d    |    %d", combos[i][0], combos[i][1], result);
-        PD_DrawString(30, y + 1, dbg);
-      }
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_ACCENT);
+        PD_DrawString(16, 180, descriptions[step]);
 
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_ACCENT);
-      PD_DrawString(16, 180, descriptions[step]);
-
-      bbar("EXIT", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("EXIT", NULL, "UP/DOWN");
+      });
     }
     HAL_Delay(50);
   }
@@ -162,42 +164,43 @@ void hc00n_test_activity(void) {
       lu = HAL_GetTick();
       uint8_t outputs = boardHC00N.readOutputByte();
 
-      PD_FillScreen(LV_BG_DARK);
-      bar("Logic Test");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("Logic Test");
 
-      PD_DrawAngledCard(8, 44, 224, 100, 6, TOS_CARD_BG);
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_TEXT_HINT);
-      PD_DrawString(30, 52, "Channel   Output");
-      PD_SetColor(LV_BORDER);
-      PD_DrawLine(20, 68, 220, 68);
+        PD_DrawAngledCard(8, 44, 224, 100, 6, TOS_CARD_BG);
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_TEXT_HINT);
+        PD_DrawString(30, 52, "Channel   Output");
+        PD_SetColor(LV_BORDER);
+        PD_DrawLine(20, 68, 220, 68);
 
-      for (int ch = 0; ch < 4; ch++) {
-        int y = 78 + ch * 20;
-        uint8_t state = (outputs >> (3 - ch)) & 0x01;
+        for (int ch = 0; ch < 4; ch++) {
+          int y = 78 + ch * 20;
+          uint8_t state = (outputs >> (3 - ch)) & 0x01;
 
-        PD_SetColor(LV_TEXT_PRIMARY);
-        char dbg[16];
-        snprintf(dbg, sizeof(dbg), "  CH%d", ch + 1);
-        PD_DrawString(30, y, dbg);
+          PD_SetColor(LV_TEXT_PRIMARY);
+          char dbg[16];
+          snprintf(dbg, sizeof(dbg), "  CH%d", ch + 1);
+          PD_DrawString(30, y, dbg);
 
-        if (state) {
-          PD_SetColor(LV_ERROR);
-          PD_DrawString(130, y, "LOW");
-        } else {
-          PD_SetColor(LV_SUCCESS);
-          PD_DrawString(130, y, "HIGH");
+          if (state) {
+            PD_SetColor(LV_ERROR);
+            PD_DrawString(130, y, "LOW");
+          } else {
+            PD_SetColor(LV_SUCCESS);
+            PD_DrawString(130, y, "HIGH");
+          }
         }
-      }
 
-      PD_SetFont(FONT_ASCII_20);
-      PD_SetColor(LV_ACCENT);
-      char val_str[32];
-      snprintf(val_str, sizeof(val_str), "Value: 0x%02X", outputs);
-      PD_DrawString(16, 155, val_str);
+        PD_SetFont(FONT_ASCII_20);
+        PD_SetColor(LV_ACCENT);
+        char val_str[32];
+        snprintf(val_str, sizeof(val_str), "Value: 0x%02X", outputs);
+        PD_DrawString(16, 155, val_str);
 
-      bbar("EXIT", NULL, NULL);
-      LCD_Flush();
+        bbar("EXIT", NULL, NULL);
+      });
     }
     HAL_Delay(50);
   }
@@ -241,20 +244,21 @@ void hc00n_activity(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("10");
-      menu_cards(menu_select);
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("10");
+        menu_cards(menu_select);
 
-      uint8_t preview = boardHC00N.readOutputByte();
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_ACCENT);
-      char dbg[32];
-      snprintf(dbg, sizeof(dbg), "Output: 0x%02X", preview);
-      PD_DrawString(16, 160, dbg);
+        uint8_t preview = boardHC00N.readOutputByte();
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_ACCENT);
+        char dbg[32];
+        snprintf(dbg, sizeof(dbg), "Output: 0x%02X", preview);
+        PD_DrawString(16, 160, dbg);
 
-      bbar("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

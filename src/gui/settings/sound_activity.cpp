@@ -60,13 +60,14 @@ void sound_activity_run(void) {
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
       bool muted = keyManager.isMuted();
-      draw_frame_title("SOUND");
-      PD_SetFont(FONT_ASCII_16);
-      draw_card(0, sel, 33, "00 Return");
-      draw_card_r(1, sel, 58, "01 Mute", muted);
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+      LCD_FLUSH({
+        draw_frame_title("SOUND");
+        PD_SetFont(FONT_ASCII_16);
+        draw_card(0, sel, 33, "00 Return");
+        draw_card_r(1, sel, 58, "01 Mute", muted);
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

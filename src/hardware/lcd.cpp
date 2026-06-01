@@ -1,5 +1,7 @@
 #include "include/lcd.hpp"
 #include "include/tcs3472.hpp"
+#include "include/libpd.h"
+#include "include/libemo.h"
 #include "tim.h"
 #include "syslog.h"
 #include <stdio.h>
@@ -8,10 +10,12 @@ extern TIM_HandleTypeDef htim4;
 LCD boardLCD;
 
 extern SPI_HandleTypeDef hspi1;
+extern DMA_HandleTypeDef hdma_spi1_tx;
+
+// 弱符号 — 应用层可覆盖此函数来在 DMA 等待期间轮询按键
+__attribute__((weak)) void lcd_dma_yield(void) {}
 
 #define hspi hspi1
-
-static uint16_t *g_framebuffer = NULL;
 
 // ==================== C 接口实现 ====================
 #ifdef __cplusplus
@@ -31,17 +35,20 @@ void LCD_FillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color) {
   boardLCD.fillRect(x, y, w, h, color);
 }
 
-void LCD_Flush(void) { boardLCD.flush(); }
+void LCD_Flush(void) { boardLCD.endTileRender(); }
 
 uint16_t *LCD_GetFrameBuffer(void) { return boardLCD.getFrameBuffer(); }
 
-void LCD_SetFrameBuffer(uint16_t *fb) { g_framebuffer = fb; }
+void LCD_BeginTileRender(uint16_t y, uint16_t h) { boardLCD.beginTileRender(y, h); }
+void LCD_EndTileRender(void) { boardLCD.endTileRender(); }
+void LCD_FlushTiled(void (*render_cb)(void)) { boardLCD.flushTiled(render_cb); }
+void LCD_FlushFull(const uint16_t *data) { boardLCD.flushFull(data); }
 
 void LCD_ClearFrameBuffer(uint32_t color) {
   uint16_t color_565 = boardLCD.rgb888_to_rgb565(color);
   uint16_t *fb = boardLCD.getFrameBuffer();
   if (fb) {
-    for (uint32_t i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++) {
+    for (uint32_t i = 0; i < LCD_WIDTH * TILE_HEIGHT; i++) {
       fb[i] = color_565;
     }
   }
@@ -54,6 +61,9 @@ uint16_t LCD_RGB888ToRGB565(uint32_t rgb888) {
 uint16_t LCD_GetWidth(void) { return LCD_WIDTH; }
 uint16_t LCD_GetHeight(void) { return LCD_HEIGHT; }
 
+uint16_t LCD_GetTileY(void) { return boardLCD.getTileY(); }
+uint16_t LCD_GetTileH(void) { return boardLCD.getTileH(); }
+
 #ifdef __cplusplus
 }
 #endif
@@ -63,6 +73,8 @@ LCD::LCD() {
   initialized = false;
   current_color_565 = 0xFFFF;
   _auto_brightness = false;
+  _tile_y = 0;
+  _tile_h = TILE_HEIGHT;
 }
 
 // RGB888 转 RGB565
@@ -402,20 +414,89 @@ void LCD::updateAutoBrightness(void) {
   if (pwm != _brightness_pwm) setBrightness(pwm);
 }
 
-// 获取帧缓冲区
+// ==================== 分块帧缓冲实现 ====================
+
 uint16_t *LCD::getFrameBuffer(void) {
-  // 临时方案：使用静态局部变量
-  static uint16_t framebuffer[LCD_WIDTH * LCD_HEIGHT];
-  if (_framebuffer == nullptr) {
-    _framebuffer = framebuffer; // 指向静态数组，而不是 new
-  }
-  _use_framebuffer = true;
-  return _framebuffer;
+  return _tile_buffer;
 }
 
-// 刷新帧缓冲区到屏幕
-void LCD::flush(void) {
-  if (_framebuffer == nullptr)
+void LCD::beginTileRender(uint16_t y, uint16_t h) {
+  if (y >= LCD_HEIGHT)
+    y = LCD_HEIGHT - 1;
+  if (h == 0)
+    h = 1;
+  if (y + h > LCD_HEIGHT)
+    h = LCD_HEIGHT - y;
+  _tile_y = y;
+  _tile_h = h;
+  PD_SetTileWindow(y, h);
+  EMO_SetTileWindow(y, h);
+  // 清空 tile buffer
+  uint16_t bg = rgb888_to_rgb565(LCD_COLOR_BLACK);
+  for (uint32_t i = 0; i < LCD_WIDTH * h; i++) {
+    _tile_buffer[i] = bg;
+  }
+}
+
+void LCD::endTileRender(void) {
+  if (!initialized)
+    return;
+
+  set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
+
+  LCD_DC_DATA;
+  LCD_CS_L;
+
+  // 快速切 SPI 到 16 位模式（直接操作寄存器，跳过 HAL_Init）
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
+  hspi.Init.DataSize = SPI_DATASIZE_16BIT;
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+
+  // 快速切 DMA 到半字对齐
+  MODIFY_REG(hdma_spi1_tx.Instance->CR, DMA_SxCR_MSIZE | DMA_SxCR_PSIZE,
+             DMA_SxCR_MSIZE_0 | DMA_SxCR_PSIZE_0);
+  hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+  hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+
+  uint16_t pixel_count = LCD_WIDTH * _tile_h;
+  HAL_SPI_Transmit_DMA(&hspi, (uint8_t *)_tile_buffer, pixel_count);
+
+  // 等待 DMA 完成（期间轮询按键）
+  uint32_t timeout = HAL_GetTick() + 100;
+  while (HAL_SPI_GetState(&hspi) != HAL_SPI_STATE_READY) {
+    if (HAL_GetTick() > timeout) break;
+    lcd_dma_yield();
+  }
+
+  // 快速恢复 8 位 SPI
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
+  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+
+  // 快速恢复 DMA 字节对齐
+  CLEAR_BIT(hdma_spi1_tx.Instance->CR, DMA_SxCR_MSIZE | DMA_SxCR_PSIZE);
+  hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+
+  LCD_CS_H;
+}
+
+void LCD::flushTiled(void (*render_cb)(void)) {
+  if (!initialized || !render_cb)
+    return;
+
+  for (uint16_t y = 0; y < LCD_HEIGHT; y += TILE_HEIGHT) {
+    uint16_t h = (y + TILE_HEIGHT <= LCD_HEIGHT) ? TILE_HEIGHT : LCD_HEIGHT - y;
+    beginTileRender(y, h);
+    render_cb();
+    endTileRender();
+  }
+}
+
+void LCD::flushFull(const uint16_t *data) {
+  if (!initialized || !data)
     return;
 
   set_address(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
@@ -423,15 +504,11 @@ void LCD::flush(void) {
   LCD_DC_DATA;
   LCD_CS_L;
 
-  // 配置 SPI 为 16 位模式
   hspi.Init.DataSize = SPI_DATASIZE_16BIT;
   HAL_SPI_Init(&hspi);
 
-  // 16 位传输，像素数量是 240*240 = 57600，在 uint16_t 范围内
-  uint16_t pixel_count = LCD_WIDTH * LCD_HEIGHT;
-  HAL_SPI_Transmit(&hspi, (uint8_t *)_framebuffer, pixel_count, HAL_MAX_DELAY);
+  HAL_SPI_Transmit(&hspi, (uint8_t *)data, LCD_WIDTH * LCD_HEIGHT, HAL_MAX_DELAY);
 
-  // 恢复 8 位模式
   hspi.Init.DataSize = SPI_DATASIZE_8BIT;
   HAL_SPI_Init(&hspi);
 

@@ -189,25 +189,26 @@ void jyro_cube_activity(void) {
     if (yaw > 3.14159f) yaw -= 6.28318f;
     if (yaw < -3.14159f) yaw += 6.28318f;
 
-    PD_FillScreen(LV_BG_DARK);
-    gyro_cube_draw(roll, pitch, yaw);
+    LCD_FLUSH({
+      PD_FillScreen(LV_BG_DARK);
+      gyro_cube_draw(roll, pitch, yaw);
 
-    PD_SetFont(FONT_ASCII_12);
-    PD_SetColor(LV_ACCENT);
-    float_to_str(roll * 57.29578f, fstr);
-    sprintf(display_str, "Roll: %s", fstr);
-    PD_DrawString(5, 5, display_str);
+      PD_SetFont(FONT_ASCII_12);
+      PD_SetColor(LV_ACCENT);
+      float_to_str(roll * 57.29578f, fstr);
+      sprintf(display_str, "Roll: %s", fstr);
+      PD_DrawString(5, 5, display_str);
 
-    float_to_str(pitch * 57.29578f, fstr);
-    sprintf(display_str, "Pitch:%s", fstr);
-    PD_DrawString(5, 18, display_str);
+      float_to_str(pitch * 57.29578f, fstr);
+      sprintf(display_str, "Pitch:%s", fstr);
+      PD_DrawString(5, 18, display_str);
 
-    float_to_str(yaw * 57.29578f, fstr);
-    sprintf(display_str, "Yaw:  %s", fstr);
-    PD_DrawString(5, 31, display_str);
+      float_to_str(yaw * 57.29578f, fstr);
+      sprintf(display_str, "Yaw:  %s", fstr);
+      PD_DrawString(5, 31, display_str);
 
-    bbar("EXIT", NULL, NULL);
-    LCD_Flush();
+      bbar("EXIT", NULL, NULL);
+    });
   }
 }
 
@@ -240,78 +241,79 @@ void jyro_text_activity(void) {
     roll = roll * 0.98f + roll_acc * 0.02f;
     pitch = pitch * 0.98f + pitch_acc * 0.02f;
 
-    PD_FillScreen(LV_BG_DARK);
-    bar("JY901S Sensor");
+    LCD_FLUSH({
+      PD_FillScreen(LV_BG_DARK);
+      bar("JY901S Sensor");
 
-    PD_DrawAngledCard(8, 44, 224, 164, 6, TOS_CARD_BG);
-    PD_SetFont(FONT_ASCII_16);
+      PD_DrawAngledCard(8, 44, 224, 164, 6, TOS_CARD_BG);
+      PD_SetFont(FONT_ASCII_16);
 
-    int y = 54;
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "AccX"); y += 20;
-    PD_SetColor(LV_TEXT_PRIMARY);
-    float_to_str(data.acc_x, fstr);
-    sprintf(display_str, "%s g", fstr);
-    PD_DrawString(100, y - 20, display_str);
+      int y = 54;
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "AccX"); y += 20;
+      PD_SetColor(LV_TEXT_PRIMARY);
+      float_to_str(data.acc_x, fstr);
+      sprintf(display_str, "%s g", fstr);
+      PD_DrawString(100, y - 20, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "AccY"); y += 20;
-    PD_SetColor(LV_TEXT_PRIMARY);
-    float_to_str(data.acc_y, fstr);
-    sprintf(display_str, "%s g", fstr);
-    PD_DrawString(100, y - 20, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "AccY"); y += 20;
+      PD_SetColor(LV_TEXT_PRIMARY);
+      float_to_str(data.acc_y, fstr);
+      sprintf(display_str, "%s g", fstr);
+      PD_DrawString(100, y - 20, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "AccZ"); y += 26;
-    PD_SetColor(LV_TEXT_PRIMARY);
-    float_to_str(data.acc_z, fstr);
-    sprintf(display_str, "%s g", fstr);
-    PD_DrawString(100, y - 26, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "AccZ"); y += 26;
+      PD_SetColor(LV_TEXT_PRIMARY);
+      float_to_str(data.acc_z, fstr);
+      sprintf(display_str, "%s g", fstr);
+      PD_DrawString(100, y - 26, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "GyrX"); y += 20;
-    PD_SetColor(LV_TEXT_PRIMARY);
-    float_to_str(data.gyro_x, fstr);
-    sprintf(display_str, "%s d/s", fstr);
-    PD_DrawString(100, y - 20, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "GyrX"); y += 20;
+      PD_SetColor(LV_TEXT_PRIMARY);
+      float_to_str(data.gyro_x, fstr);
+      sprintf(display_str, "%s d/s", fstr);
+      PD_DrawString(100, y - 20, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "GyrY"); y += 20;
-    PD_SetColor(LV_TEXT_PRIMARY);
-    float_to_str(data.gyro_y, fstr);
-    sprintf(display_str, "%s d/s", fstr);
-    PD_DrawString(100, y - 20, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "GyrY"); y += 20;
+      PD_SetColor(LV_TEXT_PRIMARY);
+      float_to_str(data.gyro_y, fstr);
+      sprintf(display_str, "%s d/s", fstr);
+      PD_DrawString(100, y - 20, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "GyrZ"); y += 26;
-    PD_SetColor(LV_TEXT_PRIMARY);
-    float_to_str(data.gyro_z, fstr);
-    sprintf(display_str, "%s d/s", fstr);
-    PD_DrawString(100, y - 26, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "GyrZ"); y += 26;
+      PD_SetColor(LV_TEXT_PRIMARY);
+      float_to_str(data.gyro_z, fstr);
+      sprintf(display_str, "%s d/s", fstr);
+      PD_DrawString(100, y - 26, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "Roll"); y += 20;
-    PD_SetColor(LV_ACCENT);
-    float_to_str(roll * 57.29578f, fstr);
-    sprintf(display_str, "%s deg", fstr);
-    PD_DrawString(100, y - 20, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "Roll"); y += 20;
+      PD_SetColor(LV_ACCENT);
+      float_to_str(roll * 57.29578f, fstr);
+      sprintf(display_str, "%s deg", fstr);
+      PD_DrawString(100, y - 20, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "Pitch"); y += 20;
-    PD_SetColor(LV_ACCENT);
-    float_to_str(pitch * 57.29578f, fstr);
-    sprintf(display_str, "%s deg", fstr);
-    PD_DrawString(100, y - 20, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "Pitch"); y += 20;
+      PD_SetColor(LV_ACCENT);
+      float_to_str(pitch * 57.29578f, fstr);
+      sprintf(display_str, "%s deg", fstr);
+      PD_DrawString(100, y - 20, display_str);
 
-    PD_SetColor(LV_TEXT_HINT);
-    PD_DrawString(16, y, "Yaw");
-    PD_SetColor(LV_ACCENT);
-    float_to_str(yaw * 57.29578f, fstr);
-    sprintf(display_str, "%s deg", fstr);
-    PD_DrawString(100, y, display_str);
+      PD_SetColor(LV_TEXT_HINT);
+      PD_DrawString(16, y, "Yaw");
+      PD_SetColor(LV_ACCENT);
+      float_to_str(yaw * 57.29578f, fstr);
+      sprintf(display_str, "%s deg", fstr);
+      PD_DrawString(100, y, display_str);
 
-    bbar("EXIT", NULL, NULL);
-    LCD_Flush();
+      bbar("EXIT", NULL, NULL);
+    });
     HAL_Delay(50);
   }
 }
@@ -372,43 +374,44 @@ void jyro_chart_activity(void) {
 
     if (HAL_GetTick() - last_update > 50) {
       last_update = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("JY901S Chart");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("JY901S Chart");
 
-      PD_SetFont(FONT_ASCII_12);
-      PD_SetColor(LV_ACCENT);
-      char title[32];
-      snprintf(title, sizeof(title), "Chart: %s", group_names[chart_param_group]);
-      PD_DrawString(16, 44, title);
+        PD_SetFont(FONT_ASCII_12);
+        PD_SetColor(LV_ACCENT);
+        char title[32];
+        snprintf(title, sizeof(title), "Chart: %s", group_names[chart_param_group]);
+        PD_DrawString(16, 44, title);
 
-      int chart_x = 10, chart_y = 58, chart_w = 220, chart_h = 90;
-      draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
-      draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
+        int chart_x = 10, chart_y = 58, chart_w = 220, chart_h = 90;
+        draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
+        draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
 
-      PD_SetFont(FONT_ASCII_12);
-      PD_SetColor(LV_ERROR); PD_DrawRect(10, 156, 10, 8);
-      PD_SetColor(LV_TEXT_PRIMARY);
-      PD_DrawString(23, 155, chart_param_group==0?"AccX":chart_param_group==1?"GyrX":"Roll");
-      PD_SetColor(LV_SUCCESS); PD_DrawRect(80, 156, 10, 8);
-      PD_SetColor(LV_TEXT_PRIMARY);
-      PD_DrawString(93, 155, chart_param_group==0?"AccY":chart_param_group==1?"GyrY":"Pitch");
-      PD_SetColor(LV_PRIMARY); PD_DrawRect(150, 156, 10, 8);
-      PD_SetColor(LV_TEXT_PRIMARY);
-      PD_DrawString(163, 155, chart_param_group==0?"AccZ":chart_param_group==1?"GyrZ":"Yaw");
+        PD_SetFont(FONT_ASCII_12);
+        PD_SetColor(LV_ERROR); PD_DrawRect(10, 156, 10, 8);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        PD_DrawString(23, 155, chart_param_group==0?"AccX":chart_param_group==1?"GyrX":"Roll");
+        PD_SetColor(LV_SUCCESS); PD_DrawRect(80, 156, 10, 8);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        PD_DrawString(93, 155, chart_param_group==0?"AccY":chart_param_group==1?"GyrY":"Pitch");
+        PD_SetColor(LV_PRIMARY); PD_DrawRect(150, 156, 10, 8);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        PD_DrawString(163, 155, chart_param_group==0?"AccZ":chart_param_group==1?"GyrZ":"Yaw");
 
-      char fstr[16]; char dbg[48];
-      PD_SetColor(LV_ERROR);
-      float_to_str(val0, fstr); snprintf(dbg, sizeof(dbg), "%s", fstr);
-      PD_DrawString(10, 175, dbg);
-      PD_SetColor(LV_SUCCESS);
-      float_to_str(val1, fstr); snprintf(dbg, sizeof(dbg), "%s", fstr);
-      PD_DrawString(80, 175, dbg);
-      PD_SetColor(LV_PRIMARY);
-      float_to_str(val2, fstr); snprintf(dbg, sizeof(dbg), "%s", fstr);
-      PD_DrawString(150, 175, dbg);
+        char fstr[16]; char dbg[48];
+        PD_SetColor(LV_ERROR);
+        float_to_str(val0, fstr); snprintf(dbg, sizeof(dbg), "%s", fstr);
+        PD_DrawString(10, 175, dbg);
+        PD_SetColor(LV_SUCCESS);
+        float_to_str(val1, fstr); snprintf(dbg, sizeof(dbg), "%s", fstr);
+        PD_DrawString(80, 175, dbg);
+        PD_SetColor(LV_PRIMARY);
+        float_to_str(val2, fstr); snprintf(dbg, sizeof(dbg), "%s", fstr);
+        PD_DrawString(150, 175, dbg);
 
-      bbar("EXIT", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("EXIT", NULL, "UP/DOWN");
+      });
     }
     HAL_Delay(30);
   }
@@ -452,14 +455,15 @@ void jyro_activity(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("04");
-      PD_SetFont(FONT_ASCII_12); PD_SetColor(LV_TEXT_HINT);
-      PD_DrawString(16, 24, "Select Function:");
-      menu_cards(menu_select);
-      bbar("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("04");
+        PD_SetFont(FONT_ASCII_12); PD_SetColor(LV_TEXT_HINT);
+        PD_DrawString(16, 24, "Select Function:");
+        menu_cards(menu_select);
+        bbar("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

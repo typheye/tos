@@ -43,44 +43,45 @@ bool confirm_show(const char *title, const char *msg) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_Init();
-      PD_FillScreen(TOS_BG);
+      LCD_FLUSH({
+        PD_Init();
+        PD_FillScreen(TOS_BG);
 
-      /* Update header time */
-      extern TRTC boardTRTC;
-      Time_t t;
-      Date_t d;
-      boardTRTC.getDateTime(&t, &d);
-      char ts[8];
-      time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-      PD_SetHeaderTime(ts);
+        /* Update header time */
+        extern TRTC boardTRTC;
+        Time_t t;
+        Date_t d;
+        boardTRTC.getDateTime(&t, &d);
+        char ts[8];
+        time_fmt(ts, sizeof(ts), t.hours, t.minutes);
+        PD_SetHeaderTime(ts);
 
-      PD_DrawFrame();
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(TOS_ACCENT);
-      PD_DrawString(22, 5, title);
+        PD_DrawFrame();
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(TOS_ACCENT);
+        PD_DrawString(22, 5, title);
 
-      /* Message */
-      PD_SetColor(TOS_TEXT);
-      PD_DrawString(16, 33, msg);
+        /* Message */
+        PD_SetColor(TOS_TEXT);
+        PD_DrawString(16, 33, msg);
 
-      /* Yes / No at positions 6 and 7 (closer to bottom) */
-      int y0 = 33 + 5 * 25; /* position 5: y=158 */
-      int y1 = 33 + 6 * 25; /* position 6: y=183 */
+        /* Yes / No at positions 6 and 7 (closer to bottom) */
+        int y0 = 33 + 5 * 25; /* position 5: y=158 */
+        int y1 = 33 + 6 * 25; /* position 6: y=183 */
 
-      PD_DrawAngledCard(14, y0, 212, 20, 5,
-                        sel == 0 ? TOS_ACCENT : TOS_CARD_BG);
-      PD_SetColor(sel == 0 ? TOS_TEXT : TOS_TEXT_SEC);
-      PD_DrawString(26, y0 + 2, "01 Yes, Confirm");
+        PD_DrawAngledCard(14, y0, 212, 20, 5,
+                          sel == 0 ? TOS_ACCENT : TOS_CARD_BG);
+        PD_SetColor(sel == 0 ? TOS_TEXT : TOS_TEXT_SEC);
+        PD_DrawString(26, y0 + 2, "01 Yes, Confirm");
 
-      PD_DrawAngledCard(14, y1, 212, 20, 5,
-                        sel == 1 ? TOS_ACCENT : TOS_CARD_BG);
-      PD_SetColor(sel == 1 ? TOS_TEXT : TOS_TEXT_SEC);
-      PD_DrawString(26, y1 + 2, "02 No, Cancel");
+        PD_DrawAngledCard(14, y1, 212, 20, 5,
+                          sel == 1 ? TOS_ACCENT : TOS_CARD_BG);
+        PD_SetColor(sel == 1 ? TOS_TEXT : TOS_TEXT_SEC);
+        PD_DrawString(26, y1 + 2, "02 No, Cancel");
 
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

@@ -114,35 +114,36 @@ static void refresh(void) {
 // ============ Draw ============
 
 static void draw_storage(int sel) {
-  draw_frame_title("SD");
-  PD_SetFont(FONT_ASCII_16);
+  LCD_FLUSH({
+    draw_frame_title("SD");
+    PD_SetFont(FONT_ASCII_16);
 
-  draw_card(0, sel, 33, "00 Return");
-  draw_card(1, sel, 58, "01 Refresh");
+    draw_card(0, sel, 33, "00 Return");
+    draw_card(1, sel, 58, "01 Refresh");
 
-  // Built-In Storage
-  int y = 94;
-  PD_SetColor(TOS_TEXT);
-  PD_DrawString(26, y, "Built-In Storage");
-  PD_SetColor(TOS_ACCENT);
-  const char *sz = fmt_size(builtin_cap_kb);
-  uint16_t sw = PD_GetStringWidth(sz);
-  PD_DrawString(220 - sw, y, sz);
-  draw_progress(14, y + 22, 212, 22, builtin_used_pct);
-
-  // External Storage (only when card present)
-  if (sd_present) {
-    y = 152;
+    // Built-In Storage
+    int y = 94;
     PD_SetColor(TOS_TEXT);
-    PD_DrawString(26, y, "External Storage");
-    sz = fmt_size(sd_cap_kb);
-    sw = PD_GetStringWidth(sz);
+    PD_DrawString(26, y, "Built-In Storage");
+    PD_SetColor(TOS_ACCENT);
+    const char *sz = fmt_size(builtin_cap_kb);
+    uint16_t sw = PD_GetStringWidth(sz);
     PD_DrawString(220 - sw, y, sz);
-    draw_progress(14, y + 22, 212, 22, sd_used_pct);
-  }
+    draw_progress(14, y + 22, 212, 22, builtin_used_pct);
 
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-  LCD_Flush();
+    // External Storage (only when card present)
+    if (sd_present) {
+      y = 152;
+      PD_SetColor(TOS_TEXT);
+      PD_DrawString(26, y, "External Storage");
+      sz = fmt_size(sd_cap_kb);
+      sw = PD_GetStringWidth(sz);
+      PD_DrawString(220 - sw, y, sz);
+      draw_progress(14, y + 22, 212, 22, sd_used_pct);
+    }
+
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 // ============ Main ============
@@ -151,12 +152,13 @@ void storage_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
 
   // Show loading
-  PD_Init(); PD_FillScreen(TOS_BG); PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16); PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, "SD");
-  PD_SetColor(TOS_TEXT);
-  PD_DrawString(26, 33, "Refreshing...");
-  LCD_Flush();
+  LCD_FLUSH({
+    PD_Init(); PD_FillScreen(TOS_BG); PD_DrawFrame();
+    PD_SetFont(FONT_ASCII_16); PD_SetColor(TOS_ACCENT);
+    PD_DrawString(22, 5, "SD");
+    PD_SetColor(TOS_TEXT);
+    PD_DrawString(26, 33, "Refreshing...");
+  });
   HAL_Delay(500);
 
   refresh();
@@ -173,11 +175,12 @@ void storage_activity_run(void) {
       if (sel == 0) return;
       if (sel == 1) {
         boardLCD.fillScreen(LCD_COLOR_BLACK);
-        PD_Init(); PD_FillScreen(TOS_BG); PD_DrawFrame();
-        PD_SetFont(FONT_ASCII_16); PD_SetColor(TOS_ACCENT);
-        PD_DrawString(22, 5, "SD");
-        PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Refreshing...");
-        LCD_Flush();
+        LCD_FLUSH({
+          PD_Init(); PD_FillScreen(TOS_BG); PD_DrawFrame();
+          PD_SetFont(FONT_ASCII_16); PD_SetColor(TOS_ACCENT);
+          PD_DrawString(22, 5, "SD");
+          PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Refreshing...");
+        });
         HAL_Delay(500);
         refresh();
         lu = 0;
@@ -185,6 +188,6 @@ void storage_activity_run(void) {
     }
     le = ce;
     if (HAL_GetTick() - lu > 100) { lu = HAL_GetTick(); draw_storage(sel); }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

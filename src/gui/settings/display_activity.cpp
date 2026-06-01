@@ -74,65 +74,66 @@ static int item_count(void) {
 }
 
 static void draw_disp(int sel) {
-  draw_frame_title("DISP");
-  PD_SetFont(FONT_ASCII_16);
+  LCD_FLUSH({
+    draw_frame_title("DISP");
+    PD_SetFont(FONT_ASCII_16);
 
-  int n = item_count();
-  int vis = n < 7 ? n : 7;
-  int start = sel - vis / 2;
-  if (start < 0)
-    start = 0;
-  if (start + vis > n)
-    start = n - vis;
+    int n = item_count();
+    int vis = n < 7 ? n : 7;
+    int start = sel - vis / 2;
+    if (start < 0)
+      start = 0;
+    if (start + vis > n)
+      start = n - vis;
 
-  for (int i = 0; i < vis; i++) {
-    int idx = start + i;
-    if (idx >= n)
-      break;
-    int cy = 33 + i * 25;
+    for (int i = 0; i < vis; i++) {
+      int idx = start + i;
+      if (idx >= n)
+        break;
+      int cy = 33 + i * 25;
 
-    switch (idx) {
-    case 0:
-      draw_card(idx, sel, cy, "00 Return");
-      break;
-    case 1: {
-      char buf[32];
-      snprintf(buf, sizeof(buf), "01 Auto");
-      draw_card_r(idx, sel, cy, buf, disp_auto ? "ON" : "OFF",
-                  disp_edit && edit_field == 1);
-      break;
-    }
-    case 2: {
-      char buf[32];
-      snprintf(buf, sizeof(buf), "   Brightness");
-      if (disp_auto) {
-        // Greyed out when Auto is ON
-        bool s = (idx == sel);
-        uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
-        PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-        PD_SetColor(TOS_GREY);
-        PD_DrawString(26, cy + 2, buf);
-      } else {
-        char val[8];
-        snprintf(val, sizeof(val), "%d%%", disp_bright * 10);
-        draw_card_r(idx, sel, cy, buf, val, disp_edit && edit_field == 2);
+      switch (idx) {
+      case 0:
+        draw_card(idx, sel, cy, "00 Return");
+        break;
+      case 1: {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "01 Auto");
+        draw_card_r(idx, sel, cy, buf, disp_auto ? "ON" : "OFF",
+                    disp_edit && edit_field == 1);
+        break;
       }
-      break;
+      case 2: {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "   Brightness");
+        if (disp_auto) {
+          // Greyed out when Auto is ON
+          bool s = (idx == sel);
+          uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+          PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
+          PD_SetColor(TOS_GREY);
+          PD_DrawString(26, cy + 2, buf);
+        } else {
+          char val[8];
+          snprintf(val, sizeof(val), "%d%%", disp_bright * 10);
+          draw_card_r(idx, sel, cy, buf, val, disp_edit && edit_field == 2);
+        }
+        break;
+      }
+      case 3: {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "02 Direction");
+        draw_card_r(idx, sel, cy, buf, dir_names[disp_dir],
+                    disp_edit && edit_field == 3);
+        break;
+      }
+      case 4:
+        draw_card(idx, sel, cy, "03 Resolution  240x240");
+        break;
+      }
     }
-    case 3: {
-      char buf[32];
-      snprintf(buf, sizeof(buf), "02 Direction");
-      draw_card_r(idx, sel, cy, buf, dir_names[disp_dir],
-                  disp_edit && edit_field == 3);
-      break;
-    }
-    case 4:
-      draw_card(idx, sel, cy, "03 Resolution  240x240");
-      break;
-    }
-  }
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-  LCD_Flush();
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 // ============ Main ============
@@ -239,6 +240,6 @@ void display_activity_run(void) {
       lu = HAL_GetTick();
       draw_disp(sel);
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

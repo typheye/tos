@@ -838,6 +838,7 @@ void pet_launcher_run(void) {
   LOG_I("PET", "Launcher started - triple-press ENTER to exit");
 
   uint32_t heartbeat = 0;
+  uint32_t slow_frame_log = 0;
   while (1) {
     now = HAL_GetTick();
     if (now - heartbeat > 5000U) {
@@ -861,8 +862,9 @@ void pet_launcher_run(void) {
         uint32_t t2 = enter_tm[(enter_idx - 1) % 3];
         if (t2 - t0 < TRIPLE_WINDOW) {
           LOG_I("PET", "Triple ENTER - returning to menu");
-          EMO_FillScreen(EMO_BLACK);
-          LCD_Flush();
+          LCD_FLUSH({
+            EMO_FillScreen(EMO_BLACK);
+          });
           return;
         }
       }
@@ -894,12 +896,19 @@ void pet_launcher_run(void) {
     }
 
     // --- Update & Draw ---
+    uint32_t frame_start = now;
     boardLCD.updateAutoBrightness();
     update_animation();
     trace_state(now);
-    EMO_DrawFace(pet_blink_l, pet_blink_r, pet_mouth,
-                 pet_look_x, pet_look_y, pet_cheek, pet_brow_y);
-    LCD_Flush();
-    HAL_Delay(10);
+    LCD_FLUSH({
+      EMO_DrawFace(pet_blink_l, pet_blink_r, pet_mouth,
+                   pet_look_x, pet_look_y, pet_cheek, pet_brow_y);
+    });
+    uint32_t frame_ms = HAL_GetTick() - frame_start;
+    if (frame_ms > 45U && now - slow_frame_log > 3000U) {
+      slow_frame_log = now;
+      LOG_D("PET", "slow frame %lums", (unsigned long)frame_ms);
+    }
+    HAL_Delay(1);
   }
 }

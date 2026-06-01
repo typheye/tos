@@ -181,17 +181,18 @@ void i2c_scan_activity_gui(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("03");
-      draw_scan_status();
-      draw_scan_results();
-      if (scan_in_progress)
-        bbar("Scanning...", NULL, "UP/DOWN");
-      else
-        bbar("EXIT", NULL, "UP/DOWN");
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("03");
+        draw_scan_status();
+        draw_scan_results();
+        if (scan_in_progress)
+          bbar("Scanning...", NULL, "UP/DOWN");
+        else
+          bbar("EXIT", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 

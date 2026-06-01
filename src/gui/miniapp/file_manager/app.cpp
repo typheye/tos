@@ -181,30 +181,31 @@ void file_manager_run(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      draw_frame_title("FILE");
-      PD_SetFont(FONT_ASCII_16);
-      int vis = n < 7 ? n : 7;
-      if (n == 0)
-        vis = 1;
-      int start = sel - vis / 2;
-      if (start < 0)
-        start = 0;
-      if (start + vis > n)
-        start = n - vis;
+      LCD_FLUSH({
+        draw_frame_title("FILE");
+        PD_SetFont(FONT_ASCII_16);
+        int vis = n < 7 ? n : 7;
+        if (n == 0)
+          vis = 1;
+        int start = sel - vis / 2;
+        if (start < 0)
+          start = 0;
+        if (start + vis > n)
+          start = n - vis;
 
-      if (n == 0) {
-        draw_card(0, 0, 33, "   No files", false);
-      } else {
-        for (int i = 0; i < vis; i++) {
-          int idx = start + i;
-          if (idx >= n)
-            break;
-          draw_card(idx, sel, 33 + i * 25, fm_items[idx], fm_is_dir[idx]);
+        if (n == 0) {
+          draw_card(0, 0, 33, "   No files", false);
+        } else {
+          for (int i = 0; i < vis; i++) {
+            int idx = start + i;
+            if (idx >= n)
+              break;
+            draw_card(idx, sel, 33 + i * 25, fm_items[idx], fm_is_dir[idx]);
+          }
         }
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

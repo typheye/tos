@@ -6,6 +6,7 @@
 // ==================== LCD 尺寸 ====================
 #define LCD_WIDTH 240
 #define LCD_HEIGHT 240
+#define TILE_HEIGHT 32
 
 // ==================== 引脚定义 ====================
 // SPI 引脚
@@ -64,8 +65,15 @@ void LCD_Flush(void);
 
 // 帧缓冲区操作
 uint16_t *LCD_GetFrameBuffer(void);
-void LCD_SetFrameBuffer(uint16_t *fb);
 void LCD_ClearFrameBuffer(uint32_t color);
+
+// 分块渲染接口
+void LCD_BeginTileRender(uint16_t y, uint16_t h);
+void LCD_EndTileRender(void);
+void LCD_FlushTiled(void (*render_cb)(void));
+void LCD_FlushFull(const uint16_t *data);
+uint16_t LCD_GetTileY(void);
+uint16_t LCD_GetTileH(void);
 
 // 工具函数
 void LCD_UpdateAutoBrightness(void);

@@ -50,52 +50,54 @@ static void draw_frame_title(const char *title) {
 }
 
 static void draw_menu(int sel) {
-  draw_frame_title("HID Tools");
+  LCD_FLUSH({
+    draw_frame_title("HID Tools");
 
-  int visible = HID_MENU_ITEMS < 7 ? HID_MENU_ITEMS : 7;
-  int start = sel - visible / 2;
-  if (start < 0) {
-    start = 0;
-  }
-  if (start + visible > HID_MENU_ITEMS) {
-    start = HID_MENU_ITEMS - visible;
-  }
-
-  for (int i = 0; i < visible; i++) {
-    int idx = start + i;
-    int cy = 33 + i * 25;
-    if (idx == sel) {
-      PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
-      PD_SetColor(TOS_TEXT);
-    } else {
-      PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_CARD_BG);
-      PD_SetColor(TOS_TEXT_SEC);
+    int visible = HID_MENU_ITEMS < 7 ? HID_MENU_ITEMS : 7;
+    int start = sel - visible / 2;
+    if (start < 0) {
+      start = 0;
     }
-    PD_DrawString(26, cy + 2, hid_menu[idx]);
-  }
+    if (start + visible > HID_MENU_ITEMS) {
+      start = HID_MENU_ITEMS - visible;
+    }
 
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-  LCD_Flush();
+    for (int i = 0; i < visible; i++) {
+      int idx = start + i;
+      int cy = 33 + i * 25;
+      if (idx == sel) {
+        PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_ACCENT);
+        PD_SetColor(TOS_TEXT);
+      } else {
+        PD_DrawAngledCard(14, cy, 212, 20, 5, TOS_CARD_BG);
+        PD_SetColor(TOS_TEXT_SEC);
+      }
+      PD_DrawString(26, cy + 2, hid_menu[idx]);
+    }
+
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 static void show_message(const char *title, const char *line1,
                          const char *line2 = nullptr,
                          const char *line3 = nullptr,
                          uint32_t hold_ms = 1200) {
-  draw_frame_title(title);
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_TEXT);
-  if (line1 != nullptr) {
-    PD_DrawString(22, 38, line1);
-  }
-  if (line2 != nullptr) {
-    PD_DrawString(22, 63, line2);
-  }
-  if (line3 != nullptr) {
-    PD_DrawString(22, 88, line3);
-  }
-  PD_DrawFooterCenter("WAIT", NULL, "");
-  LCD_Flush();
+  LCD_FLUSH({
+    draw_frame_title(title);
+    PD_SetFont(FONT_ASCII_16);
+    PD_SetColor(TOS_TEXT);
+    if (line1 != nullptr) {
+      PD_DrawString(22, 38, line1);
+    }
+    if (line2 != nullptr) {
+      PD_DrawString(22, 63, line2);
+    }
+    if (line3 != nullptr) {
+      PD_DrawString(22, 88, line3);
+    }
+    PD_DrawFooterCenter("WAIT", NULL, "");
+  });
   HAL_Delay(hold_ms);
 }
 
@@ -193,34 +195,35 @@ static int8_t gyro_rate_to_delta(float rate_dps, float *fraction_accum) {
 
 static void draw_gyro_mouse_status(float gx, float gy, float gz,
                                    int8_t dx, int8_t dy, uint8_t buttons) {
-  char line[48];
-  draw_frame_title("Gyro Mouse");
+  LCD_FLUSH({
+    char line[48];
+    draw_frame_title("Gyro Mouse");
 
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_TEXT);
-  PD_DrawString(18, 34, "JY901S -> HID Mouse x10");
+    PD_SetFont(FONT_ASCII_16);
+    PD_SetColor(TOS_TEXT);
+    PD_DrawString(18, 34, "JY901S -> HID Mouse x10");
 
-  PD_SetColor(TOS_TEXT_SEC);
-  snprintf(line, sizeof(line), "X=Gz:%ld  Y=-Gx:%ld", (long)gz, (long)(-gx));
-  PD_DrawString(18, 58, line);
+    PD_SetColor(TOS_TEXT_SEC);
+    snprintf(line, sizeof(line), "X=Gz:%ld  Y=-Gx:%ld", (long)gz, (long)(-gx));
+    PD_DrawString(18, 58, line);
 
-  snprintf(line, sizeof(line), "dX:%d dY:%d", (int)dx, (int)dy);
-  PD_DrawString(18, 80, line);
+    snprintf(line, sizeof(line), "dX:%d dY:%d", (int)dx, (int)dy);
+    PD_DrawString(18, 80, line);
 
-  snprintf(line, sizeof(line), "A8:L=%s D0:R=%s",
-           (buttons & THID::MOUSE_LEFT) ? "ON" : "--",
-           (buttons & THID::MOUSE_RIGHT) ? "ON" : "--");
-  PD_DrawString(18, 102, line);
+    snprintf(line, sizeof(line), "A8:L=%s D0:R=%s",
+             (buttons & THID::MOUSE_LEFT) ? "ON" : "--",
+             (buttons & THID::MOUSE_RIGHT) ? "ON" : "--");
+    PD_DrawString(18, 102, line);
 
-  snprintf(line, sizeof(line), "Gain x10 Max %d", GYRO_MOUSE_MAX_DELTA);
-  PD_DrawString(18, 124, line);
+    snprintf(line, sizeof(line), "Gain x10 Max %d", GYRO_MOUSE_MAX_DELTA);
+    PD_DrawString(18, 124, line);
 
-  snprintf(line, sizeof(line), "Gyro X/Y/Z %ld/%ld/%ld",
-           (long)gx, (long)gy, (long)gz);
-  PD_DrawString(18, 146, line);
+    snprintf(line, sizeof(line), "Gyro X/Y/Z %ld/%ld/%ld",
+             (long)gx, (long)gy, (long)gz);
+    PD_DrawString(18, 146, line);
 
-  PD_DrawFooterCenter("ENTER EXIT", "A8 LEFT", "D0 RIGHT");
-  LCD_Flush();
+    PD_DrawFooterCenter("ENTER EXIT", "A8 LEFT", "D0 RIGHT");
+  });
 }
 
 static void gyro_mouse_activity(void) {
@@ -344,6 +347,6 @@ void hid_tools_run(void) {
       last_ui = HAL_GetTick();
       draw_menu(sel);
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

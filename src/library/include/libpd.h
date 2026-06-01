@@ -53,6 +53,7 @@ typedef enum {
 
 // 初始化
 void PD_Init(void);
+void PD_SetTileWindow(uint16_t y, uint16_t h);
 
 // 绘图设置
 void PD_SetColor(uint32_t color);

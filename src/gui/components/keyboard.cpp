@@ -80,64 +80,65 @@ static int iabs(int x) { return x < 0 ? -x : x; }
 // ============ Draw ============
 
 static void draw_kb(const char *pwd, int len, int sel, bool shift) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  PD_DrawFrame();
+  LCD_FLUSH({
+    PD_Init();
+    PD_FillScreen(TOS_BG);
+    PD_DrawFrame();
 
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, "KEY");
+    PD_SetFont(FONT_ASCII_16);
+    PD_SetColor(TOS_ACCENT);
+    PD_DrawString(22, 5, "KEY");
 
-  // Password (16px font, right margin = left*1.5)
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_TEXT);
-  int lmargin = 18, rmargin = 27;
-  int max_chars = (240 - lmargin - rmargin) / 10; // ~19 chars
-  int start = len > max_chars ? len - max_chars : 0;
-  char disp[24];
-  strncpy(disp, pwd + start, len - start);
-  disp[len - start] = '\0';
-  PD_DrawString(lmargin, 33, disp);
+    // Password (16px font, right margin = left*1.5)
+    PD_SetFont(FONT_ASCII_16);
+    PD_SetColor(TOS_TEXT);
+    int lmargin = 18, rmargin = 27;
+    int max_chars = (240 - lmargin - rmargin) / 10; // ~19 chars
+    int start = len > max_chars ? len - max_chars : 0;
+    char disp[24];
+    strncpy(disp, pwd + start, len - start);
+    disp[len - start] = '\0';
+    PD_DrawString(lmargin, 33, disp);
 
-  // Blue underline beneath text
-  PD_SetColor(TOS_ACCENT);
-  PD_SetFill(true);
-  PD_DrawRect(lmargin, 50, 240 - lmargin - rmargin, 2);
-  PD_SetFill(false);
+    // Blue underline beneath text
+    PD_SetColor(TOS_ACCENT);
+    PD_SetFill(true);
+    PD_DrawRect(lmargin, 50, 240 - lmargin - rmargin, 2);
+    PD_SetFill(false);
 
-  // Key grid — symmetric margins
-  int base_y = 56, row_h = 28, margin = 8;
-  int flat_idx = 0;
-  for (int r = 0; r < N_ROWS; r++) {
-    int n = rows[r].n;
-    int grid_w = 240 - margin * 2;
-    int slot_w = grid_w / n;
-    int cy = base_y + r * row_h;
+    // Key grid — symmetric margins
+    int base_y = 56, row_h = 28, margin = 8;
+    int flat_idx = 0;
+    for (int r = 0; r < N_ROWS; r++) {
+      int n = rows[r].n;
+      int grid_w = 240 - margin * 2;
+      int slot_w = grid_w / n;
+      int cy = base_y + r * row_h;
 
-    for (int c = 0; c < n; c++) {
-      const KbKey *k = &rows[r].keys[c];
-      int card_w = slot_w - 2;
-      int cx = margin + c * slot_w + 1;
+      for (int c = 0; c < n; c++) {
+        const KbKey *k = &rows[r].keys[c];
+        int card_w = slot_w - 2;
+        int cx = margin + c * slot_w + 1;
 
-      bool sel_k = (flat_idx == sel);
-      uint32_t bg = sel_k ? TOS_ACCENT : TOS_CARD_BG;
-      uint32_t fg = sel_k ? TOS_TEXT : TOS_TEXT_SEC;
+        bool sel_k = (flat_idx == sel);
+        uint32_t bg = sel_k ? TOS_ACCENT : TOS_CARD_BG;
+        uint32_t fg = sel_k ? TOS_TEXT : TOS_TEXT_SEC;
 
-      PD_DrawAngledCard(cx, cy, card_w, 22, 4, bg);
-      PD_SetColor(fg);
-      PD_SetFont(FONT_ASCII_16);
+        PD_DrawAngledCard(cx, cy, card_w, 22, 4, bg);
+        PD_SetColor(fg);
+        PD_SetFont(FONT_ASCII_16);
 
-      const char *label = shift ? k->hi : k->lo;
-      uint16_t tw = PD_GetStringWidth(label);
-      uint16_t th = PD_GetCharHeight();
-      PD_DrawString(cx + (card_w - tw) / 2, cy + (22 - th) / 2 + 1, label);
+        const char *label = shift ? k->hi : k->lo;
+        uint16_t tw = PD_GetStringWidth(label);
+        uint16_t th = PD_GetCharHeight();
+        PD_DrawString(cx + (card_w - tw) / 2, cy + (22 - th) / 2 + 1, label);
 
-      flat_idx++;
+        flat_idx++;
+      }
     }
-  }
 
-  PD_DrawFooterCenter("ENTER", NULL, "SELECT");
-  LCD_Flush();
+    PD_DrawFooterCenter("ENTER", NULL, "SELECT");
+  });
 }
 
 // ============ Public ============

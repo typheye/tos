@@ -159,39 +159,40 @@ void tcs3472_chart_activity(void) {
 
     if (HAL_GetTick() - lu > 50) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("09");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("09");
 
-      int chart_x = 10, chart_y = 44, chart_w = 220, chart_h = 90;
-      draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
-      draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
+        int chart_x = 10, chart_y = 44, chart_w = 220, chart_h = 90;
+        draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
+        draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
 
-      PD_SetFont(FONT_ASCII_12);
-      PD_SetColor(LV_ERROR); PD_DrawRect(10, 140, 10, 8);
-      PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(23, 139, "R");
-      PD_SetColor(LV_SUCCESS); PD_DrawRect(50, 140, 10, 8);
-      PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(63, 139, "G");
-      PD_SetColor(LV_PRIMARY); PD_DrawRect(90, 140, 10, 8);
-      PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(103, 139, "B");
+        PD_SetFont(FONT_ASCII_12);
+        PD_SetColor(LV_ERROR); PD_DrawRect(10, 140, 10, 8);
+        PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(23, 139, "R");
+        PD_SetColor(LV_SUCCESS); PD_DrawRect(50, 140, 10, 8);
+        PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(63, 139, "G");
+        PD_SetColor(LV_PRIMARY); PD_DrawRect(90, 140, 10, 8);
+        PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(103, 139, "B");
 
-      if (led_state) {
-        PD_SetColor(LV_WARNING); PD_SetFill(true);
-        PD_DrawRoundRect(150, 137, 30, 14, 3); PD_SetFill(false);
-        PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(154, 138, "LED");
-      }
+        if (led_state) {
+          PD_SetColor(LV_WARNING); PD_SetFill(true);
+          PD_DrawRoundRect(150, 137, 30, 14, 3); PD_SetFill(false);
+          PD_SetColor(LV_TEXT_PRIMARY); PD_DrawString(154, 138, "LED");
+        }
 
-      char dbg[48]; char fstr[16];
-      PD_SetColor(LV_TEXT_PRIMARY);
-      snprintf(dbg, sizeof(dbg), "R:%-5u G:%-5u B:%-5u", raw.red, raw.green, raw.blue);
-      PD_DrawString(10, 158, dbg);
+        char dbg[48]; char fstr[16];
+        PD_SetColor(LV_TEXT_PRIMARY);
+        snprintf(dbg, sizeof(dbg), "R:%-5u G:%-5u B:%-5u", raw.red, raw.green, raw.blue);
+        PD_DrawString(10, 158, dbg);
 
-      PD_SetColor(LV_ACCENT);
-      float_to_str(color.color_temp, fstr);
-      snprintf(dbg, sizeof(dbg), "CCT:%s K  Lux:", fstr);
-      PD_DrawString(10, 178, dbg);
+        PD_SetColor(LV_ACCENT);
+        float_to_str(color.color_temp, fstr);
+        snprintf(dbg, sizeof(dbg), "CCT:%s K  Lux:", fstr);
+        PD_DrawString(10, 178, dbg);
 
-      bbar("EXIT", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("EXIT", NULL, "UP/DOWN");
+      });
     }
     HAL_Delay(30);
   }
@@ -203,13 +204,14 @@ void tcs3472_read_activity(void) {
   if (!boardTCS3472.isInitialized()) {
     boardTCS3472.init();
     if (!boardTCS3472.isInitialized()) {
-      PD_FillScreen(LV_BG_DARK);
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_ERROR);
-      PD_DrawString(20, 60, "TCS3472 Init Failed!");
-      PD_DrawString(20, 85, "Check I2C connection");
-      bbar("EXIT", NULL, NULL);
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_ERROR);
+        PD_DrawString(20, 60, "TCS3472 Init Failed!");
+        PD_DrawString(20, 85, "Check I2C connection");
+        bbar("EXIT", NULL, NULL);
+      });
       while (1) { keyManager.btn_enter.tick(); if (keyManager.btn_enter.getState() == KEY_PRESSED) break; HAL_Delay(50); }
       return;
     }
@@ -222,28 +224,29 @@ void tcs3472_read_activity(void) {
     TCS3472_RawData_t raw = boardTCS3472.readRaw();
     TCS3472_ColorData_t color = boardTCS3472.readColor();
 
-    PD_FillScreen(LV_BG_DARK);
-    bar("09");
+    LCD_FLUSH({
+      PD_FillScreen(LV_BG_DARK);
+      bar("09");
 
-    PD_DrawAngledCard(8, 44, 224, 100, 6, TOS_CARD_BG);
-    PD_SetFont(FONT_ASCII_16);
-    PD_SetColor(LV_ERROR);
-    sprintf(dbg, "R: %4u", raw.red); PD_DrawString(16, 52, dbg);
-    PD_SetColor(LV_SUCCESS);
-    sprintf(dbg, "G: %4u", raw.green); PD_DrawString(16, 70, dbg);
-    PD_SetColor(LV_PRIMARY);
-    sprintf(dbg, "B: %4u", raw.blue); PD_DrawString(16, 88, dbg);
-    PD_SetColor(LV_TEXT_PRIMARY);
-    sprintf(dbg, "C: %4u", raw.clear); PD_DrawString(16, 106, dbg);
+      PD_DrawAngledCard(8, 44, 224, 100, 6, TOS_CARD_BG);
+      PD_SetFont(FONT_ASCII_16);
+      PD_SetColor(LV_ERROR);
+      sprintf(dbg, "R: %4u", raw.red); PD_DrawString(16, 52, dbg);
+      PD_SetColor(LV_SUCCESS);
+      sprintf(dbg, "G: %4u", raw.green); PD_DrawString(16, 70, dbg);
+      PD_SetColor(LV_PRIMARY);
+      sprintf(dbg, "B: %4u", raw.blue); PD_DrawString(16, 88, dbg);
+      PD_SetColor(LV_TEXT_PRIMARY);
+      sprintf(dbg, "C: %4u", raw.clear); PD_DrawString(16, 106, dbg);
 
-    PD_SetColor(LV_ACCENT);
-    float_to_str(color.color_temp, fstr); sprintf(dbg, "CCT: %s K", fstr); PD_DrawString(16, 128, dbg);
-    float_to_str(color.lux, fstr); sprintf(dbg, "Lux: %s lx", fstr); PD_DrawString(16, 146, dbg);
+      PD_SetColor(LV_ACCENT);
+      float_to_str(color.color_temp, fstr); sprintf(dbg, "CCT: %s K", fstr); PD_DrawString(16, 128, dbg);
+      float_to_str(color.lux, fstr); sprintf(dbg, "Lux: %s lx", fstr); PD_DrawString(16, 146, dbg);
 
-    show_color_block(raw.red, raw.green, raw.blue);
+      show_color_block(raw.red, raw.green, raw.blue);
 
-    bbar("EXIT", NULL, NULL);
-    LCD_Flush();
+      bbar("EXIT", NULL, NULL);
+    });
     HAL_Delay(100);
   }
 }
@@ -259,25 +262,26 @@ void tcs3472_color_demo(void) {
     TCS3472_RawData_t raw = boardTCS3472.readRaw();
     TCS3472_ColorData_t color = boardTCS3472.readColor();
 
-    PD_FillScreen(LV_BG_DARK);
-    uint32_t display_color = ((raw.red >> 8) << 16) | ((raw.green >> 8) << 8) | (raw.blue >> 8);
-    PD_SetColor(display_color); PD_SetFill(true);
-    PD_DrawRect(0, 40, 240, 170); PD_SetFill(false);
+    LCD_FLUSH({
+      PD_FillScreen(LV_BG_DARK);
+      uint32_t display_color = ((raw.red >> 8) << 16) | ((raw.green >> 8) << 8) | (raw.blue >> 8);
+      PD_SetColor(display_color); PD_SetFill(true);
+      PD_DrawRect(0, 40, 240, 170); PD_SetFill(false);
 
-    PD_SetFont(FONT_ASCII_16);
-    PD_SetColor(LV_TEXT_PRIMARY);
-    char dbg[32];
-    sprintf(dbg, "R:%-5u G:%-5u B:%-5u", raw.red, raw.green, raw.blue);
-    PD_DrawString(8, 8, dbg);
+      PD_SetFont(FONT_ASCII_16);
+      PD_SetColor(LV_TEXT_PRIMARY);
+      char dbg[32];
+      sprintf(dbg, "R:%-5u G:%-5u B:%-5u", raw.red, raw.green, raw.blue);
+      PD_DrawString(8, 8, dbg);
 
-    char fstr[16];
-    float_to_str(color.color_temp, fstr);
-    sprintf(dbg, "CCT: %s K", fstr);
-    PD_SetColor(LV_ACCENT);
-    PD_DrawString(8, 28, dbg);
+      char fstr[16];
+      float_to_str(color.color_temp, fstr);
+      sprintf(dbg, "CCT: %s K", fstr);
+      PD_SetColor(LV_ACCENT);
+      PD_DrawString(8, 28, dbg);
 
-    bbar("EXIT", NULL, NULL);
-    LCD_Flush();
+      bbar("EXIT", NULL, NULL);
+    });
 
     LOG_D("TACT", "RGB: %u,%u,%u | CCT: %.0f K | Lux: %.1f", raw.red, raw.green, raw.blue, color.color_temp, color.lux);
     HAL_Delay(200);
@@ -303,32 +307,33 @@ void tcs3472_cct_demo(void) {
   r_sum /= samples; g_sum /= samples; b_sum /= samples;
   cct_sum /= samples; lux_sum /= samples;
 
-  PD_FillScreen(LV_BG_DARK);
-  bar("09");
+  LCD_FLUSH({
+    PD_FillScreen(LV_BG_DARK);
+    bar("09");
 
-  PD_DrawAngledCard(8, 44, 224, 122, 6, TOS_CARD_BG);
-  PD_SetFont(FONT_ASCII_16);
-  char dbg[64]; char fstr[16];
+    PD_DrawAngledCard(8, 44, 224, 122, 6, TOS_CARD_BG);
+    PD_SetFont(FONT_ASCII_16);
+    char dbg[64]; char fstr[16];
 
-  sprintf(dbg, "Avg R: %4u", r_sum); PD_SetColor(LV_ERROR); PD_DrawString(20, 52, dbg);
-  sprintf(dbg, "Avg G: %4u", g_sum); PD_SetColor(LV_SUCCESS); PD_DrawString(20, 72, dbg);
-  sprintf(dbg, "Avg B: %4u", b_sum); PD_SetColor(LV_PRIMARY); PD_DrawString(20, 92, dbg);
+    sprintf(dbg, "Avg R: %4u", r_sum); PD_SetColor(LV_ERROR); PD_DrawString(20, 52, dbg);
+    sprintf(dbg, "Avg G: %4u", g_sum); PD_SetColor(LV_SUCCESS); PD_DrawString(20, 72, dbg);
+    sprintf(dbg, "Avg B: %4u", b_sum); PD_SetColor(LV_PRIMARY); PD_DrawString(20, 92, dbg);
 
-  PD_SetColor(LV_TEXT_PRIMARY);
-  float_to_str(cct_sum, fstr); sprintf(dbg, "CCT: %s K", fstr);
-  PD_DrawString(20, 120, dbg);
-  float_to_str(lux_sum, fstr); sprintf(dbg, "Lux: %s lx", fstr);
-  PD_DrawString(20, 140, dbg);
+    PD_SetColor(LV_TEXT_PRIMARY);
+    float_to_str(cct_sum, fstr); sprintf(dbg, "CCT: %s K", fstr);
+    PD_DrawString(20, 120, dbg);
+    float_to_str(lux_sum, fstr); sprintf(dbg, "Lux: %s lx", fstr);
+    PD_DrawString(20, 140, dbg);
 
-  PD_SetColor(LV_ACCENT);
-  if (cct_sum < 3000) PD_DrawString(20, 175, "Warm White");
-  else if (cct_sum < 4500) PD_DrawString(20, 175, "Neutral White");
-  else if (cct_sum < 5500) PD_DrawString(20, 175, "Daylight");
-  else if (cct_sum < 7000) PD_DrawString(20, 175, "Cool White");
-  else PD_DrawString(20, 175, "Overcast/Cool");
+    PD_SetColor(LV_ACCENT);
+    if (cct_sum < 3000) PD_DrawString(20, 175, "Warm White");
+    else if (cct_sum < 4500) PD_DrawString(20, 175, "Neutral White");
+    else if (cct_sum < 5500) PD_DrawString(20, 175, "Daylight");
+    else if (cct_sum < 7000) PD_DrawString(20, 175, "Cool White");
+    else PD_DrawString(20, 175, "Overcast/Cool");
 
-  bbar("EXIT", NULL, NULL);
-  LCD_Flush();
+    bbar("EXIT", NULL, NULL);
+  });
 
   while (1) { keyManager.btn_enter.tick(); if (keyManager.btn_enter.getState() == KEY_PRESSED) break; HAL_Delay(50); }
 }
@@ -369,12 +374,13 @@ void tcs3472_activity(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("09");
-      menu_cards(menu_select);
-      bbar("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("09");
+        menu_cards(menu_select);
+        bbar("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

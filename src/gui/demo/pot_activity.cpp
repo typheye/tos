@@ -113,43 +113,44 @@ void pot_monitor_activity(void) {
       lu = HAL_GetTick();
       Pot_Data_t data = boardPot.readAll();
 
-      PD_FillScreen(LV_BG_DARK);
-      bar("11");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("11");
 
-      PD_DrawAngledCard(8, 44, 224, 78, 6, TOS_CARD_BG);
-      draw_gauge(data.percentage, 55, 80, 32);
+        PD_DrawAngledCard(8, 44, 224, 78, 6, TOS_CARD_BG);
+        draw_gauge(data.percentage, 55, 80, 32);
 
-      PD_SetFont(FONT_ASCII_16);
-      snprintf(dbg, sizeof(dbg), "ADC: %4d", data.adc_raw);
-      PD_SetColor(LV_ACCENT);
-      PD_DrawString(110, 52, dbg);
+        PD_SetFont(FONT_ASCII_16);
+        snprintf(dbg, sizeof(dbg), "ADC: %4d", data.adc_raw);
+        PD_SetColor(LV_ACCENT);
+        PD_DrawString(110, 52, dbg);
 
-      float_to_str(data.voltage, fstr);
-      snprintf(dbg, sizeof(dbg), "V: %s V", fstr);
-      PD_SetColor(LV_TEXT_PRIMARY);
-      PD_DrawString(110, 74, dbg);
+        float_to_str(data.voltage, fstr);
+        snprintf(dbg, sizeof(dbg), "V: %s V", fstr);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        PD_DrawString(110, 74, dbg);
 
-      float_to_str(data.resistance, fstr);
-      snprintf(dbg, sizeof(dbg), "R: %s k", fstr);
-      PD_SetColor(LV_TEXT_PRIMARY);
-      PD_DrawString(110, 96, dbg);
+        float_to_str(data.resistance, fstr);
+        snprintf(dbg, sizeof(dbg), "R: %s k", fstr);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        PD_DrawString(110, 96, dbg);
 
-      PD_SetFont(FONT_ASCII_20);
-      float_to_str(data.percentage, fstr);
-      snprintf(dbg, sizeof(dbg), "%s%%", fstr);
-      PD_SetColor(LV_SUCCESS);
-      PD_DrawString(190, 56, dbg);
+        PD_SetFont(FONT_ASCII_20);
+        float_to_str(data.percentage, fstr);
+        snprintf(dbg, sizeof(dbg), "%s%%", fstr);
+        PD_SetColor(LV_SUCCESS);
+        PD_DrawString(190, 56, dbg);
 
-      PD_DrawProgressBar(10, 140, 220, 16, data.percentage, LV_SUCCESS, LV_BG_DARK);
+        PD_DrawProgressBar(10, 140, 220, 16, data.percentage, LV_SUCCESS, LV_BG_DARK);
 
-      PD_SetFont(FONT_ASCII_12);
-      PD_SetColor(LV_TEXT_HINT);
-      PD_DrawString(16, 168, "Turn the potentiometer");
+        PD_SetFont(FONT_ASCII_12);
+        PD_SetColor(LV_TEXT_HINT);
+        PD_DrawString(16, 168, "Turn the potentiometer");
 
-      bbar("EXIT", NULL, NULL);
-      LCD_Flush();
+        bbar("EXIT", NULL, NULL);
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
@@ -186,28 +187,29 @@ void pot_chart_activity(void) {
     if (HAL_GetTick() - lu > 50) {
       lu = HAL_GetTick();
 
-      PD_FillScreen(LV_BG_DARK);
-      bar("11");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("11");
 
-      draw_chart(chart_data, CHART_WIDTH, 8, 44, 224, 90);
+        draw_chart(chart_data, CHART_WIDTH, 8, 44, 224, 90);
 
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_ACCENT);
-      char dbg[64];
-      snprintf(dbg, sizeof(dbg), "ADC: %4d  (%.2fV)", adc_raw, (float)adc_raw * 3.3f / 4095.0f);
-      PD_DrawString(8, 142, dbg);
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_ACCENT);
+        char dbg[64];
+        snprintf(dbg, sizeof(dbg), "ADC: %4d  (%.2fV)", adc_raw, (float)adc_raw * 3.3f / 4095.0f);
+        PD_DrawString(8, 142, dbg);
 
-      float percentage = (float)adc_raw * 100.0f / 4095.0f;
-      snprintf(dbg, sizeof(dbg), "Position: %.1f%%", percentage);
-      PD_SetColor(LV_TEXT_PRIMARY);
-      PD_DrawString(8, 164, dbg);
+        float percentage = (float)adc_raw * 100.0f / 4095.0f;
+        snprintf(dbg, sizeof(dbg), "Position: %.1f%%", percentage);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        PD_DrawString(8, 164, dbg);
 
-      PD_DrawProgressBar(8, 190, 224, 14, percentage, LV_SUCCESS, LV_BG_DARK);
+        PD_DrawProgressBar(8, 190, 224, 14, percentage, LV_SUCCESS, LV_BG_DARK);
 
-      bbar("EXIT", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("EXIT", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
@@ -244,37 +246,38 @@ void pot_calibrate_activity(void) {
       uint16_t raw = boardPot.readRaw();
       float voltage = (float)raw * 3.3f / 4095.0f;
 
-      PD_FillScreen(LV_BG_DARK);
-      bar("11");
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("11");
 
-      PD_DrawAngledCard(8, 44, 224, 70, 6, TOS_CARD_BG);
-      PD_SetFont(FONT_ASCII_16);
+        PD_DrawAngledCard(8, 44, 224, 70, 6, TOS_CARD_BG);
+        PD_SetFont(FONT_ASCII_16);
 
-      if (cal_step == 0) {
-        PD_SetColor(LV_WARNING);
-        PD_DrawString(16, 54, "Step 1: Set MIN position");
-        PD_SetColor(LV_TEXT_HINT);
-        PD_DrawString(16, 76, "Rotate CCW");
-      } else {
-        PD_SetColor(LV_WARNING);
-        PD_DrawString(16, 54, "Step 2: Set MAX position");
-        PD_SetColor(LV_TEXT_HINT);
-        PD_DrawString(16, 76, "Rotate CW");
-      }
+        if (cal_step == 0) {
+          PD_SetColor(LV_WARNING);
+          PD_DrawString(16, 54, "Step 1: Set MIN position");
+          PD_SetColor(LV_TEXT_HINT);
+          PD_DrawString(16, 76, "Rotate CCW");
+        } else {
+          PD_SetColor(LV_WARNING);
+          PD_DrawString(16, 54, "Step 2: Set MAX position");
+          PD_SetColor(LV_TEXT_HINT);
+          PD_DrawString(16, 76, "Rotate CW");
+        }
 
-      PD_SetColor(LV_TEXT_PRIMARY);
-      char dbg[64];
-      snprintf(dbg, sizeof(dbg), "ADC: %4d  (%.2f V)", raw, voltage);
-      PD_DrawString(16, 126, dbg);
+        PD_SetColor(LV_TEXT_PRIMARY);
+        char dbg[64];
+        snprintf(dbg, sizeof(dbg), "ADC: %4d  (%.2f V)", raw, voltage);
+        PD_DrawString(16, 126, dbg);
 
-      float percentage = (float)raw * 100.0f / 4095.0f;
-      PD_DrawProgressBar(16, 160, 208, 18, percentage, LV_SUCCESS, LV_BG_DARK);
+        float percentage = (float)raw * 100.0f / 4095.0f;
+        PD_DrawProgressBar(16, 160, 208, 18, percentage, LV_SUCCESS, LV_BG_DARK);
 
-      PD_SetColor(LV_ACCENT);
-      PD_DrawString(16, 188, "Press Enter to set");
+        PD_SetColor(LV_ACCENT);
+        PD_DrawString(16, 188, "Press Enter to set");
 
-      bbar("EXIT", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("EXIT", NULL, "UP/DOWN");
+      });
     }
     HAL_Delay(50);
   }
@@ -318,23 +321,24 @@ void pot_activity(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      PD_FillScreen(LV_BG_DARK);
-      bar("11");
-      menu_cards(menu_select);
+      LCD_FLUSH({
+        PD_FillScreen(LV_BG_DARK);
+        bar("11");
+        menu_cards(menu_select);
 
-      uint16_t preview = boardPot.readRaw();
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(LV_ACCENT);
-      char dbg[48];
-      snprintf(dbg, sizeof(dbg), "ADC: %4d  (%.2fV)", preview, (float)preview * 3.3f / 4095.0f);
-      PD_DrawString(16, 184, dbg);
+        uint16_t preview = boardPot.readRaw();
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(LV_ACCENT);
+        char dbg[48];
+        snprintf(dbg, sizeof(dbg), "ADC: %4d  (%.2fV)", preview, (float)preview * 3.3f / 4095.0f);
+        PD_DrawString(16, 184, dbg);
 
-      float pct = (float)preview * 100.0f / 4095.0f;
-      PD_DrawProgressBar(12, 206, 216, 4, pct, LV_SUCCESS, LV_BG_DARK);
+        float pct = (float)preview * 100.0f / 4095.0f;
+        PD_DrawProgressBar(12, 206, 216, 4, pct, LV_SUCCESS, LV_BG_DARK);
 
-      bbar("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        bbar("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

@@ -69,19 +69,20 @@ static void sysinfo_page(uint32_t boot_tick) {
     if (HAL_GetTick() - lu > 200) {
       lu = HAL_GetTick();
       uint32_t el = (HAL_GetTick() - boot_tick) / 1000;
-      draw_frame_title("SysInfo");
-      PD_SetFont(FONT_ASCII_16);
-      PD_SetColor(TOS_TEXT);
-      char buf[48];
-      snprintf(buf, sizeof(buf), "Elapsed Time:");
-      PD_DrawString(16, 33, buf);
-      snprintf(buf, sizeof(buf), "%lu:%02lu:%02lu", (unsigned long)(el / 3600),
-               (unsigned long)((el / 60) % 60), (unsigned long)(el % 60));
-      PD_DrawString(16, 58, buf);
-      PD_DrawFooterCenter("ENTER", NULL, NULL);
-      LCD_Flush();
+      LCD_FLUSH({
+        draw_frame_title("SysInfo");
+        PD_SetFont(FONT_ASCII_16);
+        PD_SetColor(TOS_TEXT);
+        char buf[48];
+        snprintf(buf, sizeof(buf), "Elapsed Time:");
+        PD_DrawString(16, 33, buf);
+        snprintf(buf, sizeof(buf), "%lu:%02lu:%02lu", (unsigned long)(el / 3600),
+                 (unsigned long)((el / 60) % 60), (unsigned long)(el % 60));
+        PD_DrawString(16, 58, buf);
+        PD_DrawFooterCenter("ENTER", NULL, NULL);
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
@@ -136,10 +137,11 @@ void about_activity_run(void) {
       case 9: /* Update System */ {
         /* Loading screen */
         boardLCD.fillScreen(LCD_COLOR_BLACK);
-        draw_frame_title("UPD");
-        PD_SetColor(TOS_TEXT);
-        PD_DrawString(26, 33, "Checking...");
-        LCD_Flush();
+        LCD_FLUSH({
+          draw_frame_title("UPD");
+          PD_SetColor(TOS_TEXT);
+          PD_DrawString(26, 33, "Checking...");
+        });
 
         TosUpgradeInfo info;
         if (TosApi_CheckUpgrade(&info)) {
@@ -173,10 +175,11 @@ void about_activity_run(void) {
         if (confirm_show("RST", "Erase all settings?\nDevice will reboot.")) {
           /* Loading screen */
           boardLCD.fillScreen(LCD_COLOR_BLACK);
-          draw_frame_title("RST");
-          PD_SetColor(TOS_TEXT);
-          PD_DrawString(26, 33, "Resetting...");
-          LCD_Flush();
+          LCD_FLUSH({
+            draw_frame_title("RST");
+            PD_SetColor(TOS_TEXT);
+            PD_DrawString(26, 33, "Resetting...");
+          });
           HAL_Delay(2000);
           /* Erase flash sector and reboot */
           Flash_Erase_Sector();
@@ -190,29 +193,30 @@ void about_activity_run(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      draw_frame_title("ABOUT");
-      PD_SetFont(FONT_ASCII_16);
+      LCD_FLUSH({
+        draw_frame_title("ABOUT");
+        PD_SetFont(FONT_ASCII_16);
 
-      int vis = AM_N < 7 ? AM_N : 7;
-      int start = sel - vis / 2;
-      if (start < 0)
-        start = 0;
-      if (start + vis > AM_N)
-        start = AM_N - vis;
+        int vis = AM_N < 7 ? AM_N : 7;
+        int start = sel - vis / 2;
+        if (start < 0)
+          start = 0;
+        if (start + vis > AM_N)
+          start = AM_N - vis;
 
-      for (int i = 0; i < vis; i++) {
-        int idx = start + i;
-        if (idx >= AM_N)
-          break;
-        int cy = 33 + i * 25;
-        if (items[idx].v[0])
-          draw_card_r(idx, sel, cy, items[idx].l, items[idx].v);
-        else
-          draw_card(idx, sel, cy, items[idx].l);
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        for (int i = 0; i < vis; i++) {
+          int idx = start + i;
+          if (idx >= AM_N)
+            break;
+          int cy = 33 + i * 25;
+          if (items[idx].v[0])
+            draw_card_r(idx, sel, cy, items[idx].l, items[idx].v);
+          else
+            draw_card(idx, sel, cy, items[idx].l);
+        }
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }

@@ -216,39 +216,43 @@ static void draw_signal_bars(int x, int y, int card_h, int rssi) {
  * ================================================================== */
 
 static void draw_scaning(int sel) {
-  draw_frame_title("WLAN");
-  int n = 2 + ap_count;
-  int visible = n < 7 ? n : 7;
-  int start = sel - visible/2;
-  if (start < 0) start = 0;
-  if (start+visible > n) start = n-visible;
-  if (start < 0) start = 0;
-  PD_SetFont(FONT_ASCII_16);
-  for (int i = 0; i < visible; i++) {
-    int idx = start+i; if (idx >= n) break;
-    int cy = 33+i*25;
-    if (idx == 0) { draw_card(idx, sel, cy, "00 Return", false); }
-    else if (idx == 1) { draw_card(idx, sel, cy, "01 Refresh", false); }
-    else {
-      int ap_idx = idx-2;
-      bool selected = (idx == sel);
-      uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-      uint32_t txt_c = TOS_TEXT;
-      PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-      char sec = (ap_enc[ap_idx] == 0) ? 'O' : 'L';
-      char disp[28]; trunc_str(ap_ssid[ap_idx], disp, 16);
-      char line[32]; snprintf(line, sizeof(line), " %c %s", sec, disp);
-      PD_SetColor(txt_c); PD_DrawString(26, cy+2, line);
-      draw_signal_bars(222, cy, 20, ap_rssi[ap_idx]);
+  LCD_FLUSH({
+    draw_frame_title("WLAN");
+    int n = 2 + ap_count;
+    int visible = n < 7 ? n : 7;
+    int start = sel - visible/2;
+    if (start < 0) start = 0;
+    if (start+visible > n) start = n-visible;
+    if (start < 0) start = 0;
+    PD_SetFont(FONT_ASCII_16);
+    for (int i = 0; i < visible; i++) {
+      int idx = start+i; if (idx >= n) break;
+      int cy = 33+i*25;
+      if (idx == 0) { draw_card(idx, sel, cy, "00 Return", false); }
+      else if (idx == 1) { draw_card(idx, sel, cy, "01 Refresh", false); }
+      else {
+        int ap_idx = idx-2;
+        bool selected = (idx == sel);
+        uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
+        uint32_t txt_c = TOS_TEXT;
+        PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
+        char sec = (ap_enc[ap_idx] == 0) ? 'O' : 'L';
+        char disp[28]; trunc_str(ap_ssid[ap_idx], disp, 16);
+        char line[32]; snprintf(line, sizeof(line), " %c %s", sec, disp);
+        PD_SetColor(txt_c); PD_DrawString(26, cy+2, line);
+        draw_signal_bars(222, cy, 20, ap_rssi[ap_idx]);
+      }
     }
-  }
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush();
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 static void scaning_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  draw_frame_title("WLAN");
-  PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Scanning WiFi..."); LCD_Flush();
+  LCD_FLUSH({
+    draw_frame_title("WLAN");
+    PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Scanning WiFi...");
+  });
   do_scan();
 
   int sel = 1; uint8_t le = 0; uint32_t lu = 0;
@@ -267,8 +271,11 @@ static void scaning_run(void) {
     if (ce && !le) {
       if (sel == 0) return;
       if (sel == 1) {
-        boardLCD.fillScreen(LCD_COLOR_BLACK); draw_frame_title("WLAN");
-        PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Scanning WiFi..."); LCD_Flush();
+        boardLCD.fillScreen(LCD_COLOR_BLACK);
+        LCD_FLUSH({
+          draw_frame_title("WLAN");
+          PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Scanning WiFi...");
+        });
         do_scan(); sel = 1; lu = 0;
       } else if (sel >= 2) {
         int ap_idx = sel-2;
@@ -276,8 +283,11 @@ static void scaning_run(void) {
         char pwd[32] = "";
         if (keyboard_open(title, pwd, 31)) {
           LOG_I("WLAN", "Connecting to %s...", ap_ssid[ap_idx]);
-          boardLCD.fillScreen(LCD_COLOR_BLACK); draw_frame_title("WLAN");
-          PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Connecting..."); LCD_Flush();
+          boardLCD.fillScreen(LCD_COLOR_BLACK);
+          LCD_FLUSH({
+            draw_frame_title("WLAN");
+            PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Connecting...");
+          });
           bool ok = ESP8266_ConnectWiFi(ap_ssid[ap_idx], pwd);
           HAL_Delay(500);
           if (ok && ESP8266_IsConnected()) {
@@ -296,8 +306,11 @@ static void scaning_run(void) {
             alert_show("ALERT", "Connection failed. Check password.");
           }
         }
-        boardLCD.fillScreen(LCD_COLOR_BLACK); draw_frame_title("WLAN");
-        PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Scanning WiFi..."); LCD_Flush();
+        boardLCD.fillScreen(LCD_COLOR_BLACK);
+        LCD_FLUSH({
+          draw_frame_title("WLAN");
+          PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Scanning WiFi...");
+        });
         do_scan();
       }
     }
@@ -310,7 +323,7 @@ static void scaning_run(void) {
     else if (!up && !down) { ea = false; }
 
     if (HAL_GetTick()-lu > 100) { lu = HAL_GetTick(); draw_scaning(sel); }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
@@ -356,15 +369,17 @@ static void connected_page(void) {
 
     if (HAL_GetTick()-lu > 100) {
       lu = HAL_GetTick();
-      draw_frame_title("WLAN");
-      PD_SetFont(FONT_ASCII_16);
-      for (int i = 0; i < 3; i++) {
-        int cy = 33+i*25;
-        draw_card(i, sel, cy, items[i], false);
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush();
+      LCD_FLUSH({
+        draw_frame_title("WLAN");
+        PD_SetFont(FONT_ASCII_16);
+        for (int i = 0; i < 3; i++) {
+          int cy = 33+i*25;
+          draw_card(i, sel, cy, items[i], false);
+        }
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
@@ -405,8 +420,11 @@ static void saved_net_action(int idx) {
       case 2:
         if (is_current) { alert_show("WLAN", "Already connected"); break; }
         /* Show connecting screen */
-        boardLCD.fillScreen(LCD_COLOR_BLACK); draw_frame_title("WLAN");
-        PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Connecting..."); LCD_Flush();
+        boardLCD.fillScreen(LCD_COLOR_BLACK);
+        LCD_FLUSH({
+          draw_frame_title("WLAN");
+          PD_SetColor(TOS_TEXT); PD_DrawString(26, 33, "Connecting...");
+        });
         if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
           HAL_Delay(500);
           if (ESP8266_IsConnected()) {
@@ -431,21 +449,23 @@ static void saved_net_action(int idx) {
     le = ce;
 
     if (HAL_GetTick()-lu > 100) { lu = HAL_GetTick();
-      draw_frame_title("WLAN"); PD_SetFont(FONT_ASCII_16);
-      for (int i = 0; i < 4; i++) {
-        if (i == 2 && is_current) {
-          /* Grey out "02 Connect" — currently connected to this network */
-          bool s = (i == sel);
-          uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
-          PD_DrawAngledCard(14, 33+i*25, 212, 20, 5, cc);
-          PD_SetColor(TOS_GREY);
-          PD_DrawString(26, 33+i*25+2, items[i]);
-        } else {
-          draw_card(i, sel, 33+i*25, items[i], false);
+      LCD_FLUSH({
+        draw_frame_title("WLAN"); PD_SetFont(FONT_ASCII_16);
+        for (int i = 0; i < 4; i++) {
+          if (i == 2 && is_current) {
+            /* Grey out "02 Connect" — currently connected to this network */
+            bool s = (i == sel);
+            uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
+            PD_DrawAngledCard(14, 33+i*25, 212, 20, 5, cc);
+            PD_SetColor(TOS_GREY);
+            PD_DrawString(26, 33+i*25+2, items[i]);
+          } else {
+            draw_card(i, sel, 33+i*25, items[i], false);
+          }
         }
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush(); }
-    HAL_Delay(20);
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      }); }
+    HAL_Delay(1);
   }
 }
 
@@ -470,16 +490,18 @@ static void saved_networks_page(void) {
     }
     le = ce;
     if (HAL_GetTick()-lu > 100) { lu = HAL_GetTick();
-      draw_frame_title("WLAN"); PD_SetFont(FONT_ASCII_16);
-      for (int i = 0; i < total; i++) {
-        int cy = 33+i*25;
-        if (i == 0) draw_card(0, sel, cy, "00 Return", false);
-        else { const SM_SavedNet_t *sn = SM_Saved_Get(i-1);
-               char b[40]; snprintf(b, sizeof(b), " L %s", sn ? sn->ssid : "?");
-               draw_card(i, sel, cy, b, false); }
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush(); }
-    HAL_Delay(20);
+      LCD_FLUSH({
+        draw_frame_title("WLAN"); PD_SetFont(FONT_ASCII_16);
+        for (int i = 0; i < total; i++) {
+          int cy = 33+i*25;
+          if (i == 0) draw_card(0, sel, cy, "00 Return", false);
+          else { const SM_SavedNet_t *sn = SM_Saved_Get(i-1);
+                 char b[40]; snprintf(b, sizeof(b), " L %s", sn ? sn->ssid : "?");
+                 draw_card(i, sel, cy, b, false); }
+        }
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      }); }
+    HAL_Delay(1);
   }
 }
 
@@ -494,39 +516,41 @@ static int wlan_item_count(void) {
 }
 
 static void draw_wlan_main(int sel) {
-  draw_frame_title("WLAN");
-  PD_SetFont(FONT_ASCII_16);
-  int n = wlan_item_count();
-  int vis = n < 7 ? n : 7;
-  int start = sel - vis/2;
-  if (start < 0) start = 0;
-  if (start+vis > n) start = n-vis;
+  LCD_FLUSH({
+    draw_frame_title("WLAN");
+    PD_SetFont(FONT_ASCII_16);
+    int n = wlan_item_count();
+    int vis = n < 7 ? n : 7;
+    int start = sel - vis/2;
+    if (start < 0) start = 0;
+    if (start+vis > n) start = n-vis;
 
-  for (int i = 0; i < vis; i++) {
-    int idx = start+i; if (idx >= n) break;
-    int cy = 33+i*25;
+    for (int i = 0; i < vis; i++) {
+      int idx = start+i; if (idx >= n) break;
+      int cy = 33+i*25;
 
-    if (idx == 0) {
-      draw_card(idx, sel, cy, "00 Return", false);
-    } else if (idx == 1) {
-      char buf[32]; snprintf(buf, sizeof(buf), "01 WLAN");
-      draw_card_r(idx, sel, cy, buf, wlan_on?"ON":"OFF", wlan_edit);
-    } else if (idx == 2 && wlan_on) {
-      bool s = (idx == sel);
-      uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
-      PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-      PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-      PD_DrawString(26, cy+2, wlan_connected ? "   Connected" : "   Scanning");
-    } else if (idx == 3 && wlan_on) {
-      char buf[32]; snprintf(buf, sizeof(buf), "02 Auto Connect");
-      draw_card_r(idx, sel, cy, buf, wlan_auto_conn?"ON":"OFF",
-                  wlan_edit && (idx == 3));
-    } else if (idx == 4 && wlan_on) {
-      char buf[32]; snprintf(buf, sizeof(buf), "03 Saved (%u)", SM_Saved_Count());
-      draw_card(idx, sel, cy, buf, false);
+      if (idx == 0) {
+        draw_card(idx, sel, cy, "00 Return", false);
+      } else if (idx == 1) {
+        char buf[32]; snprintf(buf, sizeof(buf), "01 WLAN");
+        draw_card_r(idx, sel, cy, buf, wlan_on?"ON":"OFF", wlan_edit);
+      } else if (idx == 2 && wlan_on) {
+        bool s = (idx == sel);
+        uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+        PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
+        PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
+        PD_DrawString(26, cy+2, wlan_connected ? "   Connected" : "   Scanning");
+      } else if (idx == 3 && wlan_on) {
+        char buf[32]; snprintf(buf, sizeof(buf), "02 Auto Connect");
+        draw_card_r(idx, sel, cy, buf, wlan_auto_conn?"ON":"OFF",
+                    wlan_edit && (idx == 3));
+      } else if (idx == 4 && wlan_on) {
+        char buf[32]; snprintf(buf, sizeof(buf), "03 Saved (%u)", SM_Saved_Count());
+        draw_card(idx, sel, cy, buf, false);
+      }
     }
-  }
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN"); LCD_Flush();
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 static int wlan_main_loop(void) {
@@ -586,7 +610,7 @@ static int wlan_main_loop(void) {
       wlan_load_state();
       draw_wlan_main(sel);
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 

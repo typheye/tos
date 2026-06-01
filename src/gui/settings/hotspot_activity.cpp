@@ -497,66 +497,67 @@ static int hs_item_count(void) {
 }
 
 static void draw_hs_main(int sel) {
-  draw_frame_title("HOTS");
-  PD_SetFont(FONT_ASCII_16);
-  int n = hs_item_count();
-  int visible = n < 7 ? n : 7;
-  int start = sel - visible / 2;
-  if (start < 0)
-    start = 0;
-  if (start + visible > n)
-    start = n - visible;
+  LCD_FLUSH({
+    draw_frame_title("HOTS");
+    PD_SetFont(FONT_ASCII_16);
+    int n = hs_item_count();
+    int visible = n < 7 ? n : 7;
+    int start = sel - visible / 2;
+    if (start < 0)
+      start = 0;
+    if (start + visible > n)
+      start = n - visible;
 
-  for (int i = 0; i < visible; i++) {
-    int idx = start + i;
-    if (idx >= n)
-      break;
-    int cy = 33 + i * 25;
-    switch (idx) {
-    case 0:
-      draw_card(idx, sel, cy, "00 Return", false);
-      break;
-    case 1: {
-      char b[32];
-      snprintf(b, sizeof(b), "01 Hotspot");
-      draw_card_r(idx, sel, cy, b, hs_on ? "ON" : "OFF", hs_edit);
-      break;
-    }
-    case 2: {
-      bool can_use = hs_on && (hs_client_count == 0);
-      if (can_use) {
+    for (int i = 0; i < visible; i++) {
+      int idx = start + i;
+      if (idx >= n)
+        break;
+      int cy = 33 + i * 25;
+      switch (idx) {
+      case 0:
+        draw_card(idx, sel, cy, "00 Return", false);
+        break;
+      case 1: {
         char b[32];
-        snprintf(b, sizeof(b), "   Auto Close");
-        draw_card_r(idx, sel, cy, b, hs_auto_close ? "ON" : "OFF",
-                    hs_edit && (sel == 2));
-      } else {
-        bool s = (idx == sel);
-        uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
-        PD_DrawAngledCard(14, cy, 212, 20, 5, cc);
-        PD_SetColor(TOS_GREY);
-        PD_DrawString(26, cy + 2, "   Auto Close");
+        snprintf(b, sizeof(b), "01 Hotspot");
+        draw_card_r(idx, sel, cy, b, hs_on ? "ON" : "OFF", hs_edit);
+        break;
       }
-      break;
+      case 2: {
+        bool can_use = hs_on && (hs_client_count == 0);
+        if (can_use) {
+          char b[32];
+          snprintf(b, sizeof(b), "   Auto Close");
+          draw_card_r(idx, sel, cy, b, hs_auto_close ? "ON" : "OFF",
+                      hs_edit && (sel == 2));
+        } else {
+          bool s = (idx == sel);
+          uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
+          PD_DrawAngledCard(14, cy, 212, 20, 5, cc);
+          PD_SetColor(TOS_GREY);
+          PD_DrawString(26, cy + 2, "   Auto Close");
+        }
+        break;
+      }
+      case 3:
+        draw_card(idx, sel, cy, "02 SSID & Password", false);
+        break;
+      case 4: {
+        char b[32];
+        snprintf(b, sizeof(b), "03 IP");
+        draw_card_r(idx, sel, cy, b, hs_ip, hs_edit && (idx == 4));
+        break;
+      }
+      case 5: {
+        char cb[32];
+        snprintf(cb, sizeof(cb), "04 Connected (%d)", hs_client_count);
+        draw_card(idx, sel, cy, cb, false);
+        break;
+      }
+      }
     }
-    case 3:
-      draw_card(idx, sel, cy, "02 SSID & Password", false);
-      break;
-    case 4: {
-      char b[32];
-      snprintf(b, sizeof(b), "03 IP");
-      draw_card_r(idx, sel, cy, b, hs_ip, hs_edit && (idx == 4));
-      break;
-    }
-    case 5: {
-      char cb[32];
-      snprintf(cb, sizeof(cb), "04 Connected (%d)", hs_client_count);
-      draw_card(idx, sel, cy, cb, false);
-      break;
-    }
-    }
-  }
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-  LCD_Flush();
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 static int hs_main_loop(void) {
@@ -655,22 +656,23 @@ static int hs_main_loop(void) {
       lu = HAL_GetTick();
       draw_hs_main(sel);
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
 // ============ SSID & Password page ============
 
 static void draw_ssidpwd(int sel) {
-  draw_frame_title("HOTS");
-  PD_SetFont(FONT_ASCII_16);
+  LCD_FLUSH({
+    draw_frame_title("HOTS");
+    PD_SetFont(FONT_ASCII_16);
 
-  draw_card(0, sel, 33, "00 Return", false);
-  draw_card(1, sel, 58, "01 Edit SSID", false);
-  draw_card(2, sel, 83, "02 Edit Password", false);
+    draw_card(0, sel, 33, "00 Return", false);
+    draw_card(1, sel, 58, "01 Edit SSID", false);
+    draw_card(2, sel, 83, "02 Edit Password", false);
 
-  PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-  LCD_Flush();
+    PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+  });
 }
 
 static void ssidpwd_run(void) {
@@ -719,7 +721,7 @@ static void ssidpwd_run(void) {
       lu = HAL_GetTick();
       draw_ssidpwd(sel);
     }
-    HAL_Delay(20);
+    HAL_Delay(1);
   }
 }
 
@@ -728,10 +730,11 @@ static void ssidpwd_run(void) {
 static void connected_page(void) {
   /* Loading screen */
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  draw_frame_title("HOTS");
-  PD_SetColor(TOS_TEXT);
-  PD_DrawString(26, 33, "Querying...");
-  LCD_Flush();
+  LCD_FLUSH({
+    draw_frame_title("HOTS");
+    PD_SetColor(TOS_TEXT);
+    PD_DrawString(26, 33, "Querying...");
+  });
   hs_refresh_clients();
 
   int n = hs_client_count + 1, sel = 0;
@@ -777,31 +780,32 @@ static void connected_page(void) {
 
     if (HAL_GetTick() - lu > 100) {
       lu = HAL_GetTick();
-      draw_frame_title("HOTS");
-      PD_SetFont(FONT_ASCII_16);
-      int vis = n < 7 ? n : 7;
-      int start = sel - vis / 2;
-      if (start < 0)
-        start = 0;
-      if (start + vis > n)
-        start = n - vis;
+      LCD_FLUSH({
+        draw_frame_title("HOTS");
+        PD_SetFont(FONT_ASCII_16);
+        int vis = n < 7 ? n : 7;
+        int start = sel - vis / 2;
+        if (start < 0)
+          start = 0;
+        if (start + vis > n)
+          start = n - vis;
 
-      for (int i = 0; i < vis; i++) {
-        int idx = start + i;
-        if (idx >= n)
-          break;
-        int cy = 33 + i * 25;
-        if (idx == 0) {
-          draw_card(0, sel, cy, "00 Return", false);
-        } else {
-          HsClient *c = &hs_clients[idx - 1];
-          char b[40];
-          snprintf(b, sizeof(b), " - %s", c->mac[0] ? c->mac : "-");
-          draw_card(idx, sel, cy, b, false);
+        for (int i = 0; i < vis; i++) {
+          int idx = start + i;
+          if (idx >= n)
+            break;
+          int cy = 33 + i * 25;
+          if (idx == 0) {
+            draw_card(0, sel, cy, "00 Return", false);
+          } else {
+            HsClient *c = &hs_clients[idx - 1];
+            char b[40];
+            snprintf(b, sizeof(b), " - %s", c->mac[0] ? c->mac : "-");
+            draw_card(idx, sel, cy, b, false);
+          }
         }
-      }
-      PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
-      LCD_Flush();
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
     }
     HAL_Delay(10);
   }
