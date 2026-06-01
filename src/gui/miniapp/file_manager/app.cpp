@@ -22,11 +22,11 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-#define FM_MAX_ITEMS       32
-#define FM_NAME_LEN        64
-#define FM_PATH_LEN        192
-#define FM_STACK_DEPTH     8
-#define FM_DISPLAY_LIMIT   15
+#define FM_MAX_ITEMS 32
+#define FM_NAME_LEN 64
+#define FM_PATH_LEN 192
+#define FM_STACK_DEPTH 8
+#define FM_DISPLAY_LIMIT 15
 
 static FATFS fm_fs;
 static bool fm_mounted = false;
@@ -75,8 +75,8 @@ static void fm_copy_limited(char *out, size_t out_sz, const char *src,
   out[i] = '\0';
 }
 
-static void fm_make_display_name(const char *name, bool is_dir,
-                                 char *out, size_t out_sz) {
+static void fm_make_display_name(const char *name, bool is_dir, char *out,
+                                 size_t out_sz) {
   if (out_sz == 0) {
     return;
   }
@@ -135,13 +135,20 @@ static void draw_card(int idx, int sel, int cy, const char *text, bool is_dir) {
 
 static uint32_t fm_error_code_from_fresult(FRESULT res, uint32_t fallback) {
   switch (res) {
-  case FR_OK: return SYS_ERR_NONE;
-  case FR_NOT_READY: return SYS_ERR_SD_NOT_READY;
-  case FR_TIMEOUT: return SYS_ERR_SD_TIMEOUT;
-  case FR_DISK_ERR: return SYS_ERR_SD_DISK_ERR;
-  case FR_INT_ERR: return SYS_ERR_SD_LOST;
-  case FR_NO_FILESYSTEM: return SYS_ERR_SD_NO_FILESYSTEM;
-  default: return fallback;
+  case FR_OK:
+    return SYS_ERR_NONE;
+  case FR_NOT_READY:
+    return SYS_ERR_SD_NOT_READY;
+  case FR_TIMEOUT:
+    return SYS_ERR_SD_TIMEOUT;
+  case FR_DISK_ERR:
+    return SYS_ERR_SD_DISK_ERR;
+  case FR_INT_ERR:
+    return SYS_ERR_SD_LOST;
+  case FR_NO_FILESYSTEM:
+    return SYS_ERR_SD_NO_FILESYSTEM;
+  default:
+    return fallback;
   }
 }
 
@@ -181,13 +188,13 @@ static void fm_draw_formatting(const char *line1, const char *line2) {
     draw_frame_title("FILE");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
-    PD_DrawString(22, 58, line1 ? line1 : "Working...");
+    PD_DrawString(22, 33, line1 ? line1 : "Working...");
     if (line2) {
       PD_SetFont(FONT_ASCII_12);
       PD_SetColor(TOS_TEXT_SEC);
-      PD_DrawString(22, 88, line2);
+      PD_DrawString(22, 53, line2);
     }
-    PD_DrawFooterCenter("WAIT", NULL, "");
+    PD_DrawFooterCenter("", NULL, "");
   });
 }
 
@@ -291,8 +298,8 @@ static bool fm_prepare_storage(void) {
   return false;
 }
 
-static bool fm_join_path(const char *base, const char *name,
-                         char *out, size_t out_sz) {
+static bool fm_join_path(const char *base, const char *name, char *out,
+                         size_t out_sz) {
   if (out_sz == 0) {
     return false;
   }
@@ -354,7 +361,7 @@ static void fm_show_file_path(const char *name) {
 
   LOG_I("FILE", "selected file: %s", full);
   fm_wait_keys_released(600);
-  alert_show("FILE PATH", msg);
+  alert_show("FILE", msg);
   fm_wait_keys_released(600);
 }
 
@@ -424,7 +431,8 @@ static void fm_load_dir(void) {
       break;
 
     /* With FatFs LFN enabled, fno.fname preserves long names and case.
-     * Without LFN it falls back to 8.3 short names, which are often uppercase. */
+     * Without LFN it falls back to 8.3 short names, which are often uppercase.
+     */
     int idx = fm_count++;
     strncpy(fm_items[idx], fno.fname, FM_NAME_LEN - 1);
     fm_items[idx][FM_NAME_LEN - 1] = '\0';
