@@ -67,8 +67,11 @@ static void show_message(const char *title, const char *line1,
   HAL_Delay(hold_ms);
 }
 
-static int page_menu(const char *title, const char **items, int count) {
-  int sel = 0;
+static int page_menu(const char *title, const char **items, int count,
+                     int start_sel = 0) {
+  int sel = start_sel;
+  if (sel >= count)
+    sel = 0;
   uint8_t le = 0;
   uint32_t lu = 0;
 
@@ -132,8 +135,9 @@ void hid_tools_vendor_page(void) {
                                 "03 Alert Last RX"};
   char last_rx[64] = "";
 
+  int sel = 0;
   while (1) {
-    int sel = page_menu("HID", items, 4);
+    sel = page_menu("HID", items, 4, sel);
     if (sel == 0)
       return;
     if (sel == 1) {
@@ -175,8 +179,9 @@ void hid_tools_quickkeys_page(void) {
                                 "03 Win + R",  "04 Alt + Tab", "05 Ctrl + C",
                                 "06 Ctrl + V", "07 Type TOS"};
 
+  int sel = 0;
   while (1) {
-    int sel = page_menu("Quick Keys", items, 8);
+    sel = page_menu("Quick Keys", items, 8, sel);
     if (sel == 0)
       return;
     if (!boardHID.isConfigured()) {
@@ -234,8 +239,9 @@ void hid_tools_mouse_page(void) {
   static const char *items[] = {"00 Return",     "01 Wiggle",
                                 "02 Left Click", "03 Right Click",
                                 "04 Scroll Up",  "05 Scroll Down"};
+  int sel = 0;
   while (1) {
-    int sel = page_menu("Mouse Test", items, 6);
+    sel = page_menu("Mouse Test", items, 6, sel);
     if (sel == 0)
       return;
     if (!boardHID.isConfigured()) {
@@ -295,10 +301,10 @@ static void draw_gyro_mouse_status(float gx, float gz, int8_t dx, int8_t dy,
                                    uint8_t buttons) {
   LCD_FLUSH({
     char line[48];
-    draw_frame_title("Gyro Mouse");
+    draw_frame_title("HID");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
-    PD_DrawString(18, 34, "JY901S -> HID Mouse x10");
+    PD_DrawString(18, 34, "Gyro Mouse");
     PD_SetColor(TOS_TEXT_SEC);
     snprintf(line, sizeof(line), "X=Gz:%ld  Y=-Gx:%ld", (long)gz, (long)(-gx));
     PD_DrawString(18, 58, line);
@@ -345,7 +351,7 @@ void hid_tools_gyro_mouse_page(void) {
       JY901S_Data_t data = boardJY901S.readData();
       smooth_x = smooth_x * 0.72f + data.gyro_x * 0.28f;
       smooth_z = smooth_z * 0.72f + data.gyro_z * 0.28f;
-      int8_t dx = gyro_rate_to_delta(smooth_z, &frac_x);
+      int8_t dx = gyro_rate_to_delta(-smooth_z, &frac_x);
       int8_t dy = gyro_rate_to_delta(-smooth_x, &frac_y);
       uint8_t buttons = 0;
       if (keyManager.collision_A8.isPressed())
