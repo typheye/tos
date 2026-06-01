@@ -4,6 +4,7 @@
  */
 
 #include "include/app.h"
+#include "components/include/alert.hpp"
 #include "components/include/confirm.hpp"
 #include "core/include/syshandle.h"
 #include "core/include/systime.h"
@@ -16,20 +17,30 @@
 #include "syslog.h"
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-#define FM_MAX_ITEMS 32
-#define FM_NAME_LEN 32
+#define FM_MAX_ITEMS       32
+#define FM_NAME_LEN        64
+#define FM_PATH_LEN        192
+#define FM_STACK_DEPTH     8
+#define FM_DISPLAY_LIMIT   15
 
 static FATFS fm_fs;
 static bool fm_mounted = false;
 
-static char fm_cur_path[128] = "0:";
+static char fm_cur_path[FM_PATH_LEN] = "0:";
 static char fm_items[FM_MAX_ITEMS][FM_NAME_LEN];
 static int fm_is_dir[FM_MAX_ITEMS];
 static int fm_count = 0;
+
+/* When entering a child directory, remember the selected child index in the
+ * parent. When going back through "..", restore that selection instead of
+ * jumping back to the top of the parent list. */
+static int fm_parent_sel_stack[FM_STACK_DEPTH];
+static int fm_stack_depth = 0;
 
 static void draw_frame_title(const char *title) {
   PD_Init();
@@ -51,18 +62,74 @@ static void draw_frame_title(const char *title) {
   PD_DrawString(22, 5, title);
 }
 
+static void fm_copy_limited(char *out, size_t out_sz, const char *src,
+                            size_t max_chars) {
+  if (out_sz == 0) {
+    return;
+  }
+  size_t i = 0;
+  while (i + 1U < out_sz && i < max_chars && src[i] != '\0') {
+    out[i] = src[i];
+    i++;
+  }
+  out[i] = '\0';
+}
+
+static void fm_make_display_name(const char *name, bool is_dir,
+                                 char *out, size_t out_sz) {
+  if (out_sz == 0) {
+    return;
+  }
+  out[0] = '\0';
+
+  if (strcmp(name, "..") == 0) {
+    fm_copy_limited(out, out_sz, "..", 2U);
+    return;
+  }
+
+  const bool append_slash = is_dir;
+  const size_t suffix_len = append_slash ? 1U : 0U;
+  const size_t name_len = strlen(name);
+
+  if (name_len + suffix_len <= FM_DISPLAY_LIMIT) {
+    size_t i = 0;
+    while (i + 1U < out_sz && name[i] != '\0') {
+      out[i] = name[i];
+      i++;
+    }
+    if (append_slash && i + 1U < out_sz) {
+      out[i++] = '/';
+    }
+    out[i] = '\0';
+    return;
+  }
+
+  /* Visible ASCII length <= 15. Folder: 11 + "..." + "/" = 15.
+   * File  : 12 + "..."       = 15. Avoid snprintf here because gcc is
+   * rightfully conservative about truncation warnings. */
+  const size_t keep = append_slash ? 11U : 12U;
+  size_t i = 0;
+  while (i + 1U < out_sz && i < keep && name[i] != '\0') {
+    out[i] = name[i];
+    i++;
+  }
+  const char dots[] = "...";
+  for (size_t d = 0; d < 3U && i + 1U < out_sz; ++d) {
+    out[i++] = dots[d];
+  }
+  if (append_slash && i + 1U < out_sz) {
+    out[i++] = '/';
+  }
+  out[i] = '\0';
+}
+
 static void draw_card(int idx, int sel, int cy, const char *text, bool is_dir) {
   bool s = (idx == sel);
   PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
   PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  /* Append / for directories */
-  char buf[36];
-  if (is_dir && strcmp(text, "..") != 0)
-    snprintf(buf, sizeof(buf), "%s/", text);
-  else {
-    strncpy(buf, text, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-  }
+
+  char buf[FM_DISPLAY_LIMIT + 2];
+  fm_make_display_name(text, is_dir, buf, sizeof(buf));
   PD_DrawString(26, cy + 2, buf);
 }
 
@@ -175,7 +242,6 @@ static bool fm_has_init_marker(void) {
   return false;
 }
 
-
 static void fm_wait_keys_released(uint32_t timeout_ms) {
   uint32_t start = HAL_GetTick();
   while ((HAL_GetTick() - start) < timeout_ms) {
@@ -225,6 +291,105 @@ static bool fm_prepare_storage(void) {
   return false;
 }
 
+static bool fm_join_path(const char *base, const char *name,
+                         char *out, size_t out_sz) {
+  if (out_sz == 0) {
+    return false;
+  }
+  out[0] = '\0';
+
+  const char *sep = (strcmp(base, "0:") == 0) ? "/" : "/";
+  size_t need = strlen(base) + strlen(sep) + strlen(name) + 1U;
+  if (need > out_sz) {
+    return false;
+  }
+
+  strcpy(out, base);
+  strcat(out, sep);
+  strcat(out, name);
+  return true;
+}
+
+static void fm_build_full_path(const char *name, char *out, size_t out_sz) {
+  if (!fm_join_path(fm_cur_path, name, out, out_sz)) {
+    fm_copy_limited(out, out_sz, "Path too long", strlen("Path too long"));
+  }
+}
+
+static void fm_wrap_for_alert(const char *path, char *out, size_t out_sz) {
+  if (out_sz == 0) {
+    return;
+  }
+
+  const size_t width = 22U; /* alert.cpp truncates each line at 22 chars */
+  size_t op = 0;
+  size_t col = 0;
+
+  const char *prefix = "Path:\n";
+  for (const char *p = prefix; *p && op + 1 < out_sz; ++p) {
+    out[op++] = *p;
+  }
+
+  col = 0;
+  for (const char *p = path; *p && op + 1 < out_sz; ++p) {
+    if (col >= width) {
+      out[op++] = '\n';
+      col = 0;
+      if (op + 1 >= out_sz) {
+        break;
+      }
+    }
+    out[op++] = *p;
+    col++;
+  }
+  out[op] = '\0';
+}
+
+static void fm_show_file_path(const char *name) {
+  char full[FM_PATH_LEN + FM_NAME_LEN];
+  char msg[FM_PATH_LEN + FM_NAME_LEN + 16];
+
+  fm_build_full_path(name, full, sizeof(full));
+  fm_wrap_for_alert(full, msg, sizeof(msg));
+
+  LOG_I("FILE", "selected file: %s", full);
+  fm_wait_keys_released(600);
+  alert_show("FILE PATH", msg);
+  fm_wait_keys_released(600);
+}
+
+static void fm_push_parent_selection(int sel) {
+  if (fm_stack_depth < FM_STACK_DEPTH) {
+    fm_parent_sel_stack[fm_stack_depth++] = sel;
+  } else {
+    /* Keep the newest navigation history if the user enters very deeply. */
+    for (int i = 1; i < FM_STACK_DEPTH; ++i) {
+      fm_parent_sel_stack[i - 1] = fm_parent_sel_stack[i];
+    }
+    fm_parent_sel_stack[FM_STACK_DEPTH - 1] = sel;
+  }
+}
+
+static int fm_pop_parent_selection(void) {
+  if (fm_stack_depth <= 0) {
+    return 0;
+  }
+  return fm_parent_sel_stack[--fm_stack_depth];
+}
+
+static void fm_trim_to_parent(void) {
+  if (strcmp(fm_cur_path, "0:") == 0) {
+    return;
+  }
+
+  char *p = strrchr(fm_cur_path, '/');
+  if (p == NULL || p <= fm_cur_path + 1) {
+    strcpy(fm_cur_path, "0:");
+  } else {
+    *p = '\0';
+  }
+}
+
 static void fm_load_dir(void) {
   fm_count = 0;
   if (!fm_mounted)
@@ -232,7 +397,7 @@ static void fm_load_dir(void) {
   if (!fm_mounted)
     return;
 
-  /* Always show .. for navigation/exit */
+  /* Always show .. for navigation/exit. Keep it at index 0. */
   strcpy(fm_items[0], "..");
   fm_is_dir[0] = 1;
   fm_count = 1;
@@ -255,8 +420,11 @@ static void fm_load_dir(void) {
     if (!fno.fname[0]) {
       break;
     }
-    if (fm_count >= FM_MAX_ITEMS - 1)
+    if (fm_count >= FM_MAX_ITEMS)
       break;
+
+    /* With FatFs LFN enabled, fno.fname preserves long names and case.
+     * Without LFN it falls back to 8.3 short names, which are often uppercase. */
     int idx = fm_count++;
     strncpy(fm_items[idx], fno.fname, FM_NAME_LEN - 1);
     fm_items[idx][FM_NAME_LEN - 1] = '\0';
@@ -264,9 +432,9 @@ static void fm_load_dir(void) {
   }
   f_closedir(&dir);
 
-  /* Sort: dirs first */
-  for (int i = (strcmp(fm_cur_path, "0:") == 0 ? 0 : 1); i < fm_count - 1;
-       i++) {
+  /* Sort: directories first, then case-insensitive alphabetical order.
+   * Start at 1 so ".." is never sorted into the list. */
+  for (int i = 1; i < fm_count - 1; i++) {
     for (int j = i + 1; j < fm_count; j++) {
       bool swap = false;
       if (fm_is_dir[i] && !fm_is_dir[j])
@@ -289,24 +457,54 @@ static void fm_load_dir(void) {
   }
 }
 
-static void fm_enter(int idx) {
-  if (!fm_is_dir[idx])
-    return;
+static bool fm_enter(int idx, int *sel_io) {
+  if (idx < 0 || idx >= fm_count) {
+    return false;
+  }
+
+  if (!fm_is_dir[idx]) {
+    fm_show_file_path(fm_items[idx]);
+    return false;
+  }
+
   if (strcmp(fm_items[idx], "..") == 0) {
     if (strcmp(fm_cur_path, "0:") == 0) {
       fm_unmount();
-      return; /* signal exit */
+      return true; /* signal exit */
     }
-    char *p = strrchr(fm_cur_path, '/');
-    if (p)
-      *p = '\0';
+
+    fm_trim_to_parent();
     fm_load_dir();
-  } else {
-    int len = strlen(fm_cur_path);
-    snprintf(fm_cur_path + len, sizeof(fm_cur_path) - len, "/%s",
-             fm_items[idx]);
-    fm_load_dir();
+
+    int restored = fm_pop_parent_selection();
+    if (restored < 0) {
+      restored = 0;
+    }
+    if (restored >= fm_count) {
+      restored = fm_count > 0 ? fm_count - 1 : 0;
+    }
+    if (sel_io != NULL) {
+      *sel_io = restored;
+    }
+    return false;
   }
+
+  char next_path[FM_PATH_LEN];
+  if (!fm_join_path(fm_cur_path, fm_items[idx], next_path, sizeof(next_path))) {
+    fm_wait_keys_released(600);
+    alert_show("FILE", "Path too long");
+    return false;
+  }
+
+  fm_push_parent_selection(idx);
+  strncpy(fm_cur_path, next_path, sizeof(fm_cur_path) - 1);
+  fm_cur_path[sizeof(fm_cur_path) - 1] = '\0';
+  fm_load_dir();
+
+  if (sel_io != NULL) {
+    *sel_io = 0;
+  }
+  return false;
 }
 
 void file_manager_run(void) {
@@ -316,6 +514,7 @@ void file_manager_run(void) {
   }
 
   strcpy(fm_cur_path, "0:");
+  fm_stack_depth = 0;
   fm_load_dir();
 
   int n = fm_count, sel = 0;
@@ -345,11 +544,18 @@ void file_manager_run(void) {
         fm_unmount();
         return;
       }
-      fm_enter(sel);
-      if (!fm_mounted)
+      bool exit_requested = fm_enter(sel, &sel);
+      if (exit_requested || !fm_mounted)
         return; /* exit via .. at root */
       n = fm_count;
-      sel = 0;
+      if (sel < 0) {
+        sel = 0;
+      }
+      if (sel >= n) {
+        sel = n > 0 ? n - 1 : 0;
+      }
+      lu = 0;
+      HAL_Delay(120);
     }
 
     if (HAL_GetTick() - lu > 100) {
@@ -365,6 +571,8 @@ void file_manager_run(void) {
           start = 0;
         if (start + vis > n)
           start = n - vis;
+        if (start < 0)
+          start = 0;
 
         if (n == 0) {
           draw_card(0, 0, 33, "   No files", false);
