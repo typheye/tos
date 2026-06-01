@@ -184,11 +184,10 @@ static void draw_results_page(int sel) {
       } else {
         int dev_idx = idx - 1;
         char buf[36];
-        snprintf(buf, sizeof(buf), " - %s (0x%02X)",
-                 scan_results[dev_idx].known_name
-                     ? scan_results[dev_idx].known_name
-                     : "Unknown",
-                 scan_results[dev_idx].addr_7bit);
+        snprintf(buf, sizeof(buf), " - 0x%02X %s",
+                 scan_results[dev_idx].addr_7bit),
+            scan_results[dev_idx].known_name ? scan_results[dev_idx].known_name
+                                             : "Unknown";
         draw_card(idx, sel, cy, buf);
       }
     }

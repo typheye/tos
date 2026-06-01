@@ -361,16 +361,41 @@ static void tcs3472_cct_subpage(void) {
 static void tcs3472_chart_subpage(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   reset_chart();
+  bool led_on = false;
+  boardTCS3472.ledOff();
 
   uint32_t lu = 0;
+  uint8_t last_a8 = 0, last_d0 = 0;
+  uint32_t last_led_toggle = 0;
 
   while (1) {
     keyManager.btn_enter.tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
 
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+      boardTCS3472.ledOff();
       return;
+    }
+
+    /* UP (A8): toggle LED  (300ms debounce) */
+    uint8_t ca8 = (keyManager.collision_A8.getState() == KEY_PRESSED);
+    if (ca8 && !last_a8 && (HAL_GetTick() - last_led_toggle > 300)) {
+      led_on = !led_on;
+      if (led_on)
+        boardTCS3472.ledOn();
+      else
+        boardTCS3472.ledOff();
+      last_led_toggle = HAL_GetTick();
+    }
+    last_a8 = ca8;
+
+    /* DOWN (D0): reset chart */
+    uint8_t cd0 = (keyManager.collision_D0.getState() == KEY_PRESSED);
+    if (cd0 && !last_d0) {
+      reset_chart();
+    }
+    last_d0 = cd0;
 
     TCS3472_RawData_t raw = boardTCS3472.readRaw();
     update_chart_data(raw.red, raw.green, raw.blue);
@@ -391,8 +416,13 @@ static void tcs3472_chart_subpage(void) {
         draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
         draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
 
-        /* Legend — colored fill rectangles with R/G/B labels (jyro style) */
+        /* LED indicator */
         PD_SetFont(FONT_ASCII_12);
+        PD_FillRect(170, 147, 30, 16, led_on ? TOS_ACCENT : TOS_GREY);
+        PD_SetColor(TOS_TEXT);
+        PD_DrawString(176, 149, "LED");
+
+        /* Legend — colored fill rectangles with R/G/B labels (jyro style) */
         PD_FillRect(10, 148, 10, 8, 0xFF0000);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(23, 147, "R");
