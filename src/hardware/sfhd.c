@@ -108,9 +108,9 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   hdr.datasize = dataSize;
   hdr.crc      = Flash_CRC32(pData, dataSize);
 
+  /* 将 header 和 data 打包到 record 数组 */
   memcpy(&record[0], &hdr, sizeof(hdr));
-  /* 数据从 record[3] 开始，避免覆盖 record[2] 中的 datasize 字段 */
-  memcpy(&record[3], pData, dataSize);
+  memcpy((uint8_t *)&record[0] + sizeof(hdr), pData, dataSize);
   uint32_t total = sizeof(hdr) + dataSize;
   uint32_t words = (total + 3) / 4;
 
@@ -159,8 +159,7 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
   hdr.crc      = Flash_CRC32(pData, dataSize);
   hdr.datasize = dataSize;
   memcpy(&buf[0], &hdr, sizeof(hdr));
-  /* 数据从 buf[3] 开始，避免覆盖 buf[2] 中的 datasize 字段 */
-  memcpy(&buf[3], pData, dataSize);
+  memcpy((uint8_t *)&buf[0] + sizeof(hdr), pData, dataSize);
 
   /* Step 1: 将现有数据备份到备份区 */
   st = erase_sector(FLASH_BACKUP_SECTOR, FLASH_BACKUP_ADDR);
@@ -246,8 +245,7 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
   hdr.crc      = Flash_CRC32(pData, dataSize);
   hdr.datasize = dataSize;
   memcpy(&buf[0], &hdr, sizeof(hdr));
-  /* 关键: 数据从 buf[3] 开始，避免覆盖 buf[2] 中的 datasize 字段！ */
-  memcpy(&buf[3], pData, dataSize);
+  memcpy((uint8_t *)&buf[0] + sizeof(hdr), pData, dataSize);
   uint32_t words = (total + 3) / 4;
 
   /* 找到写入位置 */

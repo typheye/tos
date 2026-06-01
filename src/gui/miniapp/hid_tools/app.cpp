@@ -288,7 +288,8 @@ static void gyro_mouse_activity(void) {
       last_dx = dx;
       last_dy = dy;
 
-      if (now - last_ui >= 160U) {
+      /* UI 刷新间隔拉长到 500ms，减少 LCD_FLUSH 阻塞对鼠标采样和上报的影响 */
+      if (now - last_ui >= 500U) {
         last_ui = now;
         draw_gyro_mouse_status(smooth_x, smooth_y, smooth_z, last_dx, last_dy,
                                buttons);
