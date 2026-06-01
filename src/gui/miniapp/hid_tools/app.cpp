@@ -18,14 +18,8 @@ extern JY901S boardJY901S;
 
 #define HID_MENU_ITEMS 8
 static const char *hid_menu[HID_MENU_ITEMS] = {
-    "00 Return",
-    "01 USB Status",
-    "02 Vendor Hello",
-    "03 Read PC OUT",
-    "04 Win + L",
-    "05 Type TOS",
-    "06 Mouse Wiggle",
-    "07 Gyro Mouse",
+    "00 Return",  "01 USB Status", "02 Vendor Hello", "03 Read PC OUT",
+    "04 Win + L", "05 Type TOS",   "06 Mouse Wiggle", "07 Gyro Mouse",
 };
 
 static void draw_frame_title(const char *title) {
@@ -51,7 +45,7 @@ static void draw_frame_title(const char *title) {
 
 static void draw_menu(int sel) {
   LCD_FLUSH({
-    draw_frame_title("HID Tools");
+    draw_frame_title("HID");
 
     int visible = HID_MENU_ITEMS < 7 ? HID_MENU_ITEMS : 7;
     int start = sel - visible / 2;
@@ -81,8 +75,7 @@ static void draw_menu(int sel) {
 
 static void show_message(const char *title, const char *line1,
                          const char *line2 = nullptr,
-                         const char *line3 = nullptr,
-                         uint32_t hold_ms = 1200) {
+                         const char *line3 = nullptr, uint32_t hold_ms = 1200) {
   LCD_FLUSH({
     draw_frame_title(title);
     PD_SetFont(FONT_ASCII_16);
@@ -104,7 +97,8 @@ static void show_message(const char *title, const char *line1,
 static void show_status(void) {
   char l1[32];
   char l2[32];
-  snprintf(l1, sizeof(l1), "Configured: %s", boardHID.isConfigured() ? "YES" : "NO");
+  snprintf(l1, sizeof(l1), "Configured: %s",
+           boardHID.isConfigured() ? "YES" : "NO");
   snprintf(l2, sizeof(l2), "TX: %s", boardHID.isTxIdle() ? "IDLE" : "BUSY");
   show_message("HID", l1, l2, "Report: KBD/MOUSE/VENDOR", 1500);
 }
@@ -124,7 +118,8 @@ static void read_pc_out(void) {
     snprintf(l1, sizeof(l1), "RX %u bytes", (unsigned)len);
     show_message("HID", l1, text, nullptr, 1800);
   } else {
-    show_message("HID", "No PC OUT packet", "Use Python tool send", nullptr, 1200);
+    show_message("HID", "No PC OUT packet", "Use Python tool send", nullptr,
+                 1200);
   }
 }
 
@@ -135,9 +130,11 @@ static void send_win_l(void) {
 }
 
 static void type_tos(void) {
-  show_message("HID", "Typing test text", "Focus a text box first", nullptr, 700);
+  show_message("HID", "Typing test text", "Focus a text box first", nullptr,
+               700);
   THID::Status st = boardHID.typeAscii("TOS HID OK", 20);
-  show_message("HID", "Keyboard type done", boardHID.statusText(st), nullptr, 900);
+  show_message("HID", "Keyboard type done", boardHID.statusText(st), nullptr,
+               900);
 }
 
 static void mouse_wiggle(void) {
@@ -193,8 +190,8 @@ static int8_t gyro_rate_to_delta(float rate_dps, float *fraction_accum) {
   return clamp_mouse_delta(whole);
 }
 
-static void draw_gyro_mouse_status(float gx, float gy, float gz,
-                                   int8_t dx, int8_t dy, uint8_t buttons) {
+static void draw_gyro_mouse_status(float gx, float gy, float gz, int8_t dx,
+                                   int8_t dy, uint8_t buttons) {
   LCD_FLUSH({
     char line[48];
     draw_frame_title("Gyro Mouse");
@@ -218,11 +215,11 @@ static void draw_gyro_mouse_status(float gx, float gy, float gz,
     snprintf(line, sizeof(line), "Gain x10 Max %d", GYRO_MOUSE_MAX_DELTA);
     PD_DrawString(18, 124, line);
 
-    snprintf(line, sizeof(line), "Gyro X/Y/Z %ld/%ld/%ld",
-             (long)gx, (long)gy, (long)gz);
+    snprintf(line, sizeof(line), "Gyro X/Y/Z %ld/%ld/%ld", (long)gx, (long)gy,
+             (long)gz);
     PD_DrawString(18, 146, line);
 
-    PD_DrawFooterCenter("ENTER EXIT", "A8 LEFT", "D0 RIGHT");
+    PD_DrawFooterCenter("ENTER", "LEFT", "RIGHT");
   });
 }
 
@@ -232,11 +229,13 @@ static void gyro_mouse_activity(void) {
   }
 
   if (!boardHID.isConfigured()) {
-    show_message("Gyro Mouse", "USB not configured", "Reconnect USB first", nullptr, 1200);
+    show_message("Gyro Mouse", "USB not configured", "Reconnect USB first",
+                 nullptr, 1200);
     return;
   }
 
-  show_message("Gyro Mouse", "Move by JY901S gyro", "A8=L  D0=R", "ENTER exits", 1000);
+  show_message("Gyro Mouse", "Move by JY901S gyro", "A8=L  D0=R", "ENTER exits",
+               1000);
 
   float smooth_x = 0.0f;
   float smooth_y = 0.0f;
@@ -291,7 +290,8 @@ static void gyro_mouse_activity(void) {
 
       if (now - last_ui >= 160U) {
         last_ui = now;
-        draw_gyro_mouse_status(smooth_x, smooth_y, smooth_z, last_dx, last_dy, buttons);
+        draw_gyro_mouse_status(smooth_x, smooth_y, smooth_z, last_dx, last_dy,
+                               buttons);
       }
     }
 

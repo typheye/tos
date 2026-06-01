@@ -1,128 +1,153 @@
 #include "include/key_activity.hpp"
+#include "core/include/systime.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
-#include "hardware/include/usart.hpp"
+#include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
-#include <stdio.h>
-#include "syslog.h"
+#include <cstdio>
 
-extern USART boardSerial;
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
+/* ── Standard template functions (exact copy from about-page) ── */
+static void draw_frame_title(const char *title) {
+  PD_Init();
+  PD_FillScreen(TOS_BG);
+  extern TRTC boardTRTC;
+  static uint32_t last_tm = 0;
+  if (HAL_GetTick() - last_tm > 1000) {
+    last_tm = HAL_GetTick();
+    Time_t t;
+    Date_t d;
+    boardTRTC.getDateTime(&t, &d);
+    char ts[8];
+    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
+    PD_SetHeaderTime(ts);
+  }
+  PD_DrawFrame();
+  PD_SetFont(FONT_ASCII_16);
+  PD_SetColor(TOS_ACCENT);
+  PD_DrawString(22, 5, title);
+}
+
+static void draw_card(int idx, int sel, int cy, const char *text) {
+  bool s = (idx == sel);
+  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
+  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
+  PD_DrawString(26, cy + 2, text);
+}
+
+static void draw_card_r(int idx, int sel, int cy, const char *label,
+                        const char *value) {
+  bool s = (idx == sel);
+  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
+  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
+  PD_DrawString(26, cy + 2, label);
+  uint16_t vw = PD_GetStringWidth(value);
+  PD_DrawString(220 - vw, cy + 2, value);
+}
+
+#define KEY_N 14
+#define KEY_VIS 7
+
 void key_test_activity(void) {
-  LCD_FLUSH({
-    PD_Init();
-    PD_FillScreen(TOS_BG);
+  boardLCD.fillScreen(LCD_COLOR_BLACK);
 
-    PD_DrawFrame();
-    PD_SetFont(FONT_ASCII_16);
-    PD_SetColor(TOS_ACCENT);
-    PD_DrawString(22, 5, "01");
+  const char *key_labels[KEY_N] = {
+      "00 Return", "01 SW1",  "   SW2",  "   SW3",  "   SW4",
+      "02 SW5",    "   SW6",  "   SW7",  "   SW8",  "   SW9",
+      "03 SW10",   "   SW11", "   SW12", "   SW13",
+  };
 
-    // Switches card
-    PD_DrawAngledCard(8, 44, 224, 50, 6, TOS_CARD_BG);
-    PD_SetFont(FONT_ASCII_12);
-    PD_SetColor(TOS_GREY);
-    PD_DrawString(16, 50, "SW1-SW6");
-    PD_SetColor(TOS_TEXT_SEC);
-    PD_DrawString(16, 66, "Press any switch to test");
-
-    // Collision card
-    PD_DrawAngledCard(8, 100, 224, 36, 6, TOS_CARD_BG);
-    PD_SetFont(FONT_ASCII_12);
-    PD_SetColor(TOS_GREY);
-    PD_DrawString(16, 106, "Collision A8 / D0");
-    PD_SetColor(TOS_TEXT_SEC);
-    PD_DrawString(16, 120, "Press Enter to exit");
-
-    // Status area
-    PD_DrawAngledCard(8, 144, 224, 40, 6, TOS_CARD_BG);
-    PD_SetFont(FONT_ASCII_16);
-    PD_SetColor(TOS_ACCENT);
-    PD_DrawString(16, 154, "Status: Waiting...");
-
-    // Bottom bar
-    PD_DrawFooterCenter("EXIT", NULL, NULL);
-  });
-
-  LOG_I("KACT", "Key Test GUI started");
-
-  uint8_t last_mask = 0xFF;
-  uint32_t last_update = HAL_GetTick();
+  int sel = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0;
 
   while (1) {
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
 
-    if (keyManager.btn_enter.getState() == KEY_PRESSED) break;
-
-    // 收集所有开关状态
-    uint8_t mask = 0;
-    if (keyManager.sw1_E0.isOn())  mask |= (1<<0);
-    if (keyManager.sw2_G13.isOn()) mask |= (1<<1);
-    if (keyManager.sw3_E2.isOn())  mask |= (1<<2);
-    if (keyManager.sw4_E4.isOn())  mask |= (1<<3);
-    if (keyManager.sw5_D6.isOn())  mask |= (1<<4);
-    if (keyManager.sw6_G9.isOn())  mask |= (1<<5);
-
-    bool coll_a8 = keyManager.collision_A8.isPressed();
-    bool coll_d0 = keyManager.collision_D0.isPressed();
-    bool sd_ok = keyManager.isSdCardInserted();
-
-    uint8_t changed = (mask != last_mask);
-
-    if (changed || (HAL_GetTick() - last_update > 200)) {
-      last_update = HAL_GetTick();
-      last_mask = mask;
-
-      LCD_FLUSH({
-        // Update Switches card
-        PD_DrawAngledCard(8, 44, 224, 50, 6, TOS_CARD_BG);
-        PD_SetFont(FONT_ASCII_12);
-        PD_SetColor(TOS_GREY);
-        PD_DrawString(16, 50, "SW1-SW6");
-
-        PD_SetFont(FONT_ASCII_16);
-        for (int i = 0; i < 6; i++) {
-          int sx = 20 + i * 36;
-          if (mask & (1<<i)) {
-            PD_SetColor(TOS_GREEN);
-            PD_SetFill(true);
-            PD_DrawRoundRect(sx, 62, 30, 22, 4);
-            PD_SetFill(false);
-            PD_SetColor(TOS_TEXT);
-          } else {
-            PD_SetColor(TOS_GREY);
-            PD_DrawRoundRect(sx, 62, 30, 22, 4);
-          }
-          char lbl[4];
-          sprintf(lbl, "%d", i+1);
-          PD_DrawString(sx + 10, 65, lbl);
-        }
-
-        // Update Collision card
-        PD_DrawAngledCard(8, 100, 224, 36, 6, TOS_CARD_BG);
-        PD_SetFont(FONT_ASCII_12);
-        PD_SetColor(TOS_GREY);
-        PD_DrawString(16, 106, "A8 / D0");
-        PD_SetFont(FONT_ASCII_16);
-        PD_SetColor(coll_a8 ? TOS_YELLOW : TOS_GREY);
-        PD_DrawString(16, 120, coll_a8 ? "A8: ON " : "A8: -- ");
-        PD_SetColor(coll_d0 ? TOS_YELLOW : TOS_GREY);
-        PD_DrawString(110, 120, coll_d0 ? "D0: ON" : "D0: --");
-
-        // Update status card
-        PD_DrawAngledCard(8, 144, 224, 40, 6, TOS_CARD_BG);
-        PD_SetFont(FONT_ASCII_16);
-        char st[32];
-        sprintf(st, "Mask: 0x%02X  SD:%s", mask, sd_ok ? "IN" : "OUT");
-        PD_SetColor(TOS_ACCENT);
-        PD_DrawString(16, 154, st);
-      });
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+      sel = (sel + 1) % KEY_N;
+      HAL_Delay(100);
+    }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+      sel = (sel - 1 + KEY_N) % KEY_N;
+      HAL_Delay(100);
     }
 
-    HAL_Delay(10);
+    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    if (ce && !le)
+      return;
+    le = ce;
+
+    if (HAL_GetTick() - lu > 200) {
+      lu = HAL_GetTick();
+
+      /* Read all states */
+      bool s1 = keyManager.sw1_E0.isOn();
+      bool s2 = keyManager.sw2_G13.isOn();
+      bool s3 = keyManager.sw3_E2.isOn();
+      bool s4 = keyManager.sw4_E4.isOn();
+      bool s5 = keyManager.sw5_D6.isOn();
+      bool s6 = keyManager.sw6_G9.isOn();
+      bool s7 = keyManager.sw7_G11.isOn();
+      bool s8 = keyManager.sw8_G10.isOn();
+      bool s9 = keyManager.sw9_G15.isOn();
+      bool s10 = keyManager.sw10_G3.isOn();
+      bool s11 = keyManager.sw11_D15.isOn();
+      bool s12 = keyManager.sw12_B12.isOn();
+      bool s13 = keyManager.sw13_B14.isOn();
+
+      /* Build value strings & colors – ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
+      char key_vals[KEY_N][8];
+      key_vals[0][0] = '\0';
+
+      // Group 1: SW1-SW4 (normal logic)
+      snprintf(key_vals[1], 8, "%s", s1 ? "ON" : "OFF");
+      snprintf(key_vals[2], 8, "%s", s2 ? "ON" : "OFF");
+      snprintf(key_vals[3], 8, "%s", s3 ? "ON" : "OFF");
+      snprintf(key_vals[4], 8, "%s", s4 ? "ON" : "OFF");
+
+      // Group 2: SW5-SW9 (inverted logic – true=OFF, false=ON)
+      snprintf(key_vals[5], 8, "%s", s5 ? "ON" : "OFF");
+      snprintf(key_vals[6], 8, "%s", s6 ? "ON" : "OFF");
+      snprintf(key_vals[7], 8, "%s", s7 ? "ON" : "OFF");
+      snprintf(key_vals[8], 8, "%s", s8 ? "ON" : "OFF");
+      snprintf(key_vals[9], 8, "%s", s9 ? "ON" : "OFF");
+
+      // Group 3: SW10-SW13 (normal logic)
+      snprintf(key_vals[10], 8, "%s", s10 ? "ON" : "OFF");
+      snprintf(key_vals[11], 8, "%s", s11 ? "ON" : "OFF");
+      snprintf(key_vals[12], 8, "%s", s12 ? "ON" : "OFF");
+      snprintf(key_vals[13], 8, "%s", s13 ? "ON" : "OFF");
+
+      LCD_FLUSH({
+        draw_frame_title("DEMO");
+        PD_SetFont(FONT_ASCII_16);
+
+        int vis = KEY_VIS;
+        int start = sel - vis / 2;
+        if (start < 0)
+          start = 0;
+        if (start + vis > KEY_N)
+          start = KEY_N - vis;
+
+        for (int i = 0; i < vis; i++) {
+          int idx = start + i;
+          if (idx >= KEY_N)
+            break;
+          int cy = 33 + i * 25;
+          if (idx == 0)
+            draw_card(idx, sel, cy, key_labels[idx]);
+          else
+            draw_card_r(idx, sel, cy, key_labels[idx], key_vals[idx]);
+        }
+
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
+      });
+    }
+    HAL_Delay(1);
   }
 }

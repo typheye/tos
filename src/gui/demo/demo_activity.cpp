@@ -10,8 +10,6 @@
 #include "include/jyro_activity.hpp"
 #include "include/key_activity.hpp"
 #include "include/libpd.h"
-#include "include/pot_activity.hpp"
-#include "include/sd_activity.hpp"
 #include "include/sn74hc00n_activity.hpp"
 #include "include/tcs3472_activity.hpp"
 #include <cstdio>
@@ -19,24 +17,21 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-#define DEMO_ITEMS 10
+#define DEMO_ITEMS 8
 static const char *demo_m[DEMO_ITEMS] = {
-    "00 Return",         "01 Key Test",      "02 SD Card Test",
-    "03 I2C Scan",       "04 JY901S Sensor", "05 BMP180 Sensor",
-    "07 3D Path Tracer", "09 TCS3472 Test",  "10 SN74HC00N Test",
-    "11 Pot Test",
+    "00 Return",        "01 Key Test",       "03 I2C Scan",
+    "04 JY901S Sensor", "05 BMP180 Sensor",  "07 3D Path Tracer",
+    "09 TCS3472 Test",  "10 SN74HC00N Test",
 };
 static void (*demo_f[DEMO_ITEMS])(void) = {
     NULL,
     key_test_activity,
-    sd_card_activity,
     i2c_scan_activity,
     jyro_activity,
     bmp180_activity,
     render_3dox_activity_with_exit,
     tcs3472_activity,
     hc00n_activity,
-    pot_activity,
 };
 
 // ============ Original TOS-style menu ============
@@ -126,7 +121,7 @@ void demo_list_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   static int sel = 0;
   while (1) {
-    sel = menu_loop("TOS", demo_m, DEMO_ITEMS, sel);
+    sel = menu_loop("DEMO", demo_m, DEMO_ITEMS, sel);
     if (sel == 0)
       return;
     if (demo_f[sel]) {

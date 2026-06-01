@@ -54,13 +54,11 @@ set(USER_Application_Src
     # Demo 活动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/jyro_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/key_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/sd_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/i2c_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/bmp_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/3dox_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/tcs3472_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/sn74hc00n_activity.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/pot_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/demo_activity.cpp
 
     # GUI文件
