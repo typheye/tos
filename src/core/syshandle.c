@@ -3,6 +3,7 @@
 #include "hardware/include/lcd.h"
 #include "library/include/libpd.h"
 #include "main.h"
+#include "syslog.h"
 #include <stdio.h>
 
 static volatile uint32_t g_last_exception_code = SYS_ERR_NONE;
@@ -22,7 +23,42 @@ const char *SysHandle_CodeName(uint32_t code) {
   case SYS_ERR_SD_FORMAT_FAILED: return "SD_FORMAT_FAILED";
   case SYS_ERR_SD_INIT_FAILED: return "SD_INIT_FAILED";
   case SYS_ERR_SD_BROWSER_FAILED: return "SD_BROWSER_FAILED";
+  case SYS_ERR_SD_FILE_OP_FAILED: return "SD_FILE_OP_FAILED";
+  case SYS_ERR_SD_PATH_TOO_LONG: return "SD_PATH_TOO_LONG";
+  case SYS_ERR_UI_STORAGE_PROBE: return "UI_STORAGE_PROBE";
+  case SYS_ERR_UI_FILE_MANAGER: return "UI_FILE_MANAGER";
+  case SYS_ERR_UI_HID_TOOLS: return "UI_HID_TOOLS";
   default: return "UNKNOWN";
+  }
+}
+
+uint32_t SysHandle_CodeFromFResult(FRESULT res, uint32_t fallback) {
+  switch (res) {
+  case FR_OK: return SYS_ERR_NONE;
+  case FR_NOT_READY: return SYS_ERR_SD_NOT_READY;
+  case FR_TIMEOUT: return SYS_ERR_SD_TIMEOUT;
+  case FR_DISK_ERR: return SYS_ERR_SD_DISK_ERR;
+  case FR_INT_ERR: return SYS_ERR_SD_LOST;
+  case FR_NO_FILESYSTEM: return SYS_ERR_SD_NO_FILESYSTEM;
+  case FR_INVALID_NAME:
+  case FR_INVALID_OBJECT:
+  case FR_INVALID_PARAMETER:
+    return SYS_ERR_SD_FILE_OP_FAILED;
+  default: return fallback;
+  }
+}
+
+bool SysHandle_IsStorageFatal(FRESULT res) {
+  return res == FR_NOT_READY || res == FR_TIMEOUT || res == FR_DISK_ERR ||
+         res == FR_INT_ERR;
+}
+
+void SysHandle_FatalFResult(FRESULT res, uint32_t fallback) {
+  uint32_t code = SysHandle_CodeFromFResult(res, fallback);
+  if (SysHandle_IsStorageFatal(res)) {
+    LOG_E("SYSH", "fatal FatFs result: %d -> 0x%08lX %s", (int)res,
+          (unsigned long)code, SysHandle_CodeName(code));
+    SysHandle_Exception(code);
   }
 }
 
@@ -51,21 +87,20 @@ static void syshandle_render(void) {
 
   PD_SetFont(FONT_ASCII_12);
   PD_SetColor(LCD_COLOR_GRAY);
-  PD_DrawString(18, 158, "The system will restart");
-  PD_DrawString(18, 176, sec_line);
+  PD_DrawString(18, 150, SysHandle_CodeName(g_draw_code));
+  PD_DrawString(18, 172, "The system will restart");
+  PD_DrawString(18, 190, sec_line);
 
-  /* Subtle square-screen friendly bottom bar. */
+  /* Square-screen friendly bottom bar. */
   PD_FillRect(18, 214, 204, 2, LCD_COLOR_GRAY);
 }
 
 void SysHandle_Exception(uint32_t code) {
   g_last_exception_code = code;
   g_draw_code = code;
+  LOG_F("SYSH", "System exception: 0x%08lX %s", (unsigned long)code,
+        SysHandle_CodeName(code));
 
-  /* Draw before reset. Keep interrupts enabled so SysTick/SPI/RTOS-less HAL
-   * timing can still work. Fatal callers should stop normal activity before
-   * jumping here if needed.
-   */
   for (g_draw_seconds = 5; g_draw_seconds >= 1; --g_draw_seconds) {
     LCD_FlushTiled(syshandle_render);
     HAL_Delay(1000);

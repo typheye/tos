@@ -253,7 +253,7 @@ static void tcs3472_color_subpage(void) {
         PD_DrawRect(22, 82, 196, 76);
         PD_SetFill(false);
 
-        PD_DrawFooterCenter("EXIT", NULL, NULL);
+        PD_DrawFooterCenter("ENTER", NULL, NULL);
       });
 
       LOG_D("TACT", "RGB: %u,%u,%u", raw.red, raw.green, raw.blue);
@@ -350,7 +350,7 @@ static void tcs3472_cct_subpage(void) {
         snprintf(line, sizeof(line), "CF: %s", class_str);
         PD_DrawString(16, msg_y, line);
 
-        PD_DrawFooterCenter("EXIT", NULL, NULL);
+        PD_DrawFooterCenter("ENTER", NULL, NULL);
       });
     }
     HAL_Delay(1);
@@ -449,7 +449,7 @@ static void tcs3472_chart_subpage(void) {
         snprintf(dbg, sizeof(dbg), "B:%-5u", raw.blue);
         PD_DrawString(110, 165, dbg);
 
-        PD_DrawFooterCenter("EXIT", NULL, "UP/DOWN");
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
     HAL_Delay(1);

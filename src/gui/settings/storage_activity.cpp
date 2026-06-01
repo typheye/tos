@@ -1,5 +1,6 @@
 #include "include/storage_activity.hpp"
 #include "core/include/systime.h"
+#include "core/include/syshandle.h"
 #include "ff.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -105,14 +106,17 @@ static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   /* 如果未挂载，临时挂载再查 */
   if (res != FR_OK) {
     res = f_mount(&fs, path, 1);
-    if (res != FR_OK)
+    if (res != FR_OK) {
+      SysHandle_FatalFResult(res, SYS_ERR_UI_STORAGE_PROBE);
       return false;
+    }
     need_unmount = true;
     res = f_getfree(path, &free_clusters, &fs_ptr);
   }
 
   if (res != FR_OK) {
     if (need_unmount) f_mount(NULL, path, 0);
+    SysHandle_FatalFResult(res, SYS_ERR_UI_STORAGE_PROBE);
     return false;
   }
 
@@ -146,6 +150,9 @@ static void refresh(void) {
 
   SDCard_Status_t st = boardSDIO.getStatus();
   sd_present = (st == SD_CARD_OK);
+  if (st == SD_CARD_ERROR) {
+    SysHandle_Exception(SYS_ERR_SD_DISK_ERR);
+  }
   if (sd_present) {
     SDCard_Info_t info = boardSDIO.getInfo();
     sd_cap_kb = (uint32_t)info.capacity_mb * 1024;

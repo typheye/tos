@@ -6,6 +6,7 @@
 #include "include/app.h"
 #include "components/include/alert.hpp"
 #include "components/include/confirm.hpp"
+#include "core/include/file_manager.h"
 #include "core/include/syshandle.h"
 #include "core/include/systime.h"
 #include "fatfs.h"
@@ -133,36 +134,13 @@ static void draw_card(int idx, int sel, int cy, const char *text, bool is_dir) {
   PD_DrawString(26, cy + 2, buf);
 }
 
-static uint32_t fm_error_code_from_fresult(FRESULT res, uint32_t fallback) {
-  switch (res) {
-  case FR_OK:
-    return SYS_ERR_NONE;
-  case FR_NOT_READY:
-    return SYS_ERR_SD_NOT_READY;
-  case FR_TIMEOUT:
-    return SYS_ERR_SD_TIMEOUT;
-  case FR_DISK_ERR:
-    return SYS_ERR_SD_DISK_ERR;
-  case FR_INT_ERR:
-    return SYS_ERR_SD_LOST;
-  case FR_NO_FILESYSTEM:
-    return SYS_ERR_SD_NO_FILESYSTEM;
-  default:
-    return fallback;
-  }
-}
-
 static void fm_fatal_if_storage_error(FRESULT res, uint32_t fallback) {
-  uint32_t code = fm_error_code_from_fresult(res, fallback);
-  if (code == SYS_ERR_SD_NOT_READY || code == SYS_ERR_SD_TIMEOUT ||
-      code == SYS_ERR_SD_DISK_ERR || code == SYS_ERR_SD_LOST) {
-    SysHandle_Exception(code);
-  }
+  SysHandle_FatalFResult(res, fallback);
 }
 
 static FRESULT fm_mount_result(void) {
   if (!fm_mounted) {
-    FRESULT res = f_mount(&fm_fs, "0:", 1);
+    FRESULT res = FMCore_Mount(&fm_fs, false);
     if (res == FR_OK) {
       fm_mounted = true;
     }
@@ -178,7 +156,7 @@ static void fm_mount(void) {
 
 static void fm_unmount(void) {
   if (fm_mounted) {
-    f_mount(NULL, "0:", 0);
+    FMCore_Unmount();
     fm_mounted = false;
   }
 }
@@ -237,7 +215,7 @@ static FRESULT fm_format_and_init_sd(void) {
 
 static bool fm_has_init_marker(void) {
   FILINFO info;
-  FRESULT res = f_stat("0:/init", &info);
+  FRESULT res = FMCore_Stat("0:/init", &info, false);
   if (res == FR_OK) {
     return true;
   }
@@ -298,27 +276,8 @@ static bool fm_prepare_storage(void) {
   return false;
 }
 
-static bool fm_join_path(const char *base, const char *name, char *out,
-                         size_t out_sz) {
-  if (out_sz == 0) {
-    return false;
-  }
-  out[0] = '\0';
-
-  const char *sep = (strcmp(base, "0:") == 0) ? "/" : "/";
-  size_t need = strlen(base) + strlen(sep) + strlen(name) + 1U;
-  if (need > out_sz) {
-    return false;
-  }
-
-  strcpy(out, base);
-  strcat(out, sep);
-  strcat(out, name);
-  return true;
-}
-
 static void fm_build_full_path(const char *name, char *out, size_t out_sz) {
-  if (!fm_join_path(fm_cur_path, name, out, out_sz)) {
+  if (!FMCore_JoinPath(fm_cur_path, name, out, out_sz)) {
     fm_copy_limited(out, out_sz, "Path too long", strlen("Path too long"));
   }
 }
@@ -409,36 +368,21 @@ static void fm_load_dir(void) {
   fm_is_dir[0] = 1;
   fm_count = 1;
 
-  DIR dir;
-  FILINFO fno;
-  FRESULT res = f_opendir(&dir, fm_cur_path);
+  FMCore_Entry entries[FM_MAX_ITEMS - 1];
+  uint16_t n = 0;
+  FRESULT res =
+      FMCore_ListDir(fm_cur_path, entries, FM_MAX_ITEMS - 1, &n, true);
   if (res != FR_OK) {
     fm_fatal_if_storage_error(res, SYS_ERR_SD_BROWSER_FAILED);
     return;
   }
 
-  while (1) {
-    res = f_readdir(&dir, &fno);
-    if (res != FR_OK) {
-      f_closedir(&dir);
-      fm_fatal_if_storage_error(res, SYS_ERR_SD_BROWSER_FAILED);
-      return;
-    }
-    if (!fno.fname[0]) {
-      break;
-    }
-    if (fm_count >= FM_MAX_ITEMS)
-      break;
-
-    /* With FatFs LFN enabled, fno.fname preserves long names and case.
-     * Without LFN it falls back to 8.3 short names, which are often uppercase.
-     */
+  for (uint16_t i = 0; i < n && fm_count < FM_MAX_ITEMS; ++i) {
     int idx = fm_count++;
-    strncpy(fm_items[idx], fno.fname, FM_NAME_LEN - 1);
+    strncpy(fm_items[idx], entries[i].name, FM_NAME_LEN - 1);
     fm_items[idx][FM_NAME_LEN - 1] = '\0';
-    fm_is_dir[idx] = (fno.fattrib & AM_DIR) ? 1 : 0;
+    fm_is_dir[idx] = entries[i].is_dir ? 1 : 0;
   }
-  f_closedir(&dir);
 
   /* Sort: directories first, then case-insensitive alphabetical order.
    * Start at 1 so ".." is never sorted into the list. */
@@ -498,7 +442,8 @@ static bool fm_enter(int idx, int *sel_io) {
   }
 
   char next_path[FM_PATH_LEN];
-  if (!fm_join_path(fm_cur_path, fm_items[idx], next_path, sizeof(next_path))) {
+  if (!FMCore_JoinPath(fm_cur_path, fm_items[idx], next_path,
+                       sizeof(next_path))) {
     fm_wait_keys_released(600);
     alert_show("FILE", "Path too long");
     return false;
@@ -527,6 +472,7 @@ void file_manager_run(void) {
 
   int n = fm_count, sel = 0;
   uint32_t lu = 0;
+  uint32_t last_probe = 0;
 
   while (1) {
     keyManager.collision_A8.tick();
@@ -546,6 +492,15 @@ void file_manager_run(void) {
     if (n > 0 && keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
       HAL_Delay(100);
+    }
+
+    if ((HAL_GetTick() - last_probe) > 1200U && fm_mounted) {
+      last_probe = HAL_GetTick();
+      FILINFO ping;
+      FRESULT pr = FMCore_Stat("0:/init", &ping, false);
+      if (SysHandle_IsStorageFatal(pr)) {
+        SysHandle_FatalFResult(pr, SYS_ERR_SD_LOST);
+      }
     }
     if (keyManager.btn_enter.getState() == KEY_PRESSED) {
       if (n == 0) {

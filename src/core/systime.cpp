@@ -37,6 +37,11 @@ struct TimeSample {
 
 static const size_t AT_RX_SIZE = 512;
 static const uint32_t RTC_SET_ADVANCE_MS = 2;
+/* ESP8266 AT+CIPSNTPTIME? is consistently a little behind wall clock on
+ * this board path because the module formats the time before the MCU receives
+ * the final OK.  Compensate the fixed transport latency before aligning to
+ * the next RTC second edge. Tune in 100ms steps if your module differs. */
+static const uint32_t TIME_SYNC_LATENCY_COMP_MS = 2300U;
 
 static bool parse_any_datetime(const char *buf, SysDateTime *out);
 
@@ -465,7 +470,8 @@ static void apply_datetime_to_rtc(const SysDateTime &dt) {
 static SysDateTime align_and_apply_sample(const TimeSample &sample) {
   uint32_t now = HAL_GetTick();
   uint32_t elapsed = now - sample.tick_ms;
-  uint32_t target_seconds = elapsed / 1000U + 1U;
+  uint32_t compensated_elapsed = elapsed + TIME_SYNC_LATENCY_COMP_MS;
+  uint32_t target_seconds = compensated_elapsed / 1000U + 1U;
   uint32_t target_tick = sample.tick_ms + target_seconds * 1000U;
   uint32_t wait_ms = target_tick - now;
   if (wait_ms < 100U) {
@@ -480,9 +486,9 @@ static SysDateTime align_and_apply_sample(const TimeSample &sample) {
 
   add_seconds(&target, target_seconds);
 
-  LOG_D("SYTM", "RTC align: age=%lums wait=%lums precise=%d",
-        (unsigned long)elapsed, (unsigned long)wait_ms,
-        sample.precise_tick ? 1 : 0);
+  LOG_D("SYTM", "RTC align: age=%lums comp=%lums wait=%lums precise=%d",
+        (unsigned long)elapsed, (unsigned long)TIME_SYNC_LATENCY_COMP_MS,
+        (unsigned long)wait_ms, sample.precise_tick ? 1 : 0);
 
   while (tick_delta(apply_tick, HAL_GetTick()) > 3) {
     HAL_Delay(1);

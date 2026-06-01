@@ -360,18 +360,18 @@ static void update_animation(void) {
     // or while the face is still in post-sensor recovery.
     if (EHW_GetExpr() == EHW_EXPR_NONE &&
         now - sensor_recover_start >= SENSOR_RECOVER_MS &&
-        now - mood_timer > 6200U + rnd(7600U)) {
+        now - mood_timer > 5200U + rnd(6200U)) {
       mood_timer = now;
-      int r = rnd(24U);
+      int r = rnd(30U);
       if (r < 2)       pet_state = ANIM_SURPRISED;
-      else if (r < 5)  pet_state = ANIM_HAPPY;
-      else if (r < 8)  pet_state = ANIM_CURIOUS;
-      else if (r < 10) pet_state = ANIM_SLEEPY;
-      else if (r < 12) pet_state = ANIM_SHY;
-      else if (r < 14) pet_state = ANIM_PROUD;
-      else if (r < 16) pet_state = ANIM_ANNOYED;
-      else if (r < 19) pet_state = ANIM_GLANCE;
-      else if (r < 22) pet_state = ANIM_GIGGLE;
+      else if (r < 6)  pet_state = ANIM_HAPPY;
+      else if (r < 10) pet_state = ANIM_CURIOUS;
+      else if (r < 12) pet_state = ANIM_SLEEPY;
+      else if (r < 14) pet_state = ANIM_SHY;
+      else if (r < 16) pet_state = ANIM_PROUD;
+      else if (r < 18) pet_state = ANIM_ANNOYED;
+      else if (r < 23) pet_state = ANIM_GLANCE;
+      else if (r < 27) pet_state = ANIM_GIGGLE;
       else             pet_state = ANIM_STRETCH;
       anim_start_tm = now;
     }
