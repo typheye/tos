@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */
+﻿/* USER CODE BEGIN Header */
 /**
  ******************************************************************************
  * @file    stm32f4xx_it.c
@@ -46,7 +46,7 @@
 static uint8_t esp8266_line_buffer[256];
 static uint16_t esp8266_line_index = 0;
 
-uint8_t esp8266_global_buffer[512];
+uint8_t esp8266_global_buffer[2048];
 uint16_t esp8266_global_index = 0;
 uint8_t esp8266_data_ready = 0;
 

@@ -4,7 +4,9 @@
  */
 
 #include "core/include/tos.hpp"
+#include "core/manager/include/emotion_manager.h"
 #include "core/manager/include/settings_manager.h"
+#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"
 #include "demo/include/bmp_activity.hpp"
 #include "demo/include/i2c_activity.hpp"
@@ -121,6 +123,9 @@ void TOS::init() {
       ESP8266_IsConnected() && SM_Time_AutoSync()) {
     SysTime_Sync();
   }
+
+  EmotionManager_Init();
+  TosApi_Init();
 
   SysUI::init();
 

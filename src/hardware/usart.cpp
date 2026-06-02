@@ -22,7 +22,7 @@ void USART::init() {
 void USART::send(uint8_t *data, uint16_t size) {
   if (!_initialized)
     init();
-  HAL_UART_Transmit(&_huart, data, size, HAL_MAX_DELAY);
+  HAL_UART_Transmit(&_huart, data, size, 12U);
 }
 
 // 发送数据（字符串）- 这个必须实现！
@@ -30,7 +30,7 @@ void USART::send(const char *str) {
   if (!_initialized)
     init();
   uint16_t len = strlen(str);
-  HAL_UART_Transmit(&_huart, (uint8_t *)str, len, HAL_MAX_DELAY);
+  HAL_UART_Transmit(&_huart, (uint8_t *)str, len, 12U);
 }
 
 // 接收单个字节

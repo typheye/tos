@@ -1,10 +1,13 @@
 #include "include/launcher.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
+#include "core/manager/include/emotion_manager.h"
+#include "core/sdk/include/tos_api.h"
 #include "library/include/libehw.h"
 #include "library/include/libemo.h"
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include "syslog.h"
 
 #ifndef CCMRAM
@@ -77,6 +80,8 @@ static CCMRAM int prev_pet_state = ANIM_IDLE;
 static CCMRAM float pet_touch_mood = 0.0f;
 static CCMRAM float pet_touch_mood_target = 0.0f;
 static CCMRAM uint32_t pet_touch_mood_since = 0;
+static CCMRAM uint32_t cloud_expr_revision = 0;
+static CCMRAM int cloud_expr_anim = 0;
 
 // Recovery blending after sensor-driven expressions release.
 // Captures the face parameters at release time and smoothly decays them
@@ -213,6 +218,57 @@ static int expr_to_anim(EHW_Expr_t e) {
   }
 }
 
+static int cloud_expr_to_anim(const char *expr) {
+  if (!expr || !expr[0]) return ANIM_IDLE;
+  if (strcmp(expr, "idle") == 0) return ANIM_IDLE;
+  if (strcmp(expr, "happy") == 0) return ANIM_HAPPY;
+  if (strcmp(expr, "sad") == 0) return ANIM_SLEEPY;
+  if (strcmp(expr, "confused") == 0) return ANIM_CURIOUS;
+  if (strcmp(expr, "surprised") == 0) return ANIM_SURPRISED;
+  if (strcmp(expr, "love") == 0) return ANIM_PETTED;
+  if (strcmp(expr, "sleepy") == 0) return ANIM_SLEEPY;
+  if (strcmp(expr, "dizzy") == 0) return ANIM_DIZZY;
+  if (strcmp(expr, "petted") == 0) return ANIM_PETTED;
+  if (strcmp(expr, "shy") == 0) return ANIM_SHY;
+  if (strcmp(expr, "annoyed") == 0) return ANIM_ANNOYED;
+  if (strcmp(expr, "curious") == 0) return ANIM_CURIOUS;
+  return ANIM_IDLE;
+}
+
+static bool update_cloud_expression(uint32_t now) {
+  EmotionManager_Tick();
+  if (!EmotionManager_IsManual()) {
+    cloud_expr_revision = EmotionManager_GetRevision();
+    cloud_expr_anim = ANIM_IDLE;
+    return false;
+  }
+
+  uint32_t rev = EmotionManager_GetRevision();
+  int target = cloud_expr_to_anim(EmotionManager_GetExpression());
+  bool changed = (rev != cloud_expr_revision) || (target != cloud_expr_anim);
+  bool target_finished = (pet_state != target) &&
+                         (now - anim_start_tm > 260U);
+
+  if (changed || target_finished) {
+    cloud_expr_revision = rev;
+    cloud_expr_anim = target;
+    pet_state = target;
+    prev_pet_state = target;
+    anim_start_tm = now;
+    sensor_expr_start = now;
+    sensor_recover_start = 0;
+    blink_phase = 0;
+    if (target == ANIM_PETTED) {
+      pet_touch_mood_target = 0.0f;
+      pet_touch_mood_since = now;
+    }
+    LOG_I("PET", "Cloud expression: %s -> %s",
+          EmotionManager_GetExpression(), pet_anim_name(target));
+  }
+
+  return true;
+}
+
 // ============ Per-frame update ============
 
 static void update_idle_motion(void) {
@@ -317,8 +373,13 @@ static void update_sensor(void) {
 static void update_animation(void) {
   uint32_t now = HAL_GetTick();
 
-  update_idle_motion();
-  update_sensor();
+  bool cloud_manual = update_cloud_expression(now);
+  if (cloud_manual) {
+    if (pet_state == ANIM_IDLE) update_idle_motion();
+  } else {
+    update_idle_motion();
+    update_sensor();
+  }
 
   // Smooth recovery blend after sensor-driven expressions (DIZZY, PETTED, etc.)
   // release.  The captured face parameters decay toward neutral over ~620ms so
@@ -794,6 +855,8 @@ static void update_animation(void) {
     pet_cheek = lerp(pet_cheek, 0.0f, 0.05f);
     if (pet_cheek < 0.01f) pet_cheek = 0.0f;
   }
+
+  EmotionManager_ReportAutoExpression(pet_anim_name(pet_state));
 }
 
 // ============ Main loop ============
@@ -834,6 +897,8 @@ void pet_launcher_run(void) {
   pet_touch_mood = 0.0f;
   pet_touch_mood_target = 0.0f;
   pet_touch_mood_since = 0;
+  cloud_expr_revision = EmotionManager_GetRevision();
+  cloud_expr_anim = ANIM_IDLE;
 
   LOG_I("PET", "Launcher started - triple-press ENTER to exit");
 
@@ -841,6 +906,7 @@ void pet_launcher_run(void) {
   uint32_t slow_frame_log = 0;
   while (1) {
     now = HAL_GetTick();
+    TosApi_Tick();
     if (now - heartbeat > 5000U) {
       heartbeat = now;
       LOG_D("PET", "alive @ %lums, state=%s, expr=%d, idle=%lums, state_age=%lums",
@@ -909,6 +975,7 @@ void pet_launcher_run(void) {
       slow_frame_log = now;
       LOG_D("PET", "slow frame %lums", (unsigned long)frame_ms);
     }
+    TosApi_Tick();
     HAL_Delay(1);
   }
 }

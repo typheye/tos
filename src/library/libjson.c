@@ -19,11 +19,21 @@ static void skip_ws(const char **p) {
 
 const char *json_extract_body(const char *http) {
   if (!http || !*http) return http;
-  const char *body = strstr(http, "\r\n\r\n");
-  if (body) {
-    body += 4;
-    return body;
+
+  /* ESP8266 AT responses may prepend text such as:
+   *   Recv ...\r\n\r\nSEND OK\r\n\r\n+IPD,N:HTTP/1.1 ...
+   * The first CRLFCRLF is not the HTTP header boundary.  Search for HTTP/
+   * first, then strip the real HTTP headers.
+   */
+  const char *h = strstr(http, "HTTP/");
+  const char *body = NULL;
+  if (h) {
+    body = strstr(h, "\r\n\r\n");
+    if (body) return body + 4;
+    body = strchr(h, '{');
+    return body ? body : h;
   }
+
   body = strchr(http, '{');
   return body ? body : http;
 }

@@ -1,6 +1,7 @@
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/led.hpp"
 #include "hardware/include/usart.hpp"
+#include "include/syshandle.h"
 #include "syslog.h"
 #include <stdio.h>
 #include <string.h>
@@ -12,7 +13,7 @@
 extern USART boardSerial;
 
 extern "C" {
-extern uint8_t esp8266_global_buffer[512];
+extern uint8_t esp8266_global_buffer[];
 extern uint16_t esp8266_global_index;
 extern uint8_t esp8266_data_ready;
 extern volatile uint32_t uart2_rx_count;
@@ -27,6 +28,8 @@ ESP8266::ESP8266(UART_HandleTypeDef *huart) {
   _huart = huart;
   _state = 0;
   _hard_disabled = false;
+  _last_recover_ms = 0;
+  _recover_attempts = 0;
   _rx_index = 0;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
 }
@@ -36,7 +39,7 @@ void ESP8266::clearRxBuffer(void) {
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
   esp8266_global_index = 0;
   esp8266_data_ready = 0;
-  memset(esp8266_global_buffer, 0, 512);
+  memset(esp8266_global_buffer, 0, 2048);
 }
 
 void ESP8266::processPendingData(void) {
@@ -102,9 +105,108 @@ void ESP8266::processRxData(uint8_t *data, uint16_t len) {
   _rx_buffer[_rx_index] = '\0';
 }
 
+static void esp8266_uart_resync(UART_HandleTypeDef *huart) {
+  if (!huart) return;
+
+  HAL_UART_Abort(huart);
+  __HAL_UART_CLEAR_OREFLAG(huart);
+
+  /* Drain RXNE manually.  This is important after STM32 resets while the
+   * ESP8266 is still in the middle of CIPSEND / TCP closing. */
+  uint32_t start = HAL_GetTick();
+  while (HAL_GetTick() - start < 20U) {
+    while (__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE) != RESET) {
+      (void)(uint8_t)(huart->Instance->DR & 0xFF);
+      start = HAL_GetTick();
+    }
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) {
+      __HAL_UART_CLEAR_OREFLAG(huart);
+      start = HAL_GetTick();
+    }
+  }
+}
+
+bool ESP8266::tryRecover(bool force) {
+  uint32_t now = HAL_GetTick();
+  if (!force && (now - _last_recover_ms) < 10000U) {
+    LOG_E("ESP", "Recovery requested too soon; treating runtime ESP fault as fatal");
+    SysHandle_Fatal(SYS_ERR_ESP8266_RECOVERY_FAIL);
+    return false;
+  }
+  _last_recover_ms = now;
+  _recover_attempts++;
+
+  LOG_W("ESP", "Recovery attempt %u%s", _recover_attempts,
+        force ? " (forced)" : "");
+
+  /* Do not let the hard-disabled latch block recovery AT commands. */
+  _hard_disabled = false;
+  _state = 0;
+
+  esp8266_uart_resync(_huart);
+  clearRxBuffer();
+
+  /* Escape possible transparent mode and stale prompt/data states.  Even if the
+   * module is not in transparent mode, this sequence is harmless; it gives the
+   * AT firmware enough guard time before we send the real probe. */
+  const char *crlf = "\r\n";
+  HAL_UART_Transmit(_huart, (uint8_t *)crlf, 2, 100);
+  HAL_Delay(60);
+  const char *escape = "+++";
+  HAL_UART_Transmit(_huart, (uint8_t *)escape, 3, 100);
+  HAL_Delay(1100);
+  HAL_UART_Transmit(_huart, (uint8_t *)crlf, 2, 100);
+  HAL_Delay(120);
+
+  clearRxBuffer();
+  if (sendCommand("AT", "OK", 1000)) {
+    LOG_I("ESP", "Recovery OK by AT probe");
+    sendCommand("ATE0", "OK", 800);
+    sendCommand("AT+CIPMODE=0", "OK", 1000);
+    sendCommand("AT+CIPMUX=0", "OK", 1000);
+    _hard_disabled = false;
+    _recover_attempts = 0;
+    return true;
+  }
+
+  /* Last software-only recovery path: reset the AT firmware.  This will not
+   * help if the module lost power, but it does recover a wedged TCP/IP stack. */
+  clearRxBuffer();
+  if (sendCommand("AT+RST", "ready", 2500) || sendCommand("AT", "OK", 1000)) {
+    HAL_Delay(800);
+    clearRxBuffer();
+    if (sendCommand("AT", "OK", 1000)) {
+      LOG_I("ESP", "Recovery OK after AT+RST");
+      sendCommand("ATE0", "OK", 800);
+      sendCommand("AT+CIPMODE=0", "OK", 1000);
+      sendCommand("AT+CIPMUX=0", "OK", 1000);
+      _hard_disabled = false;
+      _recover_attempts = 0;
+      return true;
+    }
+  }
+
+  _hard_disabled = true;
+  _state = 4;
+  LOG_E("ESP", "Recovery failed");
+
+  /* Startup uses force=true so the rest of the product can finish booting and
+   * show UI.  Runtime recovery failure means the AT module is wedged; do not
+   * keep blocking launcher frames for repeated 9s recovery attempts.  Show the
+   * fatal UI and reset cleanly instead. */
+  if (!force) {
+    SysHandle_Fatal(SYS_ERR_ESP8266_RECOVERY_FAIL);
+  }
+
+  return false;
+}
+
 void ESP8266::init(void) {
   LOG_I("ESP", "Initializing...");
   LOG_D("ESP", "UART2 RX count before: %lu", (unsigned long)uart2_rx_count);
+
+  _hard_disabled = false;
+  _state = 0;
 
   /* Flush any stale boot data from ESP8266 */
   clearRxBuffer();
@@ -117,11 +219,14 @@ void ESP8266::init(void) {
   if (sendCommand("AT", "OK", 3000)) {
     LOG_I("ESP", "AT OK");
     sendCommand("ATE0", "OK", 1000);
+    sendCommand("AT+CIPMODE=0", "OK", 1000);
+    sendCommand("AT+CIPMUX=0", "OK", 1000);
   } else {
-    LOG_E("ESP", "No response to AT! Check wiring/power.");
+    LOG_W("ESP", "Initial AT timeout, trying software recovery");
     LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
-    _hard_disabled = true;
-    LOG_F("ESP", "ESP8266 HARD DISABLED — module unreachable");
+    if (!tryRecover(true)) {
+      LOG_E("ESP", "ESP8266 temporarily unavailable; background recovery enabled");
+    }
   }
 }
 
@@ -277,6 +382,8 @@ bool ESP8266::sendString(const char *str) {
 void ESP8266_Init(void) { esp8266.init(); }
 
 bool ESP8266_IsHardDisabled(void) { return esp8266.isHardDisabled(); }
+
+bool ESP8266_TryRecover(bool force) { return esp8266.tryRecover(force); }
 
 bool ESP8266_SendCommand(const char *cmd, const char *expected_response,
                          uint32_t timeout_ms) {

@@ -1,4 +1,5 @@
 #include "include/key.hpp"
+#include "core/sdk/include/tos_api.h"
 
 // ==================== Switch 实现 ====================
 
@@ -138,6 +139,7 @@ KeyManager keyManager;
 
 // 覆盖弱符号：DMA 等待期间轮询按键，消除盲窗
 void lcd_dma_yield(void) {
+  TosApi_Tick();
   keyManager.collision_A8.tick();
   keyManager.collision_D0.tick();
   keyManager.btn_enter.tick();

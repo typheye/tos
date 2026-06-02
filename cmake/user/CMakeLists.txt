@@ -28,6 +28,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/file_manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/settings_manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/network_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/emotion_manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syslog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/systime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sdk/tos_api.cpp

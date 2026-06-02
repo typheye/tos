@@ -15,6 +15,7 @@ extern "C" {
 #define TOS_API_HOST "proxy-api.otodone.com"
 #define TOS_API_PORT 80
 #define TOS_API_PATH "/tos/upgrade/check"
+#define TOS_API_V1_BASE "/v1"
 
 typedef struct {
   bool has_update;
@@ -33,6 +34,22 @@ typedef struct {
  * @return true on success, false on network/parse error
  */
 bool TosApi_CheckUpgrade(TosUpgradeInfo *info);
+
+/**
+ * @brief  Initialize background cloud heartbeat / command handling.
+ */
+void TosApi_Init(void);
+
+/**
+ * @brief  Advance background cloud communication.
+ *         Call frequently from UI/main loops. Never blocks on network I/O.
+ */
+void TosApi_Tick(void);
+
+/**
+ * @brief  Whether the background cloud client owns the ESP8266 now.
+ */
+bool TosApi_IsBusy(void);
 
 #ifdef __cplusplus
 }

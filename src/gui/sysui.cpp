@@ -1,4 +1,5 @@
 #include "include/sysui.hpp"
+#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"
 #include "gui/demo/include/demo_activity.hpp"
 #include "gui/miniapp/hid_tools/include/app.h"
@@ -77,6 +78,7 @@ static int menu_loop(const char *title, const char **items, int count,
   uint8_t le = 0;
   uint32_t lu = 0;
   while (1) {
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -98,6 +100,7 @@ static int menu_loop(const char *title, const char **items, int count,
       lu = HAL_GetTick();
       draw_menu(title, items, count, sel);
     }
+    TosApi_Tick();
     HAL_Delay(1);
   }
 }
@@ -105,6 +108,8 @@ static int menu_loop(const char *title, const char **items, int count,
 void SysUI::init(void) { last_tick = HAL_GetTick(); }
 
 void SysUI::loop(void) {
+  TosApi_Tick();
+
   Time_t now;
   Date_t today;
   boardTRTC.getDateTime(&now, &today);

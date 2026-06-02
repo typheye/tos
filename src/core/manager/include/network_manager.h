@@ -95,6 +95,44 @@ bool Net_HttpPost(const char *host, uint16_t port, const char *path,
                   const char *body, uint16_t body_len,
                   char *resp_buf, uint16_t resp_sz, uint32_t timeout_ms);
 
+typedef enum {
+  NET_ASYNC_IDLE = 0,
+  NET_ASYNC_BUSY,
+  NET_ASYNC_DONE,
+  NET_ASYNC_FAILED
+} NetAsyncState_t;
+
+/**
+ * @brief  Start a non-blocking HTTP POST request.
+ *
+ *         The caller must call Net_AsyncTick() frequently from UI/main loops.
+ *         Only one async request can be active at a time.
+ */
+bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
+                            const char *body, uint16_t body_len,
+                            uint32_t timeout_ms);
+
+/**
+ * @brief  Advance the active async request state machine.
+ */
+void Net_AsyncTick(void);
+
+/**
+ * @brief  Current async request state.
+ */
+NetAsyncState_t Net_AsyncState(void);
+
+/**
+ * @brief  Raw HTTP response for a finished async request.
+ *         Valid while state is NET_ASYNC_DONE.
+ */
+const char *Net_AsyncResponse(void);
+
+/**
+ * @brief  Clear a DONE/FAILED async request and return to IDLE.
+ */
+void Net_AsyncReset(void);
+
 #ifdef __cplusplus
 }
 #endif

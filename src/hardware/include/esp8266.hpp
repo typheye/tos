@@ -78,6 +78,13 @@ bool ESP8266_GetIP(char *buf, uint16_t sz);
  */
 bool ESP8266_IsHardDisabled(void);
 
+/**
+ * @brief Try to recover ESP8266 after AT timeout / stuck CIPSEND state.
+ * @param force true to ignore recovery rate limit.
+ * @return true if AT responds again.
+ */
+bool ESP8266_TryRecover(bool force);
+
 #ifdef __cplusplus
 }
 #endif
@@ -100,6 +107,7 @@ public:
   bool isConnected(void);
   int getState(void) { return _state; }
   bool isHardDisabled(void) { return _hard_disabled; }
+  bool tryRecover(bool force = false);
 
   // 数据处理（在中断中调用）
   void processRxData(uint8_t *data, uint16_t len);
@@ -117,7 +125,9 @@ public:
 private:
   UART_HandleTypeDef *_huart;
   int _state; // 0=断开, 1=连接中, 2=已连接, 3=已获取IP
-  bool _hard_disabled; // true = 模块初始化失败，硬件不可用
+  bool _hard_disabled; // true = temporarily unreachable, recovery may clear it
+  uint32_t _last_recover_ms;
+  uint8_t _recover_attempts;
   uint8_t _rx_buffer[1536];
   uint16_t _rx_index;
 

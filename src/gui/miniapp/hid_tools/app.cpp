@@ -1,5 +1,6 @@
 #include "include/app.h"
 #include "include/hid_tools_pages.hpp"
+#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -81,6 +82,7 @@ static int menu_loop(const char *title, const char **items, int count,
   uint32_t lu = 0;
 
   while (1) {
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -105,6 +107,7 @@ static int menu_loop(const char *title, const char **items, int count,
       lu = HAL_GetTick();
       draw_menu(title, items, count, sel);
     }
+    TosApi_Tick();
     HAL_Delay(1);
   }
 }

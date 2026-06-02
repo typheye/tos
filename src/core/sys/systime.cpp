@@ -195,12 +195,20 @@ static bool parse_numeric_datetime(const char *buf, SysDateTime *out) {
   for (const char *p = buf; p && *p; ++p) {
     const char *q = p; SysDateTime dt; char sep;
     if (!read_fixed_digits(&q, 4, &dt.year)) continue;
-    sep = *q; if (sep != '-' && sep != '/' && sep != '.') continue; ++q;
-    if (!read_fixed_digits(&q, 2, &dt.month)) continue; if (*q != sep) continue; ++q;
+    sep = *q;
+    if (sep != '-' && sep != '/' && sep != '.') continue;
+    ++q;
+    if (!read_fixed_digits(&q, 2, &dt.month)) continue;
+    if (*q != sep) continue;
+    ++q;
     if (!read_fixed_digits(&q, 2, &dt.day)) continue;
     while (*q == ' ' || *q == 'T' || *q == '"' || *q == '\'') ++q;
-    if (!read_fixed_digits(&q, 2, &dt.hour)) continue; if (*q != ':') continue; ++q;
-    if (!read_fixed_digits(&q, 2, &dt.minute)) continue; if (*q != ':') continue; ++q;
+    if (!read_fixed_digits(&q, 2, &dt.hour)) continue;
+    if (*q != ':') continue;
+    ++q;
+    if (!read_fixed_digits(&q, 2, &dt.minute)) continue;
+    if (*q != ':') continue;
+    ++q;
     if (!read_fixed_digits(&q, 2, &dt.second)) continue;
     if (valid_datetime(dt)) { *out = dt; return true; }
   }
@@ -210,11 +218,18 @@ static bool parse_numeric_datetime(const char *buf, SysDateTime *out) {
 static bool parse_esp_asctime(const char *buf, SysDateTime *out) {
   for (const char *p = buf; p && *p; ++p) {
     SysDateTime dt; const char *q;
-    dt.month = month_from_name(p); if (dt.month == 0) continue;
-    q = p + 3; skip_spaces(&q);
-    if (!read_digits(&q, 1, 2, &dt.day)) continue; skip_spaces(&q);
-    if (!read_fixed_digits(&q, 2, &dt.hour)) continue; if (*q != ':') continue; ++q;
-    if (!read_fixed_digits(&q, 2, &dt.minute)) continue; if (*q != ':') continue; ++q;
+    dt.month = month_from_name(p);
+    if (dt.month == 0) continue;
+    q = p + 3;
+    skip_spaces(&q);
+    if (!read_digits(&q, 1, 2, &dt.day)) continue;
+    skip_spaces(&q);
+    if (!read_fixed_digits(&q, 2, &dt.hour)) continue;
+    if (*q != ':') continue;
+    ++q;
+    if (!read_fixed_digits(&q, 2, &dt.minute)) continue;
+    if (*q != ':') continue;
+    ++q;
     if (!read_fixed_digits(&q, 2, &dt.second)) continue;
     skip_spaces(&q);
     if (!read_fixed_digits(&q, 4, &dt.year)) continue;

@@ -7,6 +7,7 @@
 #include "components/include/alert.hpp"
 #include "components/include/confirm.hpp"
 #include "core/manager/include/file_manager.h"
+#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/syshandle.h"
 #include "core/sys/include/systime.h"
 #include "fatfs.h"
@@ -482,6 +483,7 @@ void file_manager_run(void) {
   uint32_t last_probe = 0;
 
   while (1) {
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -557,6 +559,7 @@ void file_manager_run(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
+    TosApi_Tick();
     HAL_Delay(1);
   }
 }
