@@ -1,6 +1,8 @@
 #include "file_manager.h"
 
 #include "syshandle.h"
+/* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
+extern bool TSDIO_IsHardDisabled(void);
 #include "syslog.h"
 #include <stdio.h>
 #include <string.h>
@@ -42,6 +44,15 @@ static void fatal_if_needed(FRESULT res, bool fatal_on_storage_error,
 
 FRESULT FMCore_Mount(FATFS *fs, bool fatal_on_storage_error) {
   FRESULT res = FR_OK;
+
+  /* If SD card is hard-disabled, return immediately without touching the
+   * hardware.  This prevents FatFs from calling into a broken diskio layer
+   * and triggering a SysHandle_Exception. */
+  if (TSDIO_IsHardDisabled()) {
+    LOG_W("FMCR", "mount blocked: SD card is hard-disabled");
+    return FR_NOT_READY;
+  }
+
   if (!g_fmcore_mounted) {
     res = f_mount(fs, "0:", 1);
     if (res == FR_OK) g_fmcore_mounted = true;

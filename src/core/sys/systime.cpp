@@ -730,6 +730,11 @@ bool SysTime_Sync(void) {
 
   LOG_I("SYTM", "ESP8266 time sync...");
 
+  if (ESP8266_IsHardDisabled()) {
+    LOG_W("SYTM", "ESP8266 is hard-disabled — cannot sync");
+    return false;
+  }
+
   if (!ESP8266_IsConnected()) {
     LOG_W("SYTM", "WiFi is not connected");
     return false;

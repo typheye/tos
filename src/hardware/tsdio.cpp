@@ -12,6 +12,7 @@ extern USART boardSerial;
 // 构造函数
 TSDIO::TSDIO() {
   initialized = false;
+  _hard_disabled = false;
   write_protected = false;
   memset(&card_info, 0, sizeof(card_info));
 }
@@ -59,6 +60,8 @@ SDCard_Status_t TSDIO::init(void) {
   LOG_I("SDIO", "Calling HAL_SD_Init...");
   if (HAL_SD_Init(&hsd) != HAL_OK) {
     LOG_E("SDIO", "HAL_SD_Init FAILED");
+    _hard_disabled = true;
+    LOG_F("SDIO", "SD card HARD DISABLED — init failed");
     return SD_CARD_ERROR;
   }
   LOG_I("SDIO", "HAL_SD_Init OK");
@@ -90,6 +93,8 @@ SDCard_Status_t TSDIO::init(void) {
             (unsigned long)hal_card_info.CardType, (unsigned long)hal_card_info.BlockSize,
             (unsigned long)hal_card_info.BlockNbr);
     LOG_E("SDIO", "Failed to get valid card info!");
+    _hard_disabled = true;
+    LOG_F("SDIO", "SD card HARD DISABLED — invalid card info");
     return SD_CARD_ERROR;
   }
 
@@ -125,10 +130,13 @@ SDCard_Status_t TSDIO::init(void) {
   LOG_I("SDIO", "Waiting for card ready...");
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Card ready timeout");
+    _hard_disabled = true;
+    LOG_F("SDIO", "SD card HARD DISABLED — not ready");
     return SD_CARD_NOT_READY;
   }
 
   initialized = true;
+  _hard_disabled = false;
   LOG_I("SDIO", "Init complete!");
   return SD_CARD_OK;
 }
@@ -278,6 +286,7 @@ SDCard_Status_t TSDIO::eraseBlock(uint32_t start_sector, uint32_t end_sector) {
 
 // 检查 SD 卡是否插入
 bool TSDIO::isInserted(void) {
+  if (_hard_disabled) return false;
   HAL_SD_CardInfoTypeDef card_info_test;
   return (HAL_SD_GetCardInfo(&hsd, &card_info_test) == HAL_OK);
 }
@@ -516,3 +525,7 @@ bool TSDIO::simpleWriteTest(void) {
     return false;
   }
 }
+
+// ==================== C 接口 ====================
+
+bool TSDIO_IsHardDisabled(void) { return boardSDIO.isHardDisabled(); }

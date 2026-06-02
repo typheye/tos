@@ -26,6 +26,7 @@ CCMRAM ESP8266 esp8266(&huart2);
 ESP8266::ESP8266(UART_HandleTypeDef *huart) {
   _huart = huart;
   _state = 0;
+  _hard_disabled = false;
   _rx_index = 0;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
 }
@@ -50,6 +51,8 @@ void ESP8266::processPendingData(void) {
 void ESP8266::resetRxBuffer(void) { clearRxBuffer(); }
 
 bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
+  if (_hard_disabled) return false;
+
   uint32_t start = HAL_GetTick();
 
   while (HAL_GetTick() - start < timeout_ms) {
@@ -117,11 +120,18 @@ void ESP8266::init(void) {
   } else {
     LOG_E("ESP", "No response to AT! Check wiring/power.");
     LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
+    _hard_disabled = true;
+    LOG_F("ESP", "ESP8266 HARD DISABLED — module unreachable");
   }
 }
 
 bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
                           uint32_t timeout_ms) {
+  if (_hard_disabled) {
+    LOG_W("ESP", "sendCommand blocked: hard-disabled");
+    return false;
+  }
+
   char buffer[128];
 
   clearRxBuffer();
@@ -266,27 +276,57 @@ bool ESP8266::sendString(const char *str) {
 
 void ESP8266_Init(void) { esp8266.init(); }
 
+bool ESP8266_IsHardDisabled(void) { return esp8266.isHardDisabled(); }
+
 bool ESP8266_SendCommand(const char *cmd, const char *expected_response,
                          uint32_t timeout_ms) {
+  if (esp8266.isHardDisabled()) {
+    LOG_W("ESP", "SendCommand blocked: ESP8266 is hard-disabled");
+    return false;
+  }
   return esp8266.sendCommand(cmd, expected_response, timeout_ms);
 }
 
 bool ESP8266_ConnectWiFi(const char *ssid, const char *password) {
+  if (esp8266.isHardDisabled()) {
+    LOG_W("ESP", "ConnectWiFi blocked: ESP8266 is hard-disabled");
+    return false;
+  }
   return esp8266.connectWiFi(ssid, password);
 }
 
 bool ESP8266_SendData(const uint8_t *data, uint16_t len) {
+  if (esp8266.isHardDisabled()) {
+    LOG_W("ESP", "SendData blocked: ESP8266 is hard-disabled");
+    return false;
+  }
   return esp8266.sendData(data, len);
 }
 
 bool ESP8266_StartTCP(const char *host, uint16_t port) {
+  if (esp8266.isHardDisabled()) {
+    LOG_W("ESP", "StartTCP blocked: ESP8266 is hard-disabled");
+    return false;
+  }
   return esp8266.startTCP(host, port);
 }
 
-int ESP8266_GetState(void) { return esp8266.getState(); }
+int ESP8266_GetState(void) {
+  if (esp8266.isHardDisabled()) return 4; // 4 = error / hard-disabled
+  return esp8266.getState();
+}
 
-bool ESP8266_IsConnected(void) { return esp8266.isConnected(); }
+bool ESP8266_IsConnected(void) {
+  if (esp8266.isHardDisabled()) return false;
+  return esp8266.isConnected();
+}
 
-void ESP8266_Disconnect(void) { esp8266.disconnect(); }
+void ESP8266_Disconnect(void) {
+  if (esp8266.isHardDisabled()) return;
+  esp8266.disconnect();
+}
 
-bool ESP8266_GetIP(char *buf, uint16_t sz) { return esp8266.getIP(buf, sz); }
+bool ESP8266_GetIP(char *buf, uint16_t sz) {
+  if (esp8266.isHardDisabled()) return false;
+  return esp8266.getIP(buf, sz);
+}

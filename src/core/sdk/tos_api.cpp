@@ -259,6 +259,13 @@ static bool json_get_bool(const char *buf, const char *key) {
 
 bool TosApi_CheckUpgrade(TosUpgradeInfo *info) {
   if (!info) return false;
+
+  /* If ESP8266 is hard-disabled, bail out immediately */
+  if (ESP8266_IsHardDisabled()) {
+    LOG_W("TAPI", "ESP8266 is hard-disabled — cannot check upgrade");
+    return false;
+  }
+
   memset(info, 0, sizeof(*info));
 
   char host[64];

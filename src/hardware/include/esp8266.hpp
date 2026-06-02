@@ -71,6 +71,13 @@ bool ESP8266_IsConnected(void);
 void ESP8266_Disconnect(void);
 bool ESP8266_GetIP(char *buf, uint16_t sz);
 
+/**
+ * @brief 检查 ESP8266 是否处于硬断开状态
+ *        硬断开 = 模块初始化失败，物理上不可用
+ * @return true 硬断开（不可用）, false 正常
+ */
+bool ESP8266_IsHardDisabled(void);
+
 #ifdef __cplusplus
 }
 #endif
@@ -92,6 +99,7 @@ public:
   bool closeConnection(void);
   bool isConnected(void);
   int getState(void) { return _state; }
+  bool isHardDisabled(void) { return _hard_disabled; }
 
   // 数据处理（在中断中调用）
   void processRxData(uint8_t *data, uint16_t len);
@@ -109,6 +117,7 @@ public:
 private:
   UART_HandleTypeDef *_huart;
   int _state; // 0=断开, 1=连接中, 2=已连接, 3=已获取IP
+  bool _hard_disabled; // true = 模块初始化失败，硬件不可用
   uint8_t _rx_buffer[1536];
   uint16_t _rx_index;
 

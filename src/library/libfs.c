@@ -1,6 +1,8 @@
 #include "include/libfs.h"
 #include "diskio.h"
 #include "ff.h"
+/* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
+extern bool TSDIO_IsHardDisabled(void);
 #include <stdlib.h>
 #include <string.h>
 
@@ -122,6 +124,12 @@ FS_Status_t FS_Mount(const char *path) {
   FRESULT res;
   const char *drive = path ? path : "0:";
 
+  /* If SD card is hard-disabled, return immediately. */
+  if (TSDIO_IsHardDisabled()) {
+    last_error = FS_ERROR;
+    return FS_ERROR;
+  }
+
   res = f_mount(&fs, drive, 1);
 
   if (res == FR_OK) {
@@ -157,6 +165,12 @@ FS_Status_t FS_Unmount(const char *path) {
 FS_Status_t FS_Format(const char *path) {
   FRESULT res;
   const char *drive = path ? path : "0:";
+
+  /* If SD card is hard-disabled, return immediately. */
+  if (TSDIO_IsHardDisabled()) {
+    last_error = FS_ERROR;
+    return FS_ERROR;
+  }
 
 #ifdef FF_MAX_SS
   uint32_t work_buffer[FF_MAX_SS / sizeof(uint32_t)];

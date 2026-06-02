@@ -14,6 +14,7 @@
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/sfhd.h"
 #include "hardware/include/trtc.hpp"
+#include "hardware/include/tsdio.hpp"
 #include "include/libpd.h"
 #include "syslog.h"
 #include <cstdio>
@@ -461,6 +462,12 @@ static bool fm_enter(int idx, int *sel_io) {
 }
 
 void file_manager_run(void) {
+  /* If SD card is hard-disabled, alert and return immediately. */
+  if (TSDIO_IsHardDisabled()) {
+    alert_show("SYS", "SD card is disable!");
+    return;
+  }
+
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   if (!fm_prepare_storage()) {
     return;

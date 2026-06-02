@@ -560,6 +560,14 @@ static FRESULT sfhd_try_mkfs(BYTE opt, const char *name) {
 }
 
 FRESULT SFHD_SD_FormatAndInit(const SFHD_SD_FormatOptions_t *options) {
+  /* If SD card is hard-disabled, bail out immediately — avoid touching
+   * non-existent hardware and triggering SysHandle_Exception. */
+  extern bool TSDIO_IsHardDisabled(void);
+  if (TSDIO_IsHardDisabled()) {
+    LOG_W("SFHD", "SD format blocked: SD card is hard-disabled");
+    return FR_NOT_READY;
+  }
+
   DWORD free_clusters = 0;
   FATFS *mounted_fs = NULL;
 

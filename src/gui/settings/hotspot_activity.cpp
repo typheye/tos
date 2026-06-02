@@ -163,8 +163,8 @@ static bool hs_at_command_any(const char *cmd, const char *expected1,
 static bool hs_at_command(const char *cmd, const char *expected,
                           uint32_t timeout_ms, uint32_t settle_ms, char *out,
                           size_t out_sz) {
-  return hs_at_command_any(cmd, expected, NULL, NULL, timeout_ms, settle_ms, out,
-                           out_sz);
+  return hs_at_command_any(cmd, expected, NULL, NULL, timeout_ms, settle_ms,
+                           out, out_sz);
 }
 
 static void hs_log_response(const char *tag, const char *resp) {
@@ -379,8 +379,8 @@ static void hs_configure_dhcp_range(void) {
   int a, b, c, d;
   char cmd[96];
 
-  if (sscanf(hs_ip, "%d.%d.%d.%d", &a, &b, &c, &d) != 4 ||
-      a != 192 || b != 168 || c < 1 || c > 255 || d != 1) {
+  if (sscanf(hs_ip, "%d.%d.%d.%d", &a, &b, &c, &d) != 4 || a != 192 ||
+      b != 168 || c < 1 || c > 255 || d != 1) {
     return;
   }
 
@@ -814,6 +814,12 @@ static void connected_page(void) {
 // ============ Public ============
 
 void hotspot_activity_run(void) {
+  /* If ESP8266 is hard-disabled, show alert and bail out immediately. */
+  if (ESP8266_IsHardDisabled()) {
+    alert_show("SYS", "ESP8266 is disable!");
+    return;
+  }
+
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   /* Load from Flash */
   hs_auto_close = SM_Hotspot_AutoClose();

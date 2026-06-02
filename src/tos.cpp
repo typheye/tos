@@ -13,9 +13,6 @@ void TOS::start() {
   if (!initialized_)
     init();
 
-  // 设置默认界面为启动器
-  SysUI::setActivity(UI_PET);
-
   // 主循环
   while (1) {
     uint32_t t0 = HAL_GetTick();

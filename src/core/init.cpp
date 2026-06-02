@@ -58,6 +58,10 @@ void TOS::init() {
   boardTRTC.init(); // 已修复，内部会等待 LSE 并重试
 
   boardSDIO.init();
+  if (TSDIO_IsHardDisabled()) {
+    LOG_W("MAIN", "SD card is hard-disabled — SD features unavailable");
+  }
+
   keyManager.init();
   boardJY901S.init();
   boardBMP180.init();
@@ -78,8 +82,9 @@ void TOS::init() {
 
   ESP8266_Init();
 
-  /* ── WLAN Auto-Connect ── */
-  if (SM_Wlan_On() && SM_Wlan_AutoConn()) {
+  /* ── WLAN Auto-Connect ──
+   * Skip entirely if ESP8266 is hard-disabled (module not responding). */
+  if (!ESP8266_IsHardDisabled() && SM_Wlan_On() && SM_Wlan_AutoConn()) {
     LOG_I("MAIN", "Auto-connect: starting...");
     ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
     HAL_Delay(300);
@@ -110,8 +115,10 @@ void TOS::init() {
     }
   }
 
-  /* Background NTP sync — only if Auto Sync is ON */
-  if (SM_Wlan_On() && ESP8266_IsConnected() && SM_Time_AutoSync()) {
+  /* Background NTP sync — only if Auto Sync is ON
+   * Skip if ESP8266 is hard-disabled. */
+  if (!ESP8266_IsHardDisabled() && SM_Wlan_On() &&
+      ESP8266_IsConnected() && SM_Time_AutoSync()) {
     SysTime_Sync();
   }
 
@@ -121,5 +128,6 @@ void TOS::init() {
 
   PD_SplashFinish(100);
 
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
+  // 设置默认界面为启动器
+  SysUI::setActivity(UI_PET);
 }

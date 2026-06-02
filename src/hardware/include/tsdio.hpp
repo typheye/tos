@@ -14,6 +14,13 @@ extern "C" {
 #include "sdio.h"
 #include "stm32f4xx_hal_sd.h"
 
+/**
+ * @brief 检查 SD 卡是否处于硬断开状态
+ *        硬断开 = SDIO 初始化失败，SD 卡不可用
+ * @return true 硬断开（不可用）, false 正常
+ */
+bool TSDIO_IsHardDisabled(void);
+
 #ifdef __cplusplus
 }
 #endif
@@ -67,6 +74,9 @@ public:
   // 擦除块
   SDCard_Status_t eraseBlock(uint32_t start_sector, uint32_t end_sector);
 
+  // 检查 SD 卡是否硬件断开（初始化失败，不可用）
+  bool isHardDisabled(void) { return _hard_disabled; }
+
   // 检查 SD 卡是否插入
   bool isInserted(void);
 
@@ -81,6 +91,7 @@ public:
 
 private:
   bool initialized;        // 初始化标志
+  bool _hard_disabled;     // 初始化失败 → 硬件不可用
   bool write_protected;    // 写保护标志
   SDCard_Info_t card_info; // 卡信息
 

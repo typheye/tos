@@ -3,6 +3,7 @@
  * @brief   Settings manager — Flash-backed persistent config
  */
 #include "settings_manager.h"
+#include "hardware/include/esp8266.hpp"
 #include "hardware/include/sfhd.h"
 #include "syslog.h"
 #include <stdio.h>
@@ -188,4 +189,9 @@ void SM_Hotspot_SetSSID(const char *s) { copy_str(g_settings.hs_ssid, s, sizeof(
 void SM_Hotspot_SetPWD(const char *s)  { copy_str(g_settings.hs_pwd, s, sizeof(g_settings.hs_pwd)); SM_Save(); }
 
 /* --- Status icon helpers (C-callable) --- */
-bool esp_wlan_is_on(void) { return SM_Wlan_On(); }
+bool esp_wlan_is_on(void) {
+  /* If ESP8266 is hard-disabled, report WLAN as OFF regardless of Flash
+   * setting — the icon in the status bar should show grey. */
+  if (ESP8266_IsHardDisabled()) return false;
+  return SM_Wlan_On();
+}
