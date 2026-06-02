@@ -8,6 +8,7 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sdk/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/
@@ -26,6 +27,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syshandle.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/file_manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/settings_manager.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/network_manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syslog.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/systime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sdk/tos_api.cpp
@@ -56,7 +58,8 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libpd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libemo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libehw.cpp
-    
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libjson.c
+
     # Demo 活动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/jyro_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/key_activity.cpp
