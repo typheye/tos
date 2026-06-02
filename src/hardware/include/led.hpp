@@ -3,6 +3,21 @@
 
 #include "main.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* C-compatible wrappers for cross-language access (e.g. from syshandle.c) */
+void LED_ErrorOn(void);
+void LED_ErrorOff(void);
+void LED_BoardOn(void);
+void LED_BoardOff(void);
+void LED_BoardBlink100ms(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 class LED {
 public:
   // polarity: true = 高电平点亮, false = 低电平点亮

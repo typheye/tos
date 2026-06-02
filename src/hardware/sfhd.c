@@ -319,7 +319,7 @@ void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize) {
 #include "diskio.h"
 #include "fatfs.h"
 #include "ff.h"
-#include "include/syshandle.h"
+#include "syshandle.h"
 
 #ifndef SFHD_SD_WORK_SECTOR_SIZE
 #define SFHD_SD_WORK_SECTOR_SIZE 512U

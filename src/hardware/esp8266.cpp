@@ -1,4 +1,5 @@
 #include "hardware/include/esp8266.hpp"
+#include "hardware/include/led.hpp"
 #include "hardware/include/usart.hpp"
 #include "syslog.h"
 #include <stdio.h>
@@ -56,16 +57,24 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
 
     if (_rx_index > 0) {
       if (expected && strstr((char *)_rx_buffer, expected) != NULL) {
+        /* Communication success: brief blink to acknowledge */
+        boardLed.on();
+        HAL_Delay(100);
+        boardLed.off();
         return true;
       }
 
       if (strstr((char *)_rx_buffer, "ERROR") != NULL ||
           strstr((char *)_rx_buffer, "FAIL") != NULL) {
+        /* Communication failure: keep boardLed on until next success */
+        boardLed.on();
         return false;
       }
     }
     HAL_Delay(10);
   }
+  /* Timeout: communication failure */
+  boardLed.on();
   return false;
 }
 
@@ -134,6 +143,10 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
         if (strstr((char *)_rx_buffer, expected_response) != NULL) {
           LOG_D("ESP", "OK after %lums, rx=%u bytes",
                 (unsigned long)(HAL_GetTick() - start), _rx_index);
+          /* Communication success: brief blink to acknowledge */
+          boardLed.on();
+          HAL_Delay(100);
+          boardLed.off();
           return true;
         }
         /* Buffer nearly full — search for partial match */
@@ -142,6 +155,10 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
                 _rx_index, (unsigned)sizeof(_rx_buffer), expected_response);
         }
       } else {
+        /* No expected response specified — any data counts as success */
+        boardLed.on();
+        HAL_Delay(100);
+        boardLed.off();
         return true;
       }
 
@@ -149,6 +166,8 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
           strstr((char *)_rx_buffer, "FAIL") != NULL) {
         LOG_E("ESP", "Got ERROR/FAIL after %lums, rx=%u bytes",
               (unsigned long)(HAL_GetTick() - start), _rx_index);
+        /* Communication failure: keep boardLed on until next success */
+        boardLed.on();
         return false;
       }
 
@@ -165,6 +184,8 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
   LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes",
         (unsigned long)timeout_ms, _rx_index);
+  /* Communication failure: keep boardLed on until next success */
+  boardLed.on();
   return false;
 }
 

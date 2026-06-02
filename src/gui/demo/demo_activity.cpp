@@ -1,5 +1,5 @@
 #include "include/demo_activity.hpp"
-#include "core/include/systime.h"
+#include "core/sys/include/systime.h"
 #include "gui/include/settings.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"

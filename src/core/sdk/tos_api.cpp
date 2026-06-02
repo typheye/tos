@@ -3,8 +3,8 @@
  * @brief   Cloud API — HTTP GET + JSON parse
  */
 
-#include "include/tos_api.h"
-#include "include/config.h"
+#include "tos_api.h"
+#include "../include/config.h"
 #include "hardware/include/esp8266.hpp"
 #include "syslog.h"
 #include <cstdio>

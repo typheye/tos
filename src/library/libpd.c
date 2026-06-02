@@ -1,5 +1,5 @@
 #include "include/libpd.h"
-#include "include/sysfonts.h"
+#include "sysfonts.h"
 #include "include/syslogo.h"
 #include <math.h> // 添加：sin, cos, sqrt 等（如果需要）
 #include <stdio.h>

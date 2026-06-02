@@ -1,5 +1,5 @@
 #include "include/sysui.hpp"
-#include "core/include/systime.h"
+#include "core/sys/include/systime.h"
 #include "gui/demo/include/demo_activity.hpp"
 #include "gui/miniapp/hid_tools/include/app.h"
 #include "gui/include/settings.hpp"

@@ -10,7 +10,7 @@
 
 #include "include/bmp_activity.hpp"
 #include "components/include/alert.hpp"
-#include "core/include/systime.h"
+#include "core/sys/include/systime.h"
 #include "hardware/include/bmp180.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"

@@ -3,8 +3,8 @@
  * @brief   RTC time sync through ESP8266 AT commands.
  */
 
-#include "include/systime.h"
-#include "include/settings_manager.h"
+#include "systime.h"
+#include "../manager/include/settings_manager.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/trtc.hpp"
 #include "syslog.h"
@@ -42,6 +42,11 @@ static const uint32_t RTC_SET_ADVANCE_MS = 2;
  * the final OK.  Compensate the fixed transport latency before aligning to
  * the next RTC second edge. Tune in 100ms steps if your module differs. */
 static const uint32_t TIME_SYNC_LATENCY_COMP_MS = 2300U;
+/* The ESP8266 SNTP/HTTP time sync path is consistently ~3 seconds behind the
+ * true wall clock on this hardware (module formatting + transport lag not
+ * fully covered by the latency compensation above). Add a fixed offset so the
+ * RTC lands on the correct second after alignment. */
+static const uint32_t TIME_SYNC_FIXED_OFFSET_S = 1U;
 
 static bool parse_any_datetime(const char *buf, SysDateTime *out);
 
@@ -484,11 +489,12 @@ static SysDateTime align_and_apply_sample(const TimeSample &sample) {
                                        : target_tick;
   SysDateTime target = sample.dt;
 
-  add_seconds(&target, target_seconds);
+  add_seconds(&target, target_seconds + TIME_SYNC_FIXED_OFFSET_S);
 
-  LOG_D("SYTM", "RTC align: age=%lums comp=%lums wait=%lums precise=%d",
+  LOG_D("SYTM", "RTC align: age=%lums comp=%lums wait=%lums precise=%d fixed=%lus",
         (unsigned long)elapsed, (unsigned long)TIME_SYNC_LATENCY_COMP_MS,
-        (unsigned long)wait_ms, sample.precise_tick ? 1 : 0);
+        (unsigned long)wait_ms, sample.precise_tick ? 1 : 0,
+        (unsigned long)TIME_SYNC_FIXED_OFFSET_S);
 
   while (tick_delta(apply_tick, HAL_GetTick()) > 3) {
     HAL_Delay(1);

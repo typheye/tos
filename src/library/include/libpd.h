@@ -2,7 +2,7 @@
 #define __LIBPD_H
 
 #include "include/lcd.h"
-#include "include/sysfonts.h"
+#include "sysfonts.h"
 #include <stdbool.h>
 #include <stdint.h>
 

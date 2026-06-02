@@ -3,7 +3,7 @@
  * @brief   Timestamp helper for printf-direct log macros
  */
 
-#include "include/syslog.h"
+#include "syslog.h"
 #include "stm32f4xx_hal.h"
 
 /* Hand-rolled uint32→dec (avoids newlib-nano snprintf issues) */

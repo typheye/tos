@@ -13,14 +13,14 @@
 #include "include/wlan_activity.hpp"
 #include "components/include/alert.hpp"
 #include "components/include/keyboard.hpp"
-#include "core/include/settings_manager.h"
+#include "core/manager/include/settings_manager.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
 #include "syslog.h"
-#include "core/include/systime.h"
+#include "core/sys/include/systime.h"
 #include <cstdio>
 #include <cstring>
 

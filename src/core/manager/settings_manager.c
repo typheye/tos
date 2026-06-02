@@ -2,7 +2,7 @@
  * @file    settings_manager.c
  * @brief   Settings manager — Flash-backed persistent config
  */
-#include "include/settings_manager.h"
+#include "settings_manager.h"
 #include "hardware/include/sfhd.h"
 #include "syslog.h"
 #include <stdio.h>

@@ -1,5 +1,5 @@
 #include "include/jyro_activity.hpp"
-#include "core/include/systime.h"
+#include "core/sys/include/systime.h"
 #include "hardware/include/jy901s.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"

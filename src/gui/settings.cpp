@@ -12,7 +12,7 @@
 #include "settings/include/about_activity.hpp"
 #include <cstdio>
 #include "syslog.h"
-#include "core/include/systime.h"
+#include "core/sys/include/systime.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

@@ -5,6 +5,9 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sdk/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/settings/
@@ -17,14 +20,15 @@ set(USER_Include_Dirs
 set(USER_Application_Src
     # 核心系统文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sysfonts.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syscalls_override.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syshandle.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/file_manager.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/settings_manager.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/syslog.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/systime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/tos_api.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/init.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/sysfonts.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syscalls_override.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syshandle.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/file_manager.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/manager/settings_manager.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syslog.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/systime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sdk/tos_api.cpp
     
     # 硬件驱动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/led.cpp

@@ -35,6 +35,18 @@ void LED::blink(uint32_t delay_ms) {
   HAL_Delay(delay_ms);
 }
 
+// ==================== C 兼容接口实现 ====================
+
+void LED_ErrorOn(void) { errorLed.on(); }
+void LED_ErrorOff(void) { errorLed.off(); }
+void LED_BoardOn(void) { boardLed.on(); }
+void LED_BoardOff(void) { boardLed.off(); }
+void LED_BoardBlink100ms(void) {
+  boardLed.on();
+  HAL_Delay(100);
+  boardLed.off();
+}
+
 // PC13: 低电平点亮（polarity = false）
 // PD8/PD9: 高电平点亮（polarity = true）
 LED boardLed(GPIOC, GPIO_PIN_13, false);

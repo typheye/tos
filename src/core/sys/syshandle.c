@@ -1,10 +1,13 @@
-#include "include/syshandle.h"
+#include "syshandle.h"
 
 #include "hardware/include/lcd.h"
 #include "library/include/libpd.h"
 #include "main.h"
 #include "syslog.h"
 #include <stdio.h>
+
+/* C-compatible LED wrappers (defined in hardware/led.cpp) */
+extern void LED_ErrorOn(void);
 
 static volatile uint32_t g_last_exception_code = SYS_ERR_NONE;
 static uint32_t g_draw_code = SYS_ERR_NONE;
@@ -98,6 +101,10 @@ static void syshandle_render(void) {
 void SysHandle_Exception(uint32_t code) {
   g_last_exception_code = code;
   g_draw_code = code;
+
+  /* Light the error LED immediately — stays on until system reset */
+  LED_ErrorOn();
+
   LOG_F("SYSH", "System exception: 0x%08lX %s", (unsigned long)code,
         SysHandle_CodeName(code));
 
