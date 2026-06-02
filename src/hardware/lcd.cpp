@@ -392,24 +392,48 @@ void LCD::setBrightness(uint16_t val) {
 // 自动亮度: 读取 TCS3472 环境光, 映射到 PWM
 void LCD::updateAutoBrightness(void) {
   static bool logged = false;
-  if (!_auto_brightness) { logged = false; return; }
-  if (!logged) { LOG_I("LCD", "Auto-brightness active"); logged = true; }
   static uint32_t last = 0;
-  if (HAL_GetTick() - last < 2000) return;
-  last = HAL_GetTick();
+  uint32_t now = HAL_GetTick();
+
+  if (!_auto_brightness) {
+    logged = false;
+    return;
+  }
+  if (!logged) {
+    LOG_I("LCD", "Auto-brightness active");
+    logged = true;
+  }
+
+  /* Called both from UI drawing and SysWatchdog_Tick().  Keep it low-rate so
+   * network-heavy periods do not starve brightness, but brightness updates also
+   * do not add visible jitter to HTTP. */
+  if ((uint32_t)(now - last) < 2000U) return;
+  last = now;
 
   extern TCS3472 boardTCS3472;
   if (!boardTCS3472.isInitialized()) return;
 
   float lux = boardTCS3472.getLux();
+  uint16_t target;
+  if (lux < 1)          target = 50;
+  else if (lux < 10)    target = 100;
+  else if (lux < 50)    target = 200;
+  else if (lux < 200)   target = 350;
+  else if (lux < 500)   target = 550;
+  else if (lux < 1000)  target = 750;
+  else                  target = 1000;
+
+  /* Smooth changes: full jumps are harsh and can look like the backlight is
+   * fighting the UI while network work is running. */
+  uint16_t cur = _brightness_pwm;
   uint16_t pwm;
-  if (lux < 1)       pwm = 50;
-  else if (lux < 10)  pwm = 100;
-  else if (lux < 50)  pwm = 200;
-  else if (lux < 200) pwm = 350;
-  else if (lux < 500) pwm = 550;
-  else if (lux < 1000) pwm = 750;
-  else                pwm = 1000;
+  if (target > cur) {
+    uint16_t d = target - cur;
+    pwm = cur + (d > 120U ? 120U : d);
+  } else {
+    uint16_t d = cur - target;
+    pwm = cur - (d > 120U ? 120U : d);
+  }
 
   if (pwm != _brightness_pwm) setBrightness(pwm);
 }

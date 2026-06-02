@@ -3,6 +3,7 @@
 #include "hardware/include/lcd.hpp"
 #include "core/manager/include/emotion_manager.h"
 #include "core/sdk/include/tos_api.h"
+#include "core/sys/include/syswatchdog.h"
 #include "library/include/libehw.h"
 #include "library/include/libemo.h"
 #include <cmath>
@@ -246,7 +247,7 @@ static bool update_cloud_expression(uint32_t now) {
   uint32_t rev = EmotionManager_GetRevision();
   int target = cloud_expr_to_anim(EmotionManager_GetExpression());
   bool changed = (rev != cloud_expr_revision) || (target != cloud_expr_anim);
-  bool target_finished = (pet_state != target) &&
+  bool target_finished = (target != ANIM_IDLE) && (pet_state != target) &&
                          (now - anim_start_tm > 260U);
 
   if (changed || target_finished) {
@@ -906,6 +907,7 @@ void pet_launcher_run(void) {
   uint32_t slow_frame_log = 0;
   while (1) {
     now = HAL_GetTick();
+    SysWatchdog_Tick();
     TosApi_Tick();
     if (now - heartbeat > 5000U) {
       heartbeat = now;
@@ -976,6 +978,7 @@ void pet_launcher_run(void) {
       LOG_D("PET", "slow frame %lums", (unsigned long)frame_ms);
     }
     TosApi_Tick();
+    SysWatchdog_Tick();
     HAL_Delay(1);
   }
 }

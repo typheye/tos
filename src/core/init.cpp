@@ -8,6 +8,7 @@
 #include "core/manager/include/settings_manager.h"
 #include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"
+#include "core/sys/include/syswatchdog.h"
 #include "demo/include/bmp_activity.hpp"
 #include "demo/include/i2c_activity.hpp"
 #include "demo/include/jyro_activity.hpp"
@@ -51,6 +52,9 @@ void TOS::init() {
 
   buzzer1.init();
   boardLCD.init();
+  SysWatchdog_Init();
+  SysWatchdog_ShowBootReasonIfAny();
+  SysWatchdog_FeedNow();
   HAL_Delay(50);
 
   PD_ShowSplashFadeStart(300);
@@ -82,7 +86,9 @@ void TOS::init() {
 
   LOG_I("MAIN", "System initialized, CPU:168MHz");
 
+  SysWatchdog_FeedNow();
   ESP8266_Init();
+  SysWatchdog_FeedNow();
 
   /* ── WLAN Auto-Connect ──
    * Skip entirely if ESP8266 is hard-disabled (module not responding). */
@@ -121,7 +127,9 @@ void TOS::init() {
    * Skip if ESP8266 is hard-disabled. */
   if (!ESP8266_IsHardDisabled() && SM_Wlan_On() &&
       ESP8266_IsConnected() && SM_Time_AutoSync()) {
+    SysWatchdog_FeedNow();
     SysTime_Sync();
+    SysWatchdog_FeedNow();
   }
 
   EmotionManager_Init();

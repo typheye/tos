@@ -3,6 +3,7 @@
 #include "hardware/include/usart.hpp"
 #include "include/syshandle.h"
 #include "syslog.h"
+#include "core/sys/include/syswatchdog.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -78,6 +79,7 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
       }
     }
     HAL_Delay(10);
+    SysWatchdog_Tick();
   }
   /* Timeout: communication failure */
   boardLed.on();
@@ -123,6 +125,7 @@ static void esp8266_uart_resync(UART_HandleTypeDef *huart) {
       __HAL_UART_CLEAR_OREFLAG(huart);
       start = HAL_GetTick();
     }
+    SysWatchdog_Tick();
   }
 }
 
@@ -155,6 +158,7 @@ bool ESP8266::tryRecover(bool force) {
   const char *escape = "+++";
   HAL_UART_Transmit(_huart, (uint8_t *)escape, 3, 100);
   HAL_Delay(1100);
+  SysWatchdog_FeedNow();
   HAL_UART_Transmit(_huart, (uint8_t *)crlf, 2, 100);
   HAL_Delay(120);
 
@@ -174,6 +178,7 @@ bool ESP8266::tryRecover(bool force) {
   clearRxBuffer();
   if (sendCommand("AT+RST", "ready", 2500) || sendCommand("AT", "OK", 1000)) {
     HAL_Delay(800);
+  SysWatchdog_FeedNow();
     clearRxBuffer();
     if (sendCommand("AT", "OK", 1000)) {
       LOG_I("ESP", "Recovery OK after AT+RST");
@@ -211,9 +216,11 @@ void ESP8266::init(void) {
   /* Flush any stale boot data from ESP8266 */
   clearRxBuffer();
   HAL_Delay(500);
+  SysWatchdog_FeedNow();
   processPendingData();
   clearRxBuffer();
   HAL_Delay(200);
+  SysWatchdog_FeedNow();
 
   LOG_D("ESP", "Sending AT test...");
   if (sendCommand("AT", "OK", 3000)) {
@@ -295,6 +302,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
       }
     }
     HAL_Delay(10);
+    SysWatchdog_Tick();
   }
 
   LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes",
@@ -313,6 +321,7 @@ bool ESP8266::connectWiFi(const char *ssid, const char *password) {
 
   if (result) {
     HAL_Delay(2000);
+  SysWatchdog_FeedNow();
     _state = 3;
   }
   return result;

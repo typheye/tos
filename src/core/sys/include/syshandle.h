@@ -29,6 +29,13 @@ extern "C" {
 #define SYS_ERR_UI_FILE_MANAGER       0x00002002UL
 #define SYS_ERR_UI_HID_TOOLS          0x00002003UL
 
+#define SYS_ERR_ESP8266_AT_TIMEOUT     0x00003001UL
+#define SYS_ERR_ESP8266_RECOVERY_FAIL  0x00003002UL
+#define SYS_ERR_NET_TRANSPORT_STUCK    0x00003003UL
+
+#define SYS_ERR_IWDG_RESET             0x00004002UL
+#define SYS_ERR_MAIN_LOOP_STALL        0x00004004UL
+
 /* Show the fatal exception UI, count down 5 seconds, then reset.
  * This function does not return under normal conditions.
  */

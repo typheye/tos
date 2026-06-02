@@ -22,6 +22,7 @@
 #include "dma.h"
 #include "fatfs.h"
 #include "i2c.h"
+#include "iwdg.h"
 #include "rtc.h"
 #include "sdio.h"
 #include "spi.h"
@@ -35,6 +36,7 @@
 
 #include "hardware/include/esp8266.hpp" // 确保 ESP8266 函数可用
 #include <stdio.h>                      // 添加这个头文件 for printf
+#include "core/sys/include/syswatchdog.h"
 
 /* USER CODE END Includes */
 
@@ -115,7 +117,9 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM4_Init();
   MX_USB_DEVICE_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
+  SysWatchdog_FeedNow();
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
 
   start_tos();
@@ -149,9 +153,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE
+                              |RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;

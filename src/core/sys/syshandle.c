@@ -4,12 +4,14 @@
 #include "library/include/libpd.h"
 #include "main.h"
 #include "syslog.h"
+#include "syswatchdog.h"
 #include <stdio.h>
 
 /* C-compatible LED wrappers (defined in hardware/led.cpp) */
 extern void LED_ErrorOn(void);
 
 static volatile uint32_t g_last_exception_code = SYS_ERR_NONE;
+static volatile uint8_t g_in_exception = 0;
 static uint32_t g_draw_code = SYS_ERR_NONE;
 static int g_draw_seconds = 5;
 
@@ -31,6 +33,11 @@ const char *SysHandle_CodeName(uint32_t code) {
   case SYS_ERR_UI_STORAGE_PROBE: return "UI_STORAGE_PROBE";
   case SYS_ERR_UI_FILE_MANAGER: return "UI_FILE_MANAGER";
   case SYS_ERR_UI_HID_TOOLS: return "UI_HID_TOOLS";
+  case SYS_ERR_ESP8266_AT_TIMEOUT: return "ESP8266_AT_TIMEOUT";
+  case SYS_ERR_ESP8266_RECOVERY_FAIL: return "ESP8266_RECOVERY_FAIL";
+  case SYS_ERR_NET_TRANSPORT_STUCK: return "NET_TRANSPORT_STUCK";
+  case SYS_ERR_IWDG_RESET: return "IWDG_RESET";
+  case SYS_ERR_MAIN_LOOP_STALL: return "MAIN_LOOP_STALL";
   default: return "UNKNOWN";
   }
 }
@@ -99,6 +106,14 @@ static void syshandle_render(void) {
 }
 
 void SysHandle_Exception(uint32_t code) {
+  if (g_in_exception) {
+    while (1) {
+      SysWatchdog_FeedNow();
+      HAL_Delay(20);
+    }
+  }
+  g_in_exception = 1;
+
   g_last_exception_code = code;
   g_draw_code = code;
 
@@ -110,12 +125,16 @@ void SysHandle_Exception(uint32_t code) {
 
   for (g_draw_seconds = 5; g_draw_seconds >= 1; --g_draw_seconds) {
     LCD_FlushTiled(syshandle_render);
-    HAL_Delay(1000);
+    for (uint32_t i = 0; i < 1000U; i += 20U) {
+      SysWatchdog_FeedNow();
+      HAL_Delay(20);
+    }
   }
 
   NVIC_SystemReset();
 
   while (1) {
+    SysWatchdog_FeedNow();
   }
 }
 

@@ -3,9 +3,8 @@
  * @brief   Unified network request manager — HTTP via ESP8266
  *
  * All network communication is routed through this module.
- * LED rules are applied at the low-level I/O boundaries:
- *   success → boardLed blink (100 ms)
- *   failure → warnLed ON
+ * LED rules are applied at the low-level I/O boundaries.  Keep LED feedback
+ * non-blocking; the network path must not steal UI/brightness time.
  */
 
 #include "include/network_manager.h"
@@ -13,6 +12,7 @@
 #include "hardware/include/led.hpp"
 #include "include/syshandle.h"
 #include "syslog.h"
+#include "core/sys/include/syswatchdog.h"
 #include <cstdio>
 #include <cstring>
 
@@ -32,11 +32,13 @@ static const size_t NET_RX_SIZE = 2048;
 /* ── LED helpers ──────────────────────────────────────────────── */
 
 static void net_led_success(void) {
-  /* Turn off warnLed (clear previous error), blink boardLed 100 ms */
+  /* Do not spend 100ms here.  Synchronous GET/POST already costs enough time;
+   * a blocking LED blink was visible as UI and auto-brightness jitter. */
   warnLed.off();
   boardLed.on();
-  HAL_Delay(100);
+  HAL_Delay(6);
   boardLed.off();
+  SysWatchdog_Tick();
 }
 
 static void net_led_failure(void) {
@@ -63,6 +65,7 @@ static void net_uart_discard(uint32_t idle_ms) {
       __HAL_UART_CLEAR_OREFLAG(&huart2);
       last_rx = HAL_GetTick();
     }
+    SysWatchdog_Tick();
   }
 }
 
@@ -128,6 +131,7 @@ static bool net_raw_collect(const char *ok1, const char *ok2,
 
     if ((matched || failed) && (HAL_GetTick() - last_rx >= settle_ms))
       break;
+    SysWatchdog_Tick();
   }
 
   return matched && !failed;
@@ -374,8 +378,6 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
   int req_len = snprintf(g_async.request, sizeof(g_async.request),
                          "POST %s HTTP/1.0\r\n"
                          "Host: %s\r\n"
-                         "Content-Type: application/json\r\n"
-                         "Accept: application/json\r\n"
                          "Content-Length: %u\r\n"
                          "Connection: close\r\n"
                          "\r\n",
@@ -455,6 +457,7 @@ void Net_AsyncTick(void) {
       net_async_rx_reset();
       HAL_UART_Transmit(&huart2, (uint8_t *)g_async.request,
                         g_async.req_len, 3000);
+      SysWatchdog_Tick();
       g_async.step = NET_ASYNC_STEP_WAIT_RESP;
       g_async.step_start_ms = now;
       g_async.last_rx_ms = now;
@@ -584,7 +587,6 @@ bool Net_HttpGet(const char *host, uint16_t port, const char *path,
   int req_len = snprintf(request, sizeof(request),
                          "GET %s HTTP/1.0\r\n"
                          "Host: %s\r\n"
-                         "Accept: */*\r\n"
                          "Connection: close\r\n"
                          "\r\n",
                          path, host);
@@ -615,6 +617,7 @@ bool Net_HttpGet(const char *host, uint16_t port, const char *path,
 
   esp8266.resetRxBuffer();
   HAL_UART_Transmit(&huart2, (uint8_t *)request, (uint16_t)req_len, 3000);
+  SysWatchdog_Tick();
   bool closed = net_raw_collect("CLOSED", nullptr, nullptr, timeout_ms, 150, true, false);
   const char *rx = esp8266.getRxBuffer();
   bool has_response = (rx && (strstr(rx, "HTTP/") || strstr(rx, "{")));
@@ -666,7 +669,6 @@ bool Net_HttpPost(const char *host, uint16_t port, const char *path,
   int req_len = snprintf(request, sizeof(request),
                          "POST %s HTTP/1.0\r\n"
                          "Host: %s\r\n"
-                         "Content-Type: application/json\r\n"
                          "Content-Length: %u\r\n"
                          "Connection: close\r\n"
                          "\r\n",
@@ -724,6 +726,7 @@ bool Net_HttpPost(const char *host, uint16_t port, const char *path,
 
   esp8266.resetRxBuffer();
   HAL_UART_Transmit(&huart2, (uint8_t *)request, (uint16_t)req_len, 3000);
+  SysWatchdog_Tick();
   bool closed = net_raw_collect("CLOSED", nullptr, nullptr, timeout_ms, 150, true, false);
   const char *rx = esp8266.getRxBuffer();
   bool has_response = (rx && (strstr(rx, "HTTP/") || strstr(rx, "{")));

@@ -21,7 +21,7 @@ extern TRTC boardTRTC;
 extern UART_HandleTypeDef huart2;
 
 extern "C" {
-extern uint8_t  esp8266_global_buffer[512];
+extern uint8_t  esp8266_global_buffer[2048];
 extern uint16_t esp8266_global_index;
 extern uint8_t  esp8266_data_ready;
 }

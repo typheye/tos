@@ -12,6 +12,7 @@
 #include "include/libjson.h"
 #include "main.h"
 #include "core/sys/include/systime.h"
+#include "core/sys/include/syswatchdog.h"
 #include "syslog.h"
 #include <cstring>
 #include <cstdio>
@@ -20,10 +21,10 @@
 extern Buzzer buzzer1;
 
 #define TOS_HEARTBEAT_PATH "/v1/device/heartbeat"
-#define TOS_HEARTBEAT_MS   3000U
-#define TOS_RETRY_MS       3000U
-#define TOS_START_DELAY_MS 3000U
-#define TOS_CMD_GET_TIMEOUT_MS 5000U
+#define TOS_HEARTBEAT_MS   2000U
+#define TOS_RETRY_MS       2500U
+#define TOS_START_DELAY_MS 1800U
+#define TOS_CMD_GET_TIMEOUT_MS 3000U
 #define TOS_ACK_MAX_CMDS   5
 #define TOS_MAX_CMD_OBJ     448U
 
@@ -45,6 +46,8 @@ static uint32_t g_last_ip_refresh_ms = 0;
 static uint8_t g_empty_hb_cycles = 0;
 static bool g_last_cmd_parse_malformed = false;
 static bool g_last_hb_malformed = false;
+static uint32_t g_last_full_hb_ms = 0;
+static uint8_t g_full_hb_boot_count = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -91,31 +94,43 @@ static bool build_heartbeat_body(char *out, size_t out_sz) {
   const char *wifi = net_ok ? "connected" : "disconnected";
   const char *ip = "0.0.0.0";
 
-  /* Refresh IP only occasionally.  AT+CIFSR before every 3 s heartbeat adds
-   * unnecessary AT traffic and makes the ESP8266 much easier to wedge. */
   if (net_ok) {
-    uint32_t now = HAL_GetTick();
+    uint32_t tick = HAL_GetTick();
     if (g_last_ip[0] == '\0' || strcmp(g_last_ip, "0.0.0.0") == 0 ||
-        (now - g_last_ip_refresh_ms) > 60000U) {
+        (tick - g_last_ip_refresh_ms) > 60000U) {
       char tmp[24];
       if (ESP8266_GetIP(tmp, sizeof(tmp)) && tmp[0]) {
         snprintf(g_last_ip, sizeof(g_last_ip), "%s", tmp);
       }
-      g_last_ip_refresh_ms = now;
+      g_last_ip_refresh_ms = tick;
     }
     ip = g_last_ip;
   }
 
-  int n = snprintf(out, out_sz,
-                   "{\"di\":\"%s\",\"v\":\"1\",\"vc\":%lu,"
-                   "\"b\":\"%s\",\"m\":\"%s\",\"hv\":\"%s\","
-                   "\"up\":%lu,\"w\":\"%s\",\"rssi\":0,"
-                   "\"ip\":\"%s\",\"e\":\"%s\"}",
-                   g_device_id,
-                   (unsigned long)CFG_VERSION_CODE,
-                   CFG_BUILD, CFG_MODEL, CFG_HW_REV,
-                   (unsigned long)(HAL_GetTick() / 1000U),
-                   wifi, ip, expr);
+  uint32_t now = HAL_GetTick();
+  bool full = (g_full_hb_boot_count < 3U) ||
+              ((uint32_t)(now - g_last_full_hb_ms) >= 60000U);
+  int n;
+  if (full) {
+    n = snprintf(out, out_sz,
+                 "{\"di\":\"%s\",\"v\":\"1\",\"vc\":%lu,"
+                 "\"b\":\"%s\",\"m\":\"%s\",\"hv\":\"%s\","
+                 "\"up\":%lu,\"w\":\"%s\",\"rssi\":0,"
+                 "\"ip\":\"%s\",\"e\":\"%s\"}",
+                 g_device_id,
+                 (unsigned long)CFG_VERSION_CODE,
+                 CFG_BUILD, CFG_MODEL, CFG_HW_REV,
+                 (unsigned long)(now / 1000U),
+                 wifi, ip, expr);
+    if (n > 0 && n < (int)out_sz) {
+      g_last_full_hb_ms = now;
+      if (g_full_hb_boot_count < 255U) g_full_hb_boot_count++;
+    }
+  } else {
+    n = snprintf(out, out_sz,
+                 "{\"di\":\"%s\",\"up\":%lu,\"w\":\"%s\",\"ip\":\"%s\",\"e\":\"%s\"}",
+                 g_device_id, (unsigned long)(now / 1000U), wifi, ip, expr);
+  }
   return n > 0 && n < (int)out_sz;
 }
 
@@ -246,7 +261,8 @@ static bool execute_command(const char *obj, bool *reboot_after_ack,
     return false;
   }
 
-  if (action_is(action, "set_expression", "expression", "set_emotion")) {
+  if (action_is(action, "set_expression", "expression", "set_emotion") ||
+      action_is(action, "set_expresion")) {
     char expr[16];
     expr[0] = '\0';
 
@@ -261,7 +277,7 @@ static bool execute_command(const char *obj, bool *reboot_after_ack,
     }
 
     normalize_expr_alias(expr);
-    if (strcmp(expr, "auto") == 0) {
+    if (strcmp(expr, "auto") == 0 || strcmp(expr, "idle") == 0) {
       EmotionManager_SetAuto();
       return true;
     }
@@ -293,7 +309,9 @@ static bool execute_command(const char *obj, bool *reboot_after_ack,
     /* Blocking but explicit: this command is user-triggered from cloud UI.
      * It runs after the heartbeat HTTP request has completed, before ACK POST.
      */
+    SysWatchdog_FeedNow();
     bool ok = SysTime_Sync();
+    SysWatchdog_FeedNow();
     if (!ok) {
       *err_out = "time sync failed";
       return false;
@@ -303,7 +321,9 @@ static bool execute_command(const char *obj, bool *reboot_after_ack,
 
   if (action_is(action, "ota_check", "check_update", "upgrade_check")) {
     TosUpgradeInfo info;
+    SysWatchdog_FeedNow();
     bool ok = TosApi_CheckUpgrade(&info);
+    SysWatchdog_FeedNow();
     if (!ok) {
       *err_out = "ota check failed";
       return false;
@@ -476,7 +496,7 @@ static void start_heartbeat(void) {
 
   if (Net_AsyncHttpPostStart(TOS_API_HOST, TOS_API_PORT,
                              TOS_HEARTBEAT_PATH, body,
-                             (uint16_t)strlen(body), 15000U)) {
+                             (uint16_t)strlen(body), 7000U)) {
     g_phase = TOS_PHASE_HEARTBEAT;
     LOG_D("TAPI", "Heartbeat queued, body=%uB expr=%s", (unsigned)strlen(body), EmotionManager_GetReportExpression());
   } else {
@@ -494,7 +514,7 @@ static void start_ack_or_schedule(void) {
     if (g_last_hb_malformed) {
       should_poll = true;
       g_last_hb_malformed = false;
-    } else if (++g_empty_hb_cycles >= 4U) { /* about every 12 s */
+    } else if (++g_empty_hb_cycles >= 15U) { /* about every 30 s safety poll */
       should_poll = true;
       g_empty_hb_cycles = 0;
     }
