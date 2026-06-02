@@ -132,8 +132,12 @@ static void esp8266_uart_resync(UART_HandleTypeDef *huart) {
 bool ESP8266::tryRecover(bool force) {
   uint32_t now = HAL_GetTick();
   if (!force && (now - _last_recover_ms) < 10000U) {
-    LOG_E("ESP", "Recovery requested too soon; treating runtime ESP fault as fatal");
-    SysHandle_Fatal(SYS_ERR_ESP8266_RECOVERY_FAIL);
+    /* Recovery is expensive and may take seconds.  Do not turn a rate-limit hit
+     * into a fatal exception: during boot or a temporary AP hiccup this caused
+     * syshandle re-entry / black-screen reset loops. */
+    LOG_W("ESP", "Recovery requested too soon; skip this round");
+    _hard_disabled = true;
+    _state = 4;
     return false;
   }
   _last_recover_ms = now;
@@ -195,14 +199,10 @@ bool ESP8266::tryRecover(bool force) {
   _state = 4;
   LOG_E("ESP", "Recovery failed");
 
-  /* Startup uses force=true so the rest of the product can finish booting and
-   * show UI.  Runtime recovery failure means the AT module is wedged; do not
-   * keep blocking launcher frames for repeated 9s recovery attempts.  Show the
-   * fatal UI and reset cleanly instead. */
-  if (!force) {
-    SysHandle_Fatal(SYS_ERR_ESP8266_RECOVERY_FAIL);
-  }
-
+  /* Startup and runtime both return failure to the caller.  Network code will
+   * back off.  A totally stuck main loop is still covered by IWDG; do not call
+   * syshandle from inside the ESP recovery path, because it can be reached while
+   * UART/LCD/network code is already in an unstable state. */
   return false;
 }
 

@@ -348,11 +348,11 @@ static void net_async_finish(bool ok, const char *reason) {
     warnLed.on();
     if (++g_async_fail_streak >= 3U) {
       LOG_W("NET", "Async fail streak=%u, asking ESP recovery", g_async_fail_streak);
-      bool recovered = ESP8266_TryRecover(false);
+      (void)ESP8266_TryRecover(false);
+      /* Do not fatal-reset from inside the network async state machine.
+       * Transport errors are recoverable and may happen during AP roaming or
+       * ESP8266 AT firmware hiccups.  Fatal here caused black-screen loops. */
       g_async_fail_streak = 0;
-      if (!recovered) {
-        SysHandle_Fatal(SYS_ERR_NET_TRANSPORT_STUCK);
-      }
     }
     g_async.state = NET_ASYNC_FAILED;
   }

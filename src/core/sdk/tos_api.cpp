@@ -48,6 +48,7 @@ static bool g_last_cmd_parse_malformed = false;
 static bool g_last_hb_malformed = false;
 static uint32_t g_last_full_hb_ms = 0;
 static uint8_t g_full_hb_boot_count = 0;
+static uint32_t g_last_esp_recover_try_ms = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -69,11 +70,19 @@ static void build_device_id(void) {
 
 static bool network_ready(void) {
   if (Net_IsHardDisabled()) {
-    (void)ESP8266_TryRecover(false);
     return false;
   }
   int state = ESP8266_GetState();
   return state == 3 || ESP8266_IsConnected();
+}
+
+static void maybe_try_esp_recovery(uint32_t now) {
+  /* Keep the UI alive when ESP8266 is missing/wedged.  Recovery is slow, so it
+   * must be heavily rate-limited and never called twice from the same tick. */
+  if (now < 30000U) return;  /* boot grace: let the product finish init */
+  if ((uint32_t)(now - g_last_esp_recover_try_ms) < 30000U) return;
+  g_last_esp_recover_try_ms = now;
+  (void)ESP8266_TryRecover(false);
 }
 
 static int response_code(const char *resp) {
@@ -612,8 +621,8 @@ void TosApi_Tick(void) {
   if (!time_due(now, g_next_heartbeat_ms)) return;
 
   if (!network_ready()) {
-    (void)ESP8266_TryRecover(false);
-    schedule_heartbeat(10000U);
+    maybe_try_esp_recovery(now);
+    schedule_heartbeat(5000U);
     return;
   }
 

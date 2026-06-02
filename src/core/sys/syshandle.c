@@ -15,6 +15,18 @@ static volatile uint8_t g_in_exception = 0;
 static uint32_t g_draw_code = SYS_ERR_NONE;
 static int g_draw_seconds = 5;
 
+static void syshandle_force_reset(void) {
+  /* NVIC_SystemReset() normally resets immediately.  If it is blocked for any
+   * reason, do NOT keep refreshing IWDG here; let IWDG reset the chip.  The old
+   * re-entry path refreshed IWDG forever and could leave the product on a black
+   * screen. */
+  __disable_irq();
+  NVIC_SystemReset();
+  while (1) {
+    /* no feed: IWDG fallback */
+  }
+}
+
 uint32_t SysHandle_GetLastCode(void) { return g_last_exception_code; }
 
 const char *SysHandle_CodeName(uint32_t code) {
@@ -107,10 +119,11 @@ static void syshandle_render(void) {
 
 void SysHandle_Exception(uint32_t code) {
   if (g_in_exception) {
-    while (1) {
-      SysWatchdog_FeedNow();
-      HAL_Delay(20);
-    }
+    /* A second fatal error while rendering syshandle usually means LCD/SPI/NET
+     * code re-entered the exception path.  Reset immediately instead of
+     * spinning forever. */
+    g_last_exception_code = code;
+    syshandle_force_reset();
   }
   g_in_exception = 1;
 
@@ -131,11 +144,7 @@ void SysHandle_Exception(uint32_t code) {
     }
   }
 
-  NVIC_SystemReset();
-
-  while (1) {
-    SysWatchdog_FeedNow();
-  }
+  syshandle_force_reset();
 }
 
 void SysHandle_Fatal(uint32_t code) { SysHandle_Exception(code); }

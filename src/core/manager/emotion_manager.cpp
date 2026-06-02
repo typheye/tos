@@ -5,13 +5,30 @@
 
 #include "include/emotion_manager.h"
 #include "syslog.h"
+#include "main.h"
 #include <cstdio>
 #include <cstring>
 
 static char g_manual_expr[16];
 static char g_auto_expr[16];
 static bool g_manual_mode = false;
+static uint32_t g_manual_until = 0;
 static uint32_t g_revision = 0;
+
+#define EMOTION_MANUAL_TTL_MS 7500U
+
+static bool time_due(uint32_t now, uint32_t target) {
+  return (int32_t)(now - target) >= 0;
+}
+
+static void expire_manual_if_needed(void) {
+  if (g_manual_mode && g_manual_until != 0 && time_due(HAL_GetTick(), g_manual_until)) {
+    g_manual_mode = false;
+    g_manual_until = 0;
+    g_revision++;
+    LOG_D("EMGR", "Manual expression expired, back to auto");
+  }
+}
 
 static const char *expr_normalize(const char *expr) {
   if (!expr || !expr[0]) return "idle";
@@ -48,44 +65,61 @@ void EmotionManager_Init(void) {
   copy_expr(g_manual_expr, "idle");
   copy_expr(g_auto_expr, "idle");
   g_manual_mode = false;
+  g_manual_until = 0;
   g_revision = 1;
 }
 
 bool EmotionManager_SetExpression(const char *expr) {
-  if (!expr_allowed(expr)) {
+  const char *norm = expr_normalize(expr);
+  if (strcmp(norm, "auto") == 0 || strcmp(norm, "idle") == 0) {
+    EmotionManager_SetAuto();
+    return true;
+  }
+
+  if (!expr_allowed(norm)) {
     LOG_W("EMGR", "Reject expression: %s", expr ? expr : "(null)");
     return false;
   }
 
-  bool changed = (!g_manual_mode || strcmp(g_manual_expr, expr) != 0);
-  copy_expr(g_manual_expr, expr);
+  copy_expr(g_manual_expr, norm);
   g_manual_mode = true;
-  if (changed) {
-    g_revision++;
-    LOG_I("EMGR", "Manual expression: %s", g_manual_expr);
-  }
+  g_manual_until = HAL_GetTick() + EMOTION_MANUAL_TTL_MS;
+  /* Increment even if the same expression is sent again; a repeated cloud
+   * command should be visible, but the launcher must consume it only once. */
+  g_revision++;
+  LOG_I("EMGR", "Manual expression: %s", g_manual_expr);
   return true;
 }
 
 void EmotionManager_SetAuto(void) {
-  if (g_manual_mode) {
+  if (g_manual_mode || strcmp(g_manual_expr, "idle") != 0) {
     g_revision++;
     LOG_I("EMGR", "Expression mode: auto");
   }
+  copy_expr(g_manual_expr, "idle");
   g_manual_mode = false;
+  g_manual_until = 0;
 }
 
-bool EmotionManager_IsManual(void) { return g_manual_mode; }
+bool EmotionManager_IsManual(void) {
+  expire_manual_if_needed();
+  return g_manual_mode;
+}
 
 const char *EmotionManager_GetExpression(void) {
+  expire_manual_if_needed();
   return g_manual_mode ? g_manual_expr : g_auto_expr;
 }
 
 const char *EmotionManager_GetReportExpression(void) {
+  expire_manual_if_needed();
   return g_manual_mode ? g_manual_expr : g_auto_expr;
 }
 
-uint32_t EmotionManager_GetRevision(void) { return g_revision; }
+uint32_t EmotionManager_GetRevision(void) {
+  expire_manual_if_needed();
+  return g_revision;
+}
 
 void EmotionManager_ReportAutoExpression(const char *expr) {
   if (g_manual_mode || !expr || !expr[0]) return;
@@ -95,5 +129,5 @@ void EmotionManager_ReportAutoExpression(const char *expr) {
 }
 
 void EmotionManager_Tick(void) {
-  /* Reserved for future timed expression fades / TTLs. */
+  expire_manual_if_needed();
 }

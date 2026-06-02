@@ -247,8 +247,10 @@ static bool update_cloud_expression(uint32_t now) {
   uint32_t rev = EmotionManager_GetRevision();
   int target = cloud_expr_to_anim(EmotionManager_GetExpression());
   bool changed = (rev != cloud_expr_revision) || (target != cloud_expr_anim);
-  bool target_finished = (target != ANIM_IDLE) && (pet_state != target) &&
-                         (now - anim_start_tm > 260U);
+  /* Apply manual/cloud expression only when the command revision changes.
+   * Re-applying it every time the short animation returns to idle causes
+   * repeated state jumps and, in failure cases, excessive logging. */
+  bool target_finished = false;
 
   if (changed || target_finished) {
     cloud_expr_revision = rev;
