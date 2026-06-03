@@ -309,6 +309,8 @@ static const char *normalize_expr_alias(char *expr) {
     strcpy(expr, "surprised");
   } else if (strcmp(expr, "cute") == 0) {
     strcpy(expr, "shy");
+  } else if (strcmp(expr, "like") == 0) {
+    strcpy(expr, "love");
   }
   return expr;
 }

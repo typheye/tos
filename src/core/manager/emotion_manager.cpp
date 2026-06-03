@@ -45,6 +45,7 @@ static const char *expr_normalize(const char *expr) {
   if (strcmp(expr, "normal") == 0 || strcmp(expr, "neutral") == 0) return "idle";
   if (strcmp(expr, "surprise") == 0) return "surprised";
   if (strcmp(expr, "cute") == 0) return "shy";
+  if (strcmp(expr, "like") == 0) return "love";
   return expr;
 }
 
