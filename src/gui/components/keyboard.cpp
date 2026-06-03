@@ -1,4 +1,6 @@
 #include "include/keyboard.hpp"
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/syswatchdog.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
 #include "include/libpd.h"
@@ -160,6 +162,8 @@ bool keyboard_open(const char *title, char *out, int max_len) {
   int last_pot = pot0;
 
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -235,6 +239,7 @@ bool keyboard_open(const char *title, char *out, int max_len) {
       lu = HAL_GetTick();
       draw_kb(out, len, sel, shift);
     }
+    SysWatchdog_Tick();
     HAL_Delay(15);
   }
 }

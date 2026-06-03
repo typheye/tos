@@ -70,6 +70,7 @@ int ESP8266_GetState(void);
 bool ESP8266_IsConnected(void);
 void ESP8266_Disconnect(void);
 bool ESP8266_GetIP(char *buf, uint16_t sz);
+bool ESP8266_GetRSSI(int *rssi);
 
 /**
  * @brief 检查 ESP8266 是否处于硬断开状态
@@ -79,11 +80,13 @@ bool ESP8266_GetIP(char *buf, uint16_t sz);
 bool ESP8266_IsHardDisabled(void);
 
 /**
- * @brief Try to recover ESP8266 after AT timeout / stuck CIPSEND state.
- * @param force true to ignore recovery rate limit.
- * @return true if AT responds again.
+ * @brief Runtime ESP recovery is disabled by policy; this returns false.
+ * @param force ignored.
+ * @return false.
  */
 bool ESP8266_TryRecover(bool force);
+uint16_t ESP8266_GetRecoveryFailureCount(void);
+void ESP8266_ClearRecoveryFailureCount(void);
 
 #ifdef __cplusplus
 }
@@ -95,6 +98,8 @@ bool ESP8266_TryRecover(bool force);
 
 class ESP8266 {
 public:
+  static constexpr uint16_t RX_BUFFER_SIZE = 4096;
+
   ESP8266(UART_HandleTypeDef *huart);
 
   void init(void);
@@ -108,6 +113,8 @@ public:
   int getState(void) { return _state; }
   bool isHardDisabled(void) { return _hard_disabled; }
   bool tryRecover(bool force = false);
+  uint16_t recoveryFailureCount(void) const { return _recover_failures; }
+  void clearRecoveryFailureCount(void) { _recover_failures = 0; }
 
   // 数据处理（在中断中调用）
   void processRxData(uint8_t *data, uint16_t len);
@@ -116,8 +123,12 @@ public:
   bool scanNetworks(void);
   void disconnect(void);
   bool getIP(char *ip_buffer, uint16_t buffer_size);
+  bool getRSSI(int *rssi);
   bool sendString(const char *str);
   const char *getRxBuffer(void) const { return (const char *)_rx_buffer; }
+  uint16_t getRxLength(void) const { return _rx_index; }
+  uint16_t getRxCapacity(void) const { return RX_BUFFER_SIZE; }
+  bool hasRxOverflow(void) const { return _rx_overflow; }
 
   void processPendingData(void);
   void resetRxBuffer(void);
@@ -128,8 +139,10 @@ private:
   bool _hard_disabled; // true = temporarily unreachable, recovery may clear it
   uint32_t _last_recover_ms;
   uint8_t _recover_attempts;
-  uint8_t _rx_buffer[1536];
+  uint16_t _recover_failures;
+  uint8_t _rx_buffer[RX_BUFFER_SIZE];
   uint16_t _rx_index;
+  bool _rx_overflow;
 
   void clearRxBuffer(void);
   bool waitForResponse(const char *expected, uint32_t timeout_ms);

@@ -120,6 +120,11 @@ static bool net_raw_collect(const char *ok1, const char *ok2,
 
     if (got) {
       const char *buf = esp8266.getRxBuffer();
+      if (esp8266.hasRxOverflow()) {
+        LOG_E("NET", "RX overflow while waiting for AT response");
+        failed = true;
+        break;
+      }
       if (net_has_token(buf, ok1, ok2, ok3)) matched = true;
       if (closed_ok && strstr(buf, "CLOSED")) matched = true;
       if (fail_on_error &&
@@ -269,6 +274,7 @@ struct NetAsyncCtx {
   uint32_t step_start_ms;
   uint32_t last_rx_ms;
   uint16_t last_rx_len;
+  uint32_t request_start_ms;
 };
 
 static NetAsyncCtx g_async = {NET_ASYNC_IDLE};
@@ -309,6 +315,11 @@ static void net_async_pump_rx(void) {
   esp8266.processPendingData();
 
   const char *rx = esp8266.getRxBuffer();
+  if (esp8266.hasRxOverflow()) {
+    g_async.last_rx_len = esp8266.getRxLength();
+    g_async.last_rx_ms = HAL_GetTick();
+    return;
+  }
   uint16_t len = rx ? (uint16_t)strlen(rx) : 0;
   if (len != g_async.last_rx_len) {
     g_async.last_rx_len = len;
@@ -329,6 +340,13 @@ static bool net_async_failed_token(void) {
                 strstr(rx, "DNS Fail"));
 }
 
+static void net_async_close_best_effort(void) {
+  const char close_cmd[] = "AT+CIPCLOSE\r\n";
+  HAL_UART_Transmit(&huart2, (uint8_t *)close_cmd,
+                    (uint16_t)(sizeof(close_cmd) - 1U), 100);
+  SysWatchdog_Tick();
+}
+
 static void net_async_finish(bool ok, const char *reason) {
   if (ok) {
     g_async_fail_streak = 0;
@@ -345,13 +363,14 @@ static void net_async_finish(bool ok, const char *reason) {
     LOG_D("NET", "Async POST done, rx=%u/%u", copy_len, (unsigned)(sizeof(g_async.response) - 1));
   } else {
     net_log_response(reason ? reason : "Async fail");
+    net_async_close_best_effort();
+    esp8266.resetRxBuffer();
     warnLed.on();
     if (++g_async_fail_streak >= 3U) {
-      LOG_W("NET", "Async fail streak=%u, asking ESP recovery", g_async_fail_streak);
-      (void)ESP8266_TryRecover(false);
-      /* Do not fatal-reset from inside the network async state machine.
-       * Transport errors are recoverable and may happen during AP roaming or
-       * ESP8266 AT firmware hiccups.  Fatal here caused black-screen loops. */
+      LOG_W("NET", "Async fail streak=%u; leaving ESP state untouched", g_async_fail_streak);
+      /* Runtime ESP recovery/re-init is intentionally forbidden.  The cloud
+       * policy layer will either keep the product in offline mode or reboot the
+       * whole system through syshandle after the online session is proven stuck. */
       g_async_fail_streak = 0;
     }
     g_async.state = NET_ASYNC_FAILED;
@@ -373,6 +392,7 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
   g_async.state = NET_ASYNC_BUSY;
   g_async.port = port;
   g_async.timeout_ms = timeout_ms ? timeout_ms : 15000U;
+  g_async.request_start_ms = HAL_GetTick();
   strncpy(g_async.host, host, sizeof(g_async.host) - 1);
 
   int req_len = snprintf(g_async.request, sizeof(g_async.request),
@@ -411,7 +431,22 @@ void Net_AsyncTick(void) {
   if (g_async.state != NET_ASYNC_BUSY) return;
 
   uint32_t now = HAL_GetTick();
+
+  /* Total-request guard.  Step-level timeouts alone allowed one bad heartbeat
+   * to occupy the ESP8266 state machine for 15+ seconds when CIPSTART or the
+   * HTTP response half-succeeded.  Treat the timeout passed by the caller as a
+   * whole-request budget so UI and watchdog service remain predictable. */
+  if (g_async.request_start_ms != 0U &&
+      (uint32_t)(now - g_async.request_start_ms) > g_async.timeout_ms) {
+    net_async_finish(false, "Async total timeout");
+    return;
+  }
+
   net_async_pump_rx();
+  if (esp8266.hasRxOverflow()) {
+    net_async_finish(false, "Async RX overflow");
+    return;
+  }
 
   switch (g_async.step) {
   case NET_ASYNC_STEP_CLOSE:
@@ -500,6 +535,7 @@ const char *Net_AsyncResponse(void) { return g_async.response; }
 
 void Net_AsyncReset(void) {
   if (g_async.state == NET_ASYNC_BUSY) return;
+  esp8266.resetRxBuffer();
   memset(&g_async, 0, sizeof(g_async));
   g_async.state = NET_ASYNC_IDLE;
 }

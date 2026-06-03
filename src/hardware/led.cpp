@@ -46,6 +46,8 @@ void LED_BoardBlink100ms(void) {
   HAL_Delay(100);
   boardLed.off();
 }
+void LED_WarnOn(void) { warnLed.on(); }
+void LED_WarnOff(void) { warnLed.off(); }
 
 // PC13: 低电平点亮（polarity = false）
 // PD8/PD9: 高电平点亮（polarity = true）

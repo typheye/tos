@@ -71,6 +71,9 @@ void LCD_ClearFrameBuffer(uint32_t color);
 void LCD_BeginTileRender(uint16_t y, uint16_t h);
 void LCD_EndTileRender(void);
 void LCD_FlushTiled(void (*render_cb)(void));
+/* Emergency/fatal-path drawing: blocking transfer, no DMA, no full LCD re-init. */
+void LCD_EmergencyPrepare(void);
+void LCD_FlushTiledBlocking(void (*render_cb)(void));
 void LCD_FlushFull(const uint16_t *data);
 uint16_t LCD_GetTileY(void);
 uint16_t LCD_GetTileH(void);

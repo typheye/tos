@@ -1,4 +1,6 @@
 #include "include/alert.hpp"
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/syswatchdog.h"
 #include "core/sys/include/systime.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -16,6 +18,8 @@ void alert_show(const char *title, const char *msg) {
   uint32_t lu = 0;
 
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.btn_enter.tick();
     if (keyManager.btn_enter.getState() == KEY_PRESSED) return;
 
@@ -59,6 +63,7 @@ void alert_show(const char *title, const char *msg) {
         PD_DrawFooterCenter("ENTER", NULL, NULL);
       });
     }
+    SysWatchdog_Tick();
     HAL_Delay(1);
   }
 }

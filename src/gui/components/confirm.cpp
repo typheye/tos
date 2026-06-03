@@ -4,6 +4,8 @@
  */
 
 #include "include/confirm.hpp"
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/syswatchdog.h"
 #include "core/sys/include/systime.h"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -21,6 +23,8 @@ bool confirm_show(const char *title, const char *msg) {
   uint32_t lu = 0;
 
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -82,6 +86,7 @@ bool confirm_show(const char *title, const char *msg) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
+    SysWatchdog_Tick();
     HAL_Delay(1);
   }
 }

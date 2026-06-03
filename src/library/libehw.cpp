@@ -62,6 +62,58 @@ static CCMRAM bool  jy_warned = false;
 static CCMRAM bool  bmp_warned = false;
 static CCMRAM bool  tcs_warned = false;
 
+/* Sensor bus watchdogs. Hot-plugging / brownouts around ESP8266 can leave I2C
+ * slaves in a state where every read waits for HAL timeout (~100 ms).  If we
+ * keep polling them every pet frame, UI/buttons look frozen while IWDG is still
+ * fed.  After a few slow/bad reads, temporarily suspend that sensor and retry
+ * later at low frequency. */
+static CCMRAM uint32_t jy_suspend_until = 0;
+static CCMRAM uint32_t tcs_suspend_until = 0;
+static CCMRAM uint32_t bmp_suspend_until = 0;
+static CCMRAM uint32_t jy_next_retry_log = 0;
+static CCMRAM uint32_t tcs_next_retry_log = 0;
+static CCMRAM uint32_t bmp_next_retry_log = 0;
+static CCMRAM uint8_t  jy_slow_cnt = 0;
+static CCMRAM uint8_t  tcs_slow_cnt = 0;
+static CCMRAM uint8_t  bmp_slow_cnt = 0;
+
+#define SENSOR_SLOW_LIMIT_MS   95U
+#define SENSOR_SUSPEND_MS      30000U
+#define SENSOR_BAD_SUSPEND_MS  15000U
+#define SENSOR_SLOW_LIMIT_CNT  3U
+
+static bool sensor_suspended(uint32_t now, uint32_t until, uint32_t *next_log, const char *name) {
+  if ((int32_t)(now - until) < 0) {
+    if (next_log && (int32_t)(now - *next_log) >= 0) {
+      *next_log = now + 5000U;
+      LOG_W("EHW", "%s suspended, retry in %lums", name, (unsigned long)(until - now));
+    }
+    return true;
+  }
+  return false;
+}
+
+static void sensor_note_ok(uint8_t *cnt) {
+  if (cnt) *cnt = 0;
+}
+
+static void sensor_note_slow(uint32_t now, uint32_t dt, uint8_t *cnt,
+                             uint32_t *until, uint32_t *next_log, const char *name) {
+  if (dt <= SENSOR_SLOW_LIMIT_MS) {
+    sensor_note_ok(cnt);
+    return;
+  }
+  if (cnt && *cnt < 255U) (*cnt)++;
+  LOG_W("EHW", "%s read took %lums", name, (unsigned long)dt);
+  if (cnt && *cnt >= SENSOR_SLOW_LIMIT_CNT) {
+    if (until) *until = now + SENSOR_SUSPEND_MS;
+    if (next_log) *next_log = now + 5000U;
+    *cnt = 0;
+    LOG_W("EHW", "%s disabled for %lums after repeated timeout",
+          name, (unsigned long)SENSOR_SUSPEND_MS);
+  }
+}
+
 static float angle_diff(float a, float b) {
   float d = a - b;
   while (d > 180.0f) d -= 360.0f;
@@ -74,6 +126,11 @@ static bool is_motion_expr(EHW_Expr_t e) {
 }
 
 static EHW_Expr_t check_jy901s(void) {
+  uint32_t now = HAL_GetTick();
+  if (sensor_suspended(now, jy_suspend_until, &jy_next_retry_log, "JY901S")) {
+    return EHW_EXPR_NONE;
+  }
+
   if (!boardJY901S.isInitialized()) {
     if (!jy_warned) {
       jy_warned = true;
@@ -82,11 +139,17 @@ static EHW_Expr_t check_jy901s(void) {
     return EHW_EXPR_NONE;
   }
 
-  uint32_t now = HAL_GetTick();
   uint32_t t0 = now;
   JY901S_Data_t d = boardJY901S.readData();
   uint32_t dt = HAL_GetTick() - t0;
-  if (dt > SENSOR_TO_MS) LOG_W("EHW", "JY901S read took %lums", (unsigned long)dt);
+  sensor_note_slow(now, dt, &jy_slow_cnt, &jy_suspend_until, &jy_next_retry_log, "JY901S");
+  if ((int32_t)(HAL_GetTick() - jy_suspend_until) < 0) {
+    smooth_motion *= 0.45f;
+    smooth_gyro *= 0.55f;
+    smooth_tilt *= 0.70f;
+    smooth_tilt_rate *= 0.45f;
+    return EHW_EXPR_NONE;
+  }
 
   float acc_mag = sqrtf(d.acc_x * d.acc_x + d.acc_y * d.acc_y + d.acc_z * d.acc_z);
   if (acc_mag < 0.001f || acc_mag > 400.0f) {
@@ -95,12 +158,20 @@ static EHW_Expr_t check_jy901s(void) {
       next_imu_diag = now + 3000U;
       LOG_W("EHW", "IMU bad acc mag=%d", (int)(acc_mag * 100.0f));
     }
+    if (++jy_slow_cnt >= SENSOR_SLOW_LIMIT_CNT) {
+      jy_suspend_until = now + SENSOR_BAD_SUSPEND_MS;
+      jy_next_retry_log = now + 5000U;
+      jy_slow_cnt = 0;
+      LOG_W("EHW", "JY901S disabled for %lums after bad samples",
+            (unsigned long)SENSOR_BAD_SUSPEND_MS);
+    }
     smooth_motion *= 0.55f;
     smooth_gyro *= 0.65f;
     smooth_tilt *= 0.88f;
     smooth_tilt_rate *= 0.50f;
     return EHW_EXPR_NONE;
   }
+  sensor_note_ok(&jy_slow_cnt);
 
   // Normalize the acceleration vector before using it as gravity.  JY901S can
   // be configured for different acceleration ranges; normalized tilt is stable
@@ -244,6 +315,10 @@ static CCMRAM float smooth_temp = 22.0f;
 static CCMRAM bool  temp_valid = false;
 
 static EHW_Expr_t check_bmp180(uint32_t now) {
+  if (sensor_suspended(now, bmp_suspend_until, &bmp_next_retry_log, "BMP180")) {
+    return EHW_EXPR_NONE;
+  }
+
   if (!boardBMP180.isInitialized()) {
     if (!bmp_warned) {
       bmp_warned = true;
@@ -255,9 +330,11 @@ static EHW_Expr_t check_bmp180(uint32_t now) {
   uint32_t t0 = HAL_GetTick();
   float temp = boardBMP180.readTemperature();
   uint32_t dt = HAL_GetTick() - t0;
-  if (dt > SENSOR_TO_MS) LOG_W("EHW", "BMP180 read took %lums", (unsigned long)dt);
+  sensor_note_slow(now, dt, &bmp_slow_cnt, &bmp_suspend_until, &bmp_next_retry_log, "BMP180");
+  if ((int32_t)(HAL_GetTick() - bmp_suspend_until) < 0) return EHW_EXPR_NONE;
 
   if (temp < -20.0f || temp > 85.0f) return EHW_EXPR_NONE;
+  sensor_note_ok(&bmp_slow_cnt);
   if (!temp_valid) {
     smooth_temp = temp;
     temp_valid = true;
@@ -293,6 +370,11 @@ static CCMRAM float smooth_lux = 100.0f;
 static CCMRAM bool  lux_valid = false;
 
 static EHW_Expr_t check_tcs3472(void) {
+  uint32_t now = HAL_GetTick();
+  if (sensor_suspended(now, tcs_suspend_until, &tcs_next_retry_log, "TCS3472")) {
+    return EHW_EXPR_NONE;
+  }
+
   if (!boardTCS3472.isInitialized()) {
     if (!tcs_warned) {
       tcs_warned = true;
@@ -301,12 +383,14 @@ static EHW_Expr_t check_tcs3472(void) {
     return EHW_EXPR_NONE;
   }
 
-  uint32_t t0 = HAL_GetTick();
+  uint32_t t0 = now;
   TCS3472_ColorData_t c = boardTCS3472.readColor();
   uint32_t dt = HAL_GetTick() - t0;
-  if (dt > SENSOR_TO_MS) LOG_W("EHW", "TCS3472 read took %lums", (unsigned long)dt);
+  sensor_note_slow(now, dt, &tcs_slow_cnt, &tcs_suspend_until, &tcs_next_retry_log, "TCS3472");
+  if ((int32_t)(HAL_GetTick() - tcs_suspend_until) < 0) return EHW_EXPR_NONE;
 
   if (c.lux < 0.0f || c.lux > 20000.0f) return EHW_EXPR_NONE;
+  sensor_note_ok(&tcs_slow_cnt);
   if (!lux_valid) {
     smooth_lux = c.lux;
     lux_valid = true;
@@ -363,6 +447,9 @@ void EHW_Init(void) {
   smooth_temp = 22.0f;
   smooth_lux = 100.0f;
   jy_warned = bmp_warned = tcs_warned = false;
+  jy_suspend_until = tcs_suspend_until = bmp_suspend_until = 0;
+  jy_next_retry_log = tcs_next_retry_log = bmp_next_retry_log = 0;
+  jy_slow_cnt = tcs_slow_cnt = bmp_slow_cnt = 0;
 
   LOG_I("EHW", "Init done, poll=%ums motion_hold=%ums", POLL_MS, MOTION_HOLD_MS);
 }

@@ -13,6 +13,8 @@ void LED_ErrorOff(void);
 void LED_BoardOn(void);
 void LED_BoardOff(void);
 void LED_BoardBlink100ms(void);
+void LED_WarnOn(void);
+void LED_WarnOff(void);
 
 #ifdef __cplusplus
 }

@@ -14,7 +14,9 @@
 #include "components/include/alert.hpp"
 #include "components/include/keyboard.hpp"
 #include "core/manager/include/settings_manager.h"
+#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"
+#include "core/sys/include/syswatchdog.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"
@@ -95,23 +97,49 @@ static CCMRAM int ap_rssi[MAX_APS];
 static CCMRAM int ap_enc[MAX_APS];
 static int ap_count = 0;
 
+static bool wlan_wait_cloud_idle(uint32_t max_wait_ms) {
+  uint32_t start = HAL_GetTick();
+  while (TosApi_IsBusy() && HAL_GetTick() - start < max_wait_ms) {
+    TosApi_Tick();
+    SysWatchdog_Tick();
+    HAL_Delay(10);
+  }
+  if (!TosApi_IsBusy()) return true;
+  LOG_W("WLAN", "Scan skipped: cloud request still busy");
+  return false;
+}
+
 static bool do_scan(void) {
   ap_count = 0;
+  if (!wlan_wait_cloud_idle(7500U)) {
+    alert_show("WLAN", "Network busy. Retry scan.");
+    return false;
+  }
+
   LOG_I("WLAN", "Setting STA mode and scanning...");
+  esp8266.resetRxBuffer();
   ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
   HAL_Delay(200);
+  SysWatchdog_Tick();
+  esp8266.resetRxBuffer();
   LOG_I("WLAN", "Scanning with AT+CWLAP...");
   if (!esp8266.scanNetworks()) {
     LOG_W("WLAN", "Scan failed, retrying once...");
+    esp8266.resetRxBuffer();
     HAL_Delay(300);
+    SysWatchdog_Tick();
     if (!esp8266.scanNetworks()) {
+      bool at_ok = ESP8266_SendCommand("AT", "OK", 1000);
       LOG_E("WLAN", "Scan failed after retry");
+      LOG_W("WLAN", "ESP AT after scan failure: %s", at_ok ? "OK" : "FAIL");
+      esp8266.resetRxBuffer();
       alert_show("ALERT", "WiFi scan failed. Check module.");
       return false;
     }
   }
   const char *buf = esp8266.getRxBuffer();
   if (!buf || !*buf) {
+    esp8266.resetRxBuffer();
     alert_show("ALERT", "No WiFi data received.");
     return false;
   }
@@ -181,6 +209,7 @@ static bool do_scan(void) {
     }
   }
   LOG_I("WLAN", "%d unique networks", ap_count);
+  esp8266.resetRxBuffer();
   return true;
 }
 
@@ -317,6 +346,8 @@ static void scaning_run(void) {
   uint8_t le = 0;
   uint32_t lu = 0;
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -430,6 +461,8 @@ static void connected_page(void) {
   uint32_t lu = 0;
   const char *items[] = {"00 Return", "01 Detail", "02 Disconnect"};
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -493,6 +526,8 @@ static void saved_net_action(int idx) {
   const char *items[] = {"00 Return", "01 Detail", "02 Connect", "03 Forget"};
 
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -586,6 +621,8 @@ static void saved_networks_page(void) {
   uint8_t le = 0;
   uint32_t lu = 0;
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -703,6 +740,8 @@ static int wlan_main_loop(void) {
   wlan_edit = false;
 
   while (1) {
+    SysWatchdog_Tick();
+    TosApi_Tick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();

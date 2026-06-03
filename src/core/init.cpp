@@ -93,43 +93,69 @@ void TOS::init() {
   /* ── WLAN Auto-Connect ──
    * Skip entirely if ESP8266 is hard-disabled (module not responding). */
   if (!ESP8266_IsHardDisabled() && SM_Wlan_On() && SM_Wlan_AutoConn()) {
-    LOG_I("MAIN", "Auto-connect: starting...");
-    ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
-    HAL_Delay(300);
-
     int saved = SM_Saved_Count();
-    for (int round = 0; round < 2; round++) {
+    bool has_saved = false;
+    for (int i = 0; i < saved; i++) {
+      const SM_SavedNet_t *net = SM_Saved_Get(i);
+      if (net && net->ssid[0]) { has_saved = true; break; }
+    }
+
+    if (has_saved) {
+      LOG_I("MAIN", "Auto-connect: starting...");
+      ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
+      HAL_Delay(300);
+      SysWatchdog_FeedNow();
+
       bool ok = false;
-      for (int i = 0; i < saved; i++) {
-        const SM_SavedNet_t *net = SM_Saved_Get(i);
-        if (!net || !net->ssid[0])
-          continue;
-        LOG_I("MAIN", "Auto-connect: trying %s (round %d)...", net->ssid,
-              round + 1);
-        if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
-          HAL_Delay(500);
-          if (ESP8266_IsConnected()) {
-            SM_Wlan_SetSSID(net->ssid);
-            SM_Wlan_SetPWD(net->pwd);
-            LOG_I("MAIN", "Auto-connect: connected to %s!", net->ssid);
-            ok = true;
-            break;
+      for (int round = 0; round < 2 && !ok; round++) {
+        for (int i = 0; i < saved; i++) {
+          const SM_SavedNet_t *net = SM_Saved_Get(i);
+          if (!net || !net->ssid[0]) continue;
+          LOG_I("MAIN", "Auto-connect: trying %s (round %d/2)...",
+                net->ssid, round + 1);
+          if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
+            HAL_Delay(500);
+            SysWatchdog_FeedNow();
+            if (ESP8266_IsConnected()) {
+              SM_Wlan_SetSSID(net->ssid);
+              SM_Wlan_SetPWD(net->pwd);
+              LOG_I("MAIN", "Auto-connect: connected to %s!", net->ssid);
+              ok = true;
+              break;
+            }
           }
+
+          SysWatchdog_FeedNow();
+          if (round == 0) {
+            LOG_W("MAIN", "Auto-connect: %s failed, light cleanup before retry",
+                  net->ssid);
+            esp8266.resetRxBuffer();
+            ESP8266_SendCommand("AT+CIPCLOSE", "OK", 800);
+            ESP8266_SendCommand("AT+CWQAP", "OK", 1200);
+            esp8266.resetRxBuffer();
+            HAL_Delay(400);
+          } else {
+            HAL_Delay(300);
+          }
+          SysWatchdog_FeedNow();
         }
-        HAL_Delay(300);
       }
-      if (ok)
-        break;
+
+      if (!ok) {
+        LOG_W("MAIN", "Auto-connect: no saved WLAN joined; offline for this boot");
+      }
+    } else {
+      LOG_I("MAIN", "Auto-connect skipped: no saved WLAN");
     }
   }
 
-  /* Background NTP sync — only if Auto Sync is ON
-   * Skip if ESP8266 is hard-disabled. */
+  /* Do not run blocking time sync during boot.  SNTP/HTTP fallback can take
+   * tens of seconds when the AP or upstream server is unstable, which made the
+   * product look like it had entered a reboot state.  Time can still be synced
+   * from Settings or the cloud sync_time command after the UI is responsive. */
   if (!ESP8266_IsHardDisabled() && SM_Wlan_On() &&
       ESP8266_IsConnected() && SM_Time_AutoSync()) {
-    SysWatchdog_FeedNow();
-    SysTime_Sync();
-    SysWatchdog_FeedNow();
+    LOG_I("MAIN", "Auto time sync deferred until after UI startup");
   }
 
   EmotionManager_Init();

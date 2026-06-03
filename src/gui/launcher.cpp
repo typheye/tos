@@ -41,6 +41,13 @@ static CCMRAM uint8_t last_group3_cfg = 0;
 static CCMRAM uint8_t last_mute_state = 0;
 static CCMRAM uint8_t last_sd_state = 0;
 
+static uint32_t elapsed_since(uint32_t now, uint32_t since) {
+  /* If a caller passes a timestamp from a previous launcher run or a value just
+   * ahead of now, avoid unsigned underflow logs like 4294967292ms and avoid
+   * accidentally forcing the pet into nap. */
+  return ((int32_t)(now - since) >= 0) ? (now - since) : 0U;
+}
+
 enum PetAnim {
   ANIM_IDLE = 0,
   ANIM_BLINK,
@@ -163,7 +170,7 @@ static void trace_state(uint32_t now) {
   LOG_D("PET", "state: %s -> %s, idle=%lums expr=%d",
         last_logged_state < 0 ? "boot" : pet_anim_name(last_logged_state),
         pet_anim_name(pet_state),
-        (unsigned long)(now - last_activity_tm),
+        (unsigned long)elapsed_since(now, last_activity_tm),
         EHW_GetExpr());
   last_logged_state = pet_state;
   state_since_tm = now;
@@ -344,7 +351,7 @@ static void update_sensor(void) {
 
   // Idle sleep is based on real user activity, not on ambient light/temp moods.
   // Let the pet keep napping even if the room is bright or cold.
-  if (now - last_activity_tm >= IDLE_NAP_MS && !is_motion_anim(anim)) return;
+  if (elapsed_since(now, last_activity_tm) >= IDLE_NAP_MS && !is_motion_anim(anim)) return;
 
   if (pet_state != anim) {
     if (is_motion_anim(pet_state) && !is_motion_anim(anim)) {
@@ -403,11 +410,11 @@ static void update_animation(void) {
 
   case ANIM_IDLE:
     if (pet_cheek > 0.0f) pet_cheek = lerp(pet_cheek, 0.0f, 0.06f);
-    if (now - last_activity_tm >= IDLE_NAP_MS) {
+    if (elapsed_since(now, last_activity_tm) >= IDLE_NAP_MS) {
       pet_state = ANIM_NAP;
       anim_start_tm = now;
       blink_phase = 0;
-      LOG_I("PET", "Idle %lums, entering nap", (unsigned long)(now - last_activity_tm));
+      LOG_I("PET", "Idle %lums, entering nap", (unsigned long)elapsed_since(now, last_activity_tm));
       break;
     }
     // During sensor recovery the face is still blending toward neutral;
@@ -915,8 +922,8 @@ void pet_launcher_run(void) {
       heartbeat = now;
       LOG_D("PET", "alive @ %lums, state=%s, expr=%d, idle=%lums, state_age=%lums",
             (unsigned long)now, pet_anim_name(pet_state), EHW_GetExpr(),
-            (unsigned long)(now - last_activity_tm),
-            (unsigned long)(now - state_since_tm));
+            (unsigned long)elapsed_since(now, last_activity_tm),
+            (unsigned long)(elapsed_since(now, state_since_tm)));
     }
 
     // --- Input: triple-press ENTER to exit ---

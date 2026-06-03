@@ -3,17 +3,20 @@
 #include "hardware/include/lcd.h"
 #include "library/include/libpd.h"
 #include "main.h"
+#include "tim.h"
 #include "syslog.h"
 #include "syswatchdog.h"
 #include <stdio.h>
 
 /* C-compatible LED wrappers (defined in hardware/led.cpp) */
 extern void LED_ErrorOn(void);
+extern void LED_BoardOff(void);
+extern void LED_WarnOff(void);
 
 static volatile uint32_t g_last_exception_code = SYS_ERR_NONE;
 static volatile uint8_t g_in_exception = 0;
 static uint32_t g_draw_code = SYS_ERR_NONE;
-static int g_draw_seconds = 5;
+static int g_draw_seconds = 6;
 
 static void syshandle_force_reset(void) {
   /* NVIC_SystemReset() normally resets immediately.  If it is blocked for any
@@ -84,6 +87,18 @@ void SysHandle_FatalFResult(FRESULT res, uint32_t fallback) {
   }
 }
 
+extern TIM_HandleTypeDef htim4;
+
+static void syshandle_prepare_display(void) {
+  /* Fatal errors may be raised from a network/SPI path while the LCD is dimmed
+   * or DMA is busy.  Use the emergency blocking path instead of full LCD_Init(),
+   * otherwise the screen can stay black and IWDG may reset before the page is
+   * drawn. */
+  SysWatchdog_FeedNow();
+  LCD_EmergencyPrepare();
+  SysWatchdog_FeedNow();
+}
+
 static void syshandle_render(void) {
   char code_line[32];
   char sec_line[32];
@@ -130,14 +145,20 @@ void SysHandle_Exception(uint32_t code) {
   g_last_exception_code = code;
   g_draw_code = code;
 
-  /* Light the error LED immediately — stays on until system reset */
+  /* Fatal LED policy: board/warn off, error LED on until reset. */
+  LED_BoardOff();
+  LED_WarnOff();
   LED_ErrorOn();
 
   LOG_F("SYSH", "System exception: 0x%08lX %s", (unsigned long)code,
         SysHandle_CodeName(code));
 
-  for (g_draw_seconds = 5; g_draw_seconds >= 1; --g_draw_seconds) {
-    LCD_FlushTiled(syshandle_render);
+  syshandle_prepare_display();
+
+  for (g_draw_seconds = 6; g_draw_seconds >= 1; --g_draw_seconds) {
+    SysWatchdog_FeedNow();
+    LCD_FlushTiledBlocking(syshandle_render);
+    SysWatchdog_FeedNow();
     for (uint32_t i = 0; i < 1000U; i += 20U) {
       SysWatchdog_FeedNow();
       HAL_Delay(20);

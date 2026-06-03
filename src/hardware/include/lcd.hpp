@@ -48,7 +48,10 @@ public:
   uint16_t *getFrameBuffer(void);
   void beginTileRender(uint16_t y, uint16_t h);
   void endTileRender(void);
+  void endTileRenderBlocking(void);
   void flushTiled(void (*render_cb)(void));
+  void emergencyPrepare(void);
+  void flushTiledBlocking(void (*render_cb)(void));
 
   // C++ 模板版本：接受 lambda（支持捕获局部变量）
   template <typename F>
@@ -95,8 +98,12 @@ private:
 
 extern LCD boardLCD;
 
+#ifdef __cplusplus
+extern "C" void SysWatchdog_Tick(void);
+#endif
+
 // 便捷宏：自动捕获局部变量，一行完成迁移
 // 用法: LCD_FLUSH({ draw_stuff(); });
-#define LCD_FLUSH(...) boardLCD.flushTiled([&]() { __VA_ARGS__ })
+#define LCD_FLUSH(...) do { SysWatchdog_Tick(); boardLCD.flushTiled([&]() { __VA_ARGS__ }); SysWatchdog_Tick(); } while (0)
 
 #endif

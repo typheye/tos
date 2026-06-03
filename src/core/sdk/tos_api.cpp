@@ -7,12 +7,14 @@
 #include "../include/config.h"
 #include "core/manager/include/emotion_manager.h"
 #include "core/manager/include/network_manager.h"
+#include "core/manager/include/settings_manager.h"
 #include "hardware/include/buzzer.hpp"
 #include "hardware/include/esp8266.hpp"
 #include "include/libjson.h"
 #include "main.h"
 #include "core/sys/include/systime.h"
 #include "core/sys/include/syswatchdog.h"
+#include "core/sys/include/syshandle.h"
 #include "syslog.h"
 #include <cstring>
 #include <cstdio>
@@ -21,10 +23,11 @@
 extern Buzzer buzzer1;
 
 #define TOS_HEARTBEAT_PATH "/v1/device/heartbeat"
-#define TOS_HEARTBEAT_MS   2000U
-#define TOS_RETRY_MS       2500U
-#define TOS_START_DELAY_MS 1800U
+#define TOS_HEARTBEAT_MS   3000U
+#define TOS_RETRY_MS       5000U
+#define TOS_START_DELAY_MS 2500U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
+#define TOS_NET_STUCK_MS       30000U
 #define TOS_ACK_MAX_CMDS   5
 #define TOS_MAX_CMD_OBJ     448U
 
@@ -48,7 +51,12 @@ static bool g_last_cmd_parse_malformed = false;
 static bool g_last_hb_malformed = false;
 static uint32_t g_last_full_hb_ms = 0;
 static uint8_t g_full_hb_boot_count = 0;
-static uint32_t g_last_esp_recover_try_ms = 0;
+static uint32_t g_last_cloud_ok_ms = 0;
+static uint8_t g_transport_fail_count = 0;
+static bool g_cloud_was_online = false;
+static bool g_offline_for_this_boot = false;
+static int g_last_rssi = 0;
+static uint32_t g_last_rssi_refresh_ms = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -68,21 +76,44 @@ static void build_device_id(void) {
            (unsigned long)a, (unsigned long)(b & 0xFFFFU));
 }
 
-static bool network_ready(void) {
-  if (Net_IsHardDisabled()) {
-    return false;
-  }
-  int state = ESP8266_GetState();
-  return state == 3 || ESP8266_IsConnected();
+static bool wlan_enabled(void) {
+  return SM_Wlan_On();
 }
 
-static void maybe_try_esp_recovery(uint32_t now) {
-  /* Keep the UI alive when ESP8266 is missing/wedged.  Recovery is slow, so it
-   * must be heavily rate-limited and never called twice from the same tick. */
-  if (now < 30000U) return;  /* boot grace: let the product finish init */
-  if ((uint32_t)(now - g_last_esp_recover_try_ms) < 30000U) return;
-  g_last_esp_recover_try_ms = now;
-  (void)ESP8266_TryRecover(false);
+static bool online_intended_config(void) {
+  /* Cloud-online mode is a user/config decision, not merely "ESP answers AT".
+   * Require all three persisted WLAN conditions requested by the product policy:
+   *   1) WLAN switch ON
+   *   2) auto-connect ON
+   *   3) at least one non-empty saved network
+   */
+  if (!SM_Wlan_On() || !SM_Wlan_AutoConn()) return false;
+  uint8_t n = SM_Saved_Count();
+  for (uint8_t i = 0; i < n; ++i) {
+    const SM_SavedNet_t *net = SM_Saved_Get(i);
+    if (net && net->ssid[0]) return true;
+  }
+  return false;
+}
+
+static bool network_ready(void) {
+  if (!wlan_enabled()) return false;
+  if (Net_IsHardDisabled()) return false;
+  int state = ESP8266_GetState();
+  /* Some ESP8266 AT firmwares stay in STATUS:2 while TCP requests still work.
+   * Once cloud has been reached in this boot, keep treating WLAN as usable
+   * until transport failures prove otherwise. */
+  return state == 3 || ESP8266_IsConnected() || g_cloud_was_online;
+}
+
+static bool cloud_offline_mode(void) {
+  /* High-priority offline gate.  If the product is not configured for online
+   * operation, or it failed to join a saved WLAN during this boot, it is simply
+   * offline.  Do not probe cloud and do not recover/re-init ESP8266 here. */
+  if (g_offline_for_this_boot) return true;
+  if (!online_intended_config()) return true;
+  if (!g_cloud_was_online && !network_ready()) return true;
+  return false;
 }
 
 static int response_code(const char *resp) {
@@ -92,6 +123,21 @@ static int response_code(const char *resp) {
 
 static const char *response_body(const char *resp) {
   return json_extract_body(resp);
+}
+
+static void note_transport_failure(const char *where);
+
+static int cached_rssi(bool refresh) {
+  (void)refresh;
+  uint32_t now = HAL_GetTick();
+  /* Heartbeat must be non-blocking.  Do not send AT+CWJAP? here; keep the
+   * last cached value and let future explicit telemetry code refresh it at a
+   * controlled time. */
+  if (g_last_rssi == 0) {
+    g_last_rssi = wlan_enabled() ? -99 : 0;
+    g_last_rssi_refresh_ms = now;
+  }
+  return g_last_rssi;
 }
 
 static bool build_heartbeat_body(char *out, size_t out_sz) {
@@ -105,40 +151,35 @@ static bool build_heartbeat_body(char *out, size_t out_sz) {
 
   if (net_ok) {
     uint32_t tick = HAL_GetTick();
-    if (g_last_ip[0] == '\0' || strcmp(g_last_ip, "0.0.0.0") == 0 ||
-        (tick - g_last_ip_refresh_ms) > 60000U) {
-      char tmp[24];
-      if (ESP8266_GetIP(tmp, sizeof(tmp)) && tmp[0]) {
-        snprintf(g_last_ip, sizeof(g_last_ip), "%s", tmp);
-      }
-      g_last_ip_refresh_ms = tick;
-    }
+    if (g_last_ip[0] == '\0') snprintf(g_last_ip, sizeof(g_last_ip), "0.0.0.0");
+    g_last_ip_refresh_ms = tick;
     ip = g_last_ip;
   }
 
   uint32_t now = HAL_GetTick();
   bool full = (g_full_hb_boot_count < 3U) ||
               ((uint32_t)(now - g_last_full_hb_ms) >= 60000U);
+  int rssi = wlan_enabled() ? cached_rssi(full) : 0;
   int n;
   if (full) {
     n = snprintf(out, out_sz,
                  "{\"di\":\"%s\",\"v\":\"1\",\"vc\":%lu,"
                  "\"b\":\"%s\",\"m\":\"%s\",\"hv\":\"%s\","
-                 "\"up\":%lu,\"w\":\"%s\",\"rssi\":0,"
+                 "\"up\":%lu,\"w\":\"%s\",\"rssi\":%d,"
                  "\"ip\":\"%s\",\"e\":\"%s\"}",
                  g_device_id,
                  (unsigned long)CFG_VERSION_CODE,
                  CFG_BUILD, CFG_MODEL, CFG_HW_REV,
                  (unsigned long)(now / 1000U),
-                 wifi, ip, expr);
+                 wifi, rssi, ip, expr);
     if (n > 0 && n < (int)out_sz) {
       g_last_full_hb_ms = now;
       if (g_full_hb_boot_count < 255U) g_full_hb_boot_count++;
     }
   } else {
     n = snprintf(out, out_sz,
-                 "{\"di\":\"%s\",\"up\":%lu,\"w\":\"%s\",\"ip\":\"%s\",\"e\":\"%s\"}",
-                 g_device_id, (unsigned long)(now / 1000U), wifi, ip, expr);
+                 "{\"di\":\"%s\",\"up\":%lu,\"w\":\"%s\",\"rssi\":%d,\"ip\":\"%s\",\"e\":\"%s\"}",
+                 g_device_id, (unsigned long)(now / 1000U), wifi, rssi, ip, expr);
   }
   return n > 0 && n < (int)out_sz;
 }
@@ -487,6 +528,10 @@ static bool parse_heartbeat_response(const char *resp) {
   bool has_cmd = parse_commands_from_body(body, "HB", &reboot);
   g_last_hb_malformed = g_last_cmd_parse_malformed;
   if (has_cmd) g_empty_hb_cycles = 0;
+  g_last_cloud_ok_ms = HAL_GetTick();
+  g_cloud_was_online = true;
+  g_transport_fail_count = 0;
+  ESP8266_ClearRecoveryFailureCount();
   LOG_I("TAPI", "Heartbeat OK%s", has_cmd ? ", ack pending" : "");
   return true;
 }
@@ -505,10 +550,11 @@ static void start_heartbeat(void) {
 
   if (Net_AsyncHttpPostStart(TOS_API_HOST, TOS_API_PORT,
                              TOS_HEARTBEAT_PATH, body,
-                             (uint16_t)strlen(body), 7000U)) {
+                             (uint16_t)strlen(body), 6500U)) {
     g_phase = TOS_PHASE_HEARTBEAT;
     LOG_D("TAPI", "Heartbeat queued, body=%uB expr=%s", (unsigned)strlen(body), EmotionManager_GetReportExpression());
   } else {
+    note_transport_failure("heartbeat-start");
     schedule_heartbeat(TOS_RETRY_MS);
   }
 }
@@ -528,23 +574,26 @@ static void start_ack_or_schedule(void) {
       g_empty_hb_cycles = 0;
     }
 
-    if (should_poll) {
+    if (should_poll && g_transport_fail_count == 0U) {
       (void)poll_commands_once();
+    } else if (should_poll) {
+      LOG_D("TAPI", "Skip fallback GET while transport is unstable");
     }
   }
 
   if (g_ack_body[0]) {
     if (Net_AsyncHttpPostStart(TOS_API_HOST, TOS_API_PORT, g_ack_path,
                                g_ack_body, (uint16_t)strlen(g_ack_body),
-                               10000U)) {
+                               5000U)) {
       g_phase = TOS_PHASE_ACK;
       return;
     }
     LOG_W("TAPI", "Ack start failed");
+    note_transport_failure("ack-start");
   }
   g_phase = TOS_PHASE_IDLE;
   schedule_heartbeat(TOS_HEARTBEAT_MS);
-      LOG_D("TAPI", "Next heartbeat in %lums", (unsigned long)TOS_HEARTBEAT_MS);
+  LOG_D("TAPI", "Next heartbeat in %lums", (unsigned long)TOS_HEARTBEAT_MS);
 }
 
 void TosApi_Init(void) {
@@ -553,11 +602,47 @@ void TosApi_Init(void) {
   g_ack_body[0] = '\0';
   g_reboot_after_ack = false;
   g_initialized = true;
+  g_last_cloud_ok_ms = 0;
+  g_cloud_was_online = false;
+  g_offline_for_this_boot = online_intended_config() && !network_ready();
+  g_transport_fail_count = 0;
   schedule_heartbeat(TOS_START_DELAY_MS);
-  LOG_I("TAPI", "Cloud client init, di=%s hb=%lums", g_device_id, (unsigned long)TOS_HEARTBEAT_MS);
+  LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
+        g_device_id, (unsigned long)TOS_HEARTBEAT_MS,
+        online_intended_config() ? "online-intended" : "offline",
+        g_offline_for_this_boot ? "/offline-this-boot" : "");
+}
+
+static void note_transport_failure(const char *where) {
+  uint32_t now = HAL_GetTick();
+  if (g_transport_fail_count < 255U) g_transport_fail_count++;
+  uint32_t offline_ms = g_last_cloud_ok_ms ? (now - g_last_cloud_ok_ms) : 0;
+  LOG_W("TAPI", "%s transport fail #%u, offline=%lums",
+        where ? where : "cloud", (unsigned)g_transport_fail_count,
+        (unsigned long)offline_ms);
+
+  if (!online_intended_config()) return;
+  if (g_offline_for_this_boot) return;
+  if (Net_IsHardDisabled()) return;
+
+  /* If this boot has never reached cloud, treat the product as offline.
+   * This covers WLAN disabled, auto-connect disabled, no saved AP, saved AP out
+   * of range, or server unreachable before the first successful heartbeat. */
+  if (!g_cloud_was_online || g_last_cloud_ok_ms == 0) return;
+
+  if (g_transport_fail_count == 0U) return;
+  if (offline_ms < TOS_NET_STUCK_MS) return;
+
+  /* Once this boot has proven it was online, 30s without heartbeat/ack is a
+   * whole-system network fault.  Do not attempt ESP recovery/re-init in runtime;
+   * reboot through syshandle so the ESP returns to a clean startup path. */
+  LOG_E("TAPI", "Cloud transport stuck for %lums; entering syshandle",
+        (unsigned long)offline_ms);
+  SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
 }
 
 void TosApi_Tick(void) {
+  SysWatchdog_Tick();
   if (!g_initialized) return;
 
   Net_AsyncTick();
@@ -569,7 +654,7 @@ void TosApi_Tick(void) {
     if (ns == NET_ASYNC_DONE) {
       ok = parse_heartbeat_response(Net_AsyncResponse());
     } else if (ns == NET_ASYNC_FAILED) {
-      LOG_W("TAPI", "Heartbeat transport failed");
+      note_transport_failure("heartbeat");
     }
 
     Net_AsyncReset();
@@ -577,7 +662,12 @@ void TosApi_Tick(void) {
       start_ack_or_schedule();
     } else {
       g_phase = TOS_PHASE_IDLE;
-      schedule_heartbeat(TOS_RETRY_MS);
+      uint32_t retry = TOS_RETRY_MS;
+      if (g_transport_fail_count > 0U) {
+        retry += (uint32_t)g_transport_fail_count * 2000U;
+        if (retry > 15000U) retry = 15000U;
+      }
+      schedule_heartbeat(retry);
     }
     return;
   }
@@ -587,9 +677,15 @@ void TosApi_Tick(void) {
     if (ns == NET_ASYNC_DONE) {
       int code = response_code(Net_AsyncResponse());
       ack_ok = (code == 0);
+      if (ack_ok) {
+        g_last_cloud_ok_ms = HAL_GetTick();
+        g_cloud_was_online = true;
+        g_transport_fail_count = 0;
+        ESP8266_ClearRecoveryFailureCount();
+      }
       LOG_I("TAPI", "Ack %s", ack_ok ? "OK" : "API fail");
     } else if (ns == NET_ASYNC_FAILED) {
-      LOG_W("TAPI", "Ack transport failed");
+      note_transport_failure("ack");
     }
 
     Net_AsyncReset();
@@ -620,14 +716,35 @@ void TosApi_Tick(void) {
   if (ns == NET_ASYNC_DONE || ns == NET_ASYNC_FAILED) Net_AsyncReset();
   if (!time_due(now, g_next_heartbeat_ms)) return;
 
+  if (!wlan_enabled()) {
+    /* User-selected offline mode: no cloud traffic and no system error. */
+    g_cloud_was_online = false;
+    g_last_cloud_ok_ms = 0;
+    g_transport_fail_count = 0;
+    schedule_heartbeat(10000U);
+    return;
+  }
+
   if (!network_ready()) {
-    maybe_try_esp_recovery(now);
-    schedule_heartbeat(5000U);
+    if (g_cloud_was_online) {
+      note_transport_failure("wifi-offline");
+    } else {
+      /* WLAN is configured but not joined in this boot: out-of-range/offline
+       * mode.  Do not re-init/recover ESP8266 and do not touch cloud. */
+      g_offline_for_this_boot = online_intended_config();
+      g_transport_fail_count = 0;
+    }
+    schedule_heartbeat(10000U);
     return;
   }
 
   if (g_ack_body[0]) {
     start_ack_or_schedule();
+    return;
+  }
+
+  if (cloud_offline_mode()) {
+    schedule_heartbeat(5000U);
     return;
   }
 

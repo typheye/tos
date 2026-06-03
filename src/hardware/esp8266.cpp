@@ -5,6 +5,7 @@
 #include "syslog.h"
 #include "core/sys/include/syswatchdog.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef CCMRAM
@@ -12,6 +13,19 @@
 #endif
 
 extern USART boardSerial;
+
+static void esp_led_success(void) {
+  warnLed.off();
+  boardLed.on();
+  HAL_Delay(6);
+  boardLed.off();
+  SysWatchdog_Tick();
+}
+
+static void esp_led_failure(void) {
+  boardLed.off();
+  warnLed.on();
+}
 
 extern "C" {
 extern uint8_t esp8266_global_buffer[];
@@ -31,12 +45,15 @@ ESP8266::ESP8266(UART_HandleTypeDef *huart) {
   _hard_disabled = false;
   _last_recover_ms = 0;
   _recover_attempts = 0;
+  _recover_failures = 0;
   _rx_index = 0;
+  _rx_overflow = false;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
 }
 
 void ESP8266::clearRxBuffer(void) {
   _rx_index = 0;
+  _rx_overflow = false;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
   esp8266_global_index = 0;
   esp8266_data_ready = 0;
@@ -63,18 +80,25 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
     processPendingData();
 
     if (_rx_index > 0) {
+      if (_rx_overflow) {
+        LOG_E("ESP", "RX overflow while waiting for %s",
+              expected ? expected : "(any)");
+        clearRxBuffer();
+        esp_led_failure();
+        return false;
+      }
+
       if (expected && strstr((char *)_rx_buffer, expected) != NULL) {
         /* Communication success: brief blink to acknowledge */
-        boardLed.on();
-        HAL_Delay(100);
-        boardLed.off();
+        esp_led_success();
         return true;
       }
 
       if (strstr((char *)_rx_buffer, "ERROR") != NULL ||
           strstr((char *)_rx_buffer, "FAIL") != NULL) {
         /* Communication failure: keep boardLed on until next success */
-        boardLed.on();
+        clearRxBuffer();
+        esp_led_failure();
         return false;
       }
     }
@@ -82,7 +106,8 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
     SysWatchdog_Tick();
   }
   /* Timeout: communication failure */
-  boardLed.on();
+  clearRxBuffer();
+  esp_led_failure();
   return false;
 }
 
@@ -101,108 +126,23 @@ void ESP8266::parseResponse(const char *response) {
 }
 
 void ESP8266::processRxData(uint8_t *data, uint16_t len) {
-  for (uint16_t i = 0; i < len && _rx_index < sizeof(_rx_buffer) - 1; i++) {
+  for (uint16_t i = 0; i < len; i++) {
+    if (_rx_index >= sizeof(_rx_buffer) - 1) {
+      _rx_overflow = true;
+      break;
+    }
     _rx_buffer[_rx_index++] = data[i];
   }
   _rx_buffer[_rx_index] = '\0';
 }
 
-static void esp8266_uart_resync(UART_HandleTypeDef *huart) {
-  if (!huart) return;
-
-  HAL_UART_Abort(huart);
-  __HAL_UART_CLEAR_OREFLAG(huart);
-
-  /* Drain RXNE manually.  This is important after STM32 resets while the
-   * ESP8266 is still in the middle of CIPSEND / TCP closing. */
-  uint32_t start = HAL_GetTick();
-  while (HAL_GetTick() - start < 20U) {
-    while (__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE) != RESET) {
-      (void)(uint8_t)(huart->Instance->DR & 0xFF);
-      start = HAL_GetTick();
-    }
-    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) {
-      __HAL_UART_CLEAR_OREFLAG(huart);
-      start = HAL_GetTick();
-    }
-    SysWatchdog_Tick();
-  }
-}
-
 bool ESP8266::tryRecover(bool force) {
-  uint32_t now = HAL_GetTick();
-  if (!force && (now - _last_recover_ms) < 10000U) {
-    /* Recovery is expensive and may take seconds.  Do not turn a rate-limit hit
-     * into a fatal exception: during boot or a temporary AP hiccup this caused
-     * syshandle re-entry / black-screen reset loops. */
-    LOG_W("ESP", "Recovery requested too soon; skip this round");
-    _hard_disabled = true;
-    _state = 4;
-    return false;
-  }
-  _last_recover_ms = now;
-  _recover_attempts++;
-
-  LOG_W("ESP", "Recovery attempt %u%s", _recover_attempts,
-        force ? " (forced)" : "");
-
-  /* Do not let the hard-disabled latch block recovery AT commands. */
-  _hard_disabled = false;
-  _state = 0;
-
-  esp8266_uart_resync(_huart);
-  clearRxBuffer();
-
-  /* Escape possible transparent mode and stale prompt/data states.  Even if the
-   * module is not in transparent mode, this sequence is harmless; it gives the
-   * AT firmware enough guard time before we send the real probe. */
-  const char *crlf = "\r\n";
-  HAL_UART_Transmit(_huart, (uint8_t *)crlf, 2, 100);
-  HAL_Delay(60);
-  const char *escape = "+++";
-  HAL_UART_Transmit(_huart, (uint8_t *)escape, 3, 100);
-  HAL_Delay(1100);
-  SysWatchdog_FeedNow();
-  HAL_UART_Transmit(_huart, (uint8_t *)crlf, 2, 100);
-  HAL_Delay(120);
-
-  clearRxBuffer();
-  if (sendCommand("AT", "OK", 1000)) {
-    LOG_I("ESP", "Recovery OK by AT probe");
-    sendCommand("ATE0", "OK", 800);
-    sendCommand("AT+CIPMODE=0", "OK", 1000);
-    sendCommand("AT+CIPMUX=0", "OK", 1000);
-    _hard_disabled = false;
-    _recover_attempts = 0;
-    return true;
-  }
-
-  /* Last software-only recovery path: reset the AT firmware.  This will not
-   * help if the module lost power, but it does recover a wedged TCP/IP stack. */
-  clearRxBuffer();
-  if (sendCommand("AT+RST", "ready", 2500) || sendCommand("AT", "OK", 1000)) {
-    HAL_Delay(800);
-  SysWatchdog_FeedNow();
-    clearRxBuffer();
-    if (sendCommand("AT", "OK", 1000)) {
-      LOG_I("ESP", "Recovery OK after AT+RST");
-      sendCommand("ATE0", "OK", 800);
-      sendCommand("AT+CIPMODE=0", "OK", 1000);
-      sendCommand("AT+CIPMUX=0", "OK", 1000);
-      _hard_disabled = false;
-      _recover_attempts = 0;
-      return true;
-    }
-  }
-
-  _hard_disabled = true;
-  _state = 4;
-  LOG_E("ESP", "Recovery failed");
-
-  /* Startup and runtime both return failure to the caller.  Network code will
-   * back off.  A totally stuck main loop is still covered by IWDG; do not call
-   * syshandle from inside the ESP recovery path, because it can be reached while
-   * UART/LCD/network code is already in an unstable state. */
+  (void)force;
+  if (_recover_failures < 0xFFFFU) _recover_failures++;
+  LOG_W("ESP", "Runtime ESP recovery disabled by policy");
+  /* Do not send AT+RST, do not re-init, and do not change hard-disabled here.
+   * The cloud policy layer either keeps this boot offline or reboots the whole
+   * device through syshandle after a proven online session becomes stuck. */
   return false;
 }
 
@@ -229,11 +169,10 @@ void ESP8266::init(void) {
     sendCommand("AT+CIPMODE=0", "OK", 1000);
     sendCommand("AT+CIPMUX=0", "OK", 1000);
   } else {
-    LOG_W("ESP", "Initial AT timeout, trying software recovery");
     LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
-    if (!tryRecover(true)) {
-      LOG_E("ESP", "ESP8266 temporarily unavailable; background recovery enabled");
-    }
+    _hard_disabled = true;
+    _state = 4;
+    LOG_E("ESP", "ESP8266 unavailable for this boot");
   }
 }
 
@@ -256,31 +195,39 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
   uint32_t start = HAL_GetTick();
   uint32_t last_dbg = 0;
+  bool near_full_logged = false;
 
   while (HAL_GetTick() - start < timeout_ms) {
     processPendingData();
 
     if (_rx_index > 0) {
+      if (_rx_overflow) {
+        LOG_E("ESP", "RX overflow after %lums, rx=%u/%u while waiting for '%s'",
+              (unsigned long)(HAL_GetTick() - start), _rx_index,
+              (unsigned)sizeof(_rx_buffer),
+              expected_response ? expected_response : "(any)");
+        clearRxBuffer();
+        esp_led_failure();
+        return false;
+      }
+
       if (expected_response) {
         if (strstr((char *)_rx_buffer, expected_response) != NULL) {
           LOG_D("ESP", "OK after %lums, rx=%u bytes",
                 (unsigned long)(HAL_GetTick() - start), _rx_index);
           /* Communication success: brief blink to acknowledge */
-          boardLed.on();
-          HAL_Delay(100);
-          boardLed.off();
+          esp_led_success();
           return true;
         }
         /* Buffer nearly full — search for partial match */
-        if (_rx_index >= sizeof(_rx_buffer) - 10) {
+        if (!near_full_logged && _rx_index >= sizeof(_rx_buffer) - 64) {
+          near_full_logged = true;
           LOG_W("ESP", "Rx buffer nearly full (%u/%u), searching for '%s'",
                 _rx_index, (unsigned)sizeof(_rx_buffer), expected_response);
         }
       } else {
         /* No expected response specified — any data counts as success */
-        boardLed.on();
-        HAL_Delay(100);
-        boardLed.off();
+        esp_led_success();
         return true;
       }
 
@@ -289,7 +236,8 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
         LOG_E("ESP", "Got ERROR/FAIL after %lums, rx=%u bytes",
               (unsigned long)(HAL_GetTick() - start), _rx_index);
         /* Communication failure: keep boardLed on until next success */
-        boardLed.on();
+        clearRxBuffer();
+        esp_led_failure();
         return false;
       }
 
@@ -308,7 +256,8 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
   LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes",
         (unsigned long)timeout_ms, _rx_index);
   /* Communication failure: keep boardLed on until next success */
-  boardLed.on();
+  clearRxBuffer();
+  esp_led_failure();
   return false;
 }
 
@@ -317,12 +266,17 @@ bool ESP8266::connectWiFi(const char *ssid, const char *password) {
   sprintf(cmd, "AT+CWJAP=\"%s\",\"%s\"", ssid, password);
 
   _state = 1;
+  /* 8s is too short for some APs after a cold boot or after the ESP finished a
+   * previous TCP/AT sequence.  A single 15s join is safer than two short joins
+   * that leave a late OK in the UART stream and confuse the next command. */
   bool result = sendCommand(cmd, "OK", 15000);
 
   if (result) {
     HAL_Delay(2000);
-  SysWatchdog_FeedNow();
+    SysWatchdog_FeedNow();
     _state = 3;
+  } else {
+    _state = 0;
   }
   return result;
 }
@@ -356,7 +310,83 @@ void ESP8266::disconnect(void) {
 }
 
 bool ESP8266::scanNetworks(void) {
-  return sendCommand("AT+CWLAP", "OK", 15000);
+  if (_hard_disabled) {
+    LOG_W("ESP", "scanNetworks blocked: hard-disabled");
+    return false;
+  }
+
+  clearRxBuffer();
+  const char cmd[] = "AT+CWLAP\r\n";
+  HAL_UART_Transmit(_huart, (uint8_t *)cmd, (uint16_t)(sizeof(cmd) - 1U), 1000);
+
+  uint32_t start = HAL_GetTick();
+  uint32_t last_dbg = 0;
+  bool near_full_logged = false;
+
+  while (HAL_GetTick() - start < 15000U) {
+    processPendingData();
+
+    if (_rx_index > 0) {
+      const char *rx = (const char *)_rx_buffer;
+
+      if (_rx_overflow) {
+        LOG_E("ESP", "CWLAP RX overflow after %lums, rx=%u/%u",
+              (unsigned long)(HAL_GetTick() - start), _rx_index,
+              (unsigned)sizeof(_rx_buffer));
+        break;
+      }
+
+      if (strstr(rx, "\r\nOK") || strstr(rx, "OK\r\n")) {
+        LOG_D("ESP", "CWLAP OK after %lums, rx=%u bytes",
+              (unsigned long)(HAL_GetTick() - start), _rx_index);
+        esp_led_success();
+        return true;
+      }
+
+      if (strstr(rx, "ERROR") || strstr(rx, "FAIL")) {
+        LOG_E("ESP", "CWLAP ERROR after %lums, rx=%u bytes",
+              (unsigned long)(HAL_GetTick() - start), _rx_index);
+        clearRxBuffer();
+        esp_led_failure();
+        return false;
+      }
+
+      if (!near_full_logged && _rx_index >= sizeof(_rx_buffer) - 64) {
+        near_full_logged = true;
+        LOG_W("ESP", "CWLAP RX nearly full (%u/%u), will stop on overflow",
+              _rx_index, (unsigned)sizeof(_rx_buffer));
+      }
+
+      if (HAL_GetTick() - last_dbg > 3000U) {
+        last_dbg = HAL_GetTick();
+        LOG_D("ESP", "CWLAP waiting... %lums, rx=%u/%u bytes",
+              (unsigned long)(HAL_GetTick() - start), _rx_index,
+              (unsigned)sizeof(_rx_buffer));
+      }
+    }
+
+    HAL_Delay(10);
+    SysWatchdog_Tick();
+  }
+
+  LOG_E("ESP", "CWLAP failed after %lums, rx=%u/%u",
+        (unsigned long)(HAL_GetTick() - start), _rx_index,
+        (unsigned)sizeof(_rx_buffer));
+
+  /* Let late scan output drain briefly, then verify the module still answers.
+   * The WLAN page will decide whether to retry; keep this function from
+   * polluting later HTTP/heartbeat transactions. */
+  uint32_t settle = HAL_GetTick();
+  while (HAL_GetTick() - settle < 300U) {
+    processPendingData();
+    HAL_Delay(10);
+    SysWatchdog_Tick();
+  }
+  clearRxBuffer();
+  (void)sendCommand("AT", "OK", 1000);
+  clearRxBuffer();
+  esp_led_failure();
+  return false;
 }
 
 bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
@@ -382,6 +412,64 @@ bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
   return false;
 }
 
+
+static bool esp_parse_rssi_from_cwjap(const char *rx, int *rssi) {
+  if (!rx || !rssi) return false;
+  const char *p = strstr(rx, "+CWJAP:");
+  if (!p) return false;
+
+  const char *line_end = strpbrk(p, "\r\n");
+  if (!line_end) line_end = p + strlen(p);
+
+  /* ESP AT variants differ.  Some return:
+   *   +CWJAP:"ssid","bssid",channel,rssi
+   * older ones may omit RSSI.  Scan every comma-separated numeric token on the
+   * +CWJAP line and use the last plausible RSSI value. */
+  bool found = false;
+  int best = 0;
+  const char *q = p;
+  while (q && q < line_end) {
+    q = strchr(q, ',');
+    if (!q || q >= line_end) break;
+    q++;
+    while (q < line_end && (*q == ' ' || *q == '\t' || *q == '"')) q++;
+    char *endp = NULL;
+    long v = strtol(q, &endp, 10);
+    if (endp && endp > q) {
+      /* RSSI must be a negative dBm value.  Do not treat channel numbers
+       * such as 0/1/6/11 as RSSI; that was why the cloud kept seeing 0 dBm. */
+      if (v < 0 && v >= -127) {
+        best = (int)v;
+        found = true;
+      }
+      q = endp;
+    }
+  }
+
+  if (!found) return false;
+  *rssi = best;
+  return true;
+}
+
+bool ESP8266::getRSSI(int *rssi) {
+  if (!rssi) return false;
+  if (_hard_disabled) return false;
+
+  const char *cmds[] = {"AT+CWJAP?", "AT+CWJAP_CUR?"};
+  for (unsigned i = 0; i < sizeof(cmds) / sizeof(cmds[0]); ++i) {
+    clearRxBuffer();
+    if (!sendCommand(cmds[i], "OK", 1800)) continue;
+    int v = 0;
+    if (esp_parse_rssi_from_cwjap((const char *)_rx_buffer, &v)) {
+      *rssi = v;
+      LOG_D("ESP", "RSSI=%d dBm", v);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool ESP8266::sendString(const char *str) {
   return sendData((const uint8_t *)str, strlen(str));
 }
@@ -393,6 +481,8 @@ void ESP8266_Init(void) { esp8266.init(); }
 bool ESP8266_IsHardDisabled(void) { return esp8266.isHardDisabled(); }
 
 bool ESP8266_TryRecover(bool force) { return esp8266.tryRecover(force); }
+uint16_t ESP8266_GetRecoveryFailureCount(void) { return esp8266.recoveryFailureCount(); }
+void ESP8266_ClearRecoveryFailureCount(void) { esp8266.clearRecoveryFailureCount(); }
 
 bool ESP8266_SendCommand(const char *cmd, const char *expected_response,
                          uint32_t timeout_ms) {
@@ -445,4 +535,9 @@ void ESP8266_Disconnect(void) {
 bool ESP8266_GetIP(char *buf, uint16_t sz) {
   if (esp8266.isHardDisabled()) return false;
   return esp8266.getIP(buf, sz);
+}
+
+bool ESP8266_GetRSSI(int *rssi) {
+  if (esp8266.isHardDisabled()) return false;
+  return esp8266.getRSSI(rssi);
 }

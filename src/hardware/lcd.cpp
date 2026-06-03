@@ -42,6 +42,8 @@ uint16_t *LCD_GetFrameBuffer(void) { return boardLCD.getFrameBuffer(); }
 void LCD_BeginTileRender(uint16_t y, uint16_t h) { boardLCD.beginTileRender(y, h); }
 void LCD_EndTileRender(void) { boardLCD.endTileRender(); }
 void LCD_FlushTiled(void (*render_cb)(void)) { boardLCD.flushTiled(render_cb); }
+void LCD_EmergencyPrepare(void) { boardLCD.emergencyPrepare(); }
+void LCD_FlushTiledBlocking(void (*render_cb)(void)) { boardLCD.flushTiledBlocking(render_cb); }
 void LCD_FlushFull(const uint16_t *data) { boardLCD.flushFull(data); }
 
 void LCD_ClearFrameBuffer(uint32_t color) {
@@ -505,6 +507,69 @@ void LCD::endTileRender(void) {
   hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
 
   LCD_CS_H;
+}
+
+
+void LCD::emergencyPrepare(void) {
+  /* Fatal errors may be raised while SPI/DMA is still busy.  Do not run the
+   * full LCD::init() here: it clears the panel pixel-by-pixel and can take long
+   * enough for a short IWDG configuration to reset before anything is visible.
+   * Instead, resync the SPI/DMA state, wake the already-initialized panel, and
+   * force full backlight. */
+  HAL_SPI_Abort(&hspi);
+  HAL_DMA_Abort(&hdma_spi1_tx);
+  LCD_CS_H;
+  LCD_DC_DATA;
+
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
+  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+
+  LCD_BL_ON;
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  setBrightness(1000);
+
+  if (initialized) {
+    write_cmd(0x11); /* sleep out */
+    HAL_Delay(20);
+    write_cmd(0x29); /* display on */
+    HAL_Delay(20);
+  }
+}
+
+void LCD::endTileRenderBlocking(void) {
+  if (!initialized) return;
+
+  set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
+  LCD_DC_DATA;
+  LCD_CS_L;
+
+  HAL_SPI_Abort(&hspi);
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
+  hspi.Init.DataSize = SPI_DATASIZE_16BIT;
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+
+  uint16_t pixel_count = LCD_WIDTH * _tile_h;
+  (void)HAL_SPI_Transmit(&hspi, (uint8_t *)_tile_buffer, pixel_count, 500);
+
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
+  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
+  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  LCD_CS_H;
+}
+
+void LCD::flushTiledBlocking(void (*render_cb)(void)) {
+  if (!initialized || !render_cb) return;
+
+  for (uint16_t y = 0; y < LCD_HEIGHT; y += TILE_HEIGHT) {
+    uint16_t h = (y + TILE_HEIGHT <= LCD_HEIGHT) ? TILE_HEIGHT : LCD_HEIGHT - y;
+    beginTileRender(y, h);
+    render_cb();
+    endTileRenderBlocking();
+  }
 }
 
 void LCD::flushTiled(void (*render_cb)(void)) {
