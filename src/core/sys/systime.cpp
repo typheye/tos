@@ -1,11 +1,18 @@
 /**
+ ******************************************************************************
  * @file    systime.cpp
- * @brief   RTC time sync — SNTP via ESP8266 AT commands,
- *          HTTP fallback via network_manager.
+ * @author  Typheye
+ * @brief   Systime implementation.
+ ******************************************************************************
+ * @attention
  *
- * LED rules (consistent with network_manager):
- *   Success → boardLed blink 100 ms, warnLed off
- *   Failure → warnLed ON
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "systime.h"

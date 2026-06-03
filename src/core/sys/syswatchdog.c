@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    syswatchdog.c
+ * @author  Typheye
+ * @brief   System watchdog service implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "syswatchdog.h"
 
 #include "iwdg.h"
@@ -6,6 +23,8 @@
 #include "stm32f4xx_hal.h"
 #include "syslog.h"
 #include <stdio.h>
+
+extern void LED_ServiceTick(void);
 
 static uint32_t g_boot_code = SYS_ERR_NONE;
 static uint8_t g_inited = 0;
@@ -72,6 +91,7 @@ void SysWatchdog_Tick(void) {
     SysWatchdog_FeedNow();
   }
 
+  LED_ServiceTick();
   service_display_background(now);
 }
 

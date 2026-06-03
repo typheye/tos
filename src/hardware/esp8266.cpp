@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    esp8266.cpp
+ * @author  Typheye
+ * @brief   ESP8266 AT driver implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/led.hpp"
 #include "hardware/include/usart.hpp"
@@ -24,7 +41,7 @@ static void esp_led_success(void) {
 
 static void esp_led_failure(void) {
   boardLed.off();
-  warnLed.on();
+  LED_WarnBlink300ms();
 }
 
 extern "C" {
@@ -34,10 +51,10 @@ extern uint8_t esp8266_data_ready;
 extern volatile uint32_t uart2_rx_count;
 }
 
-// 全局实例
+// Global instance
 CCMRAM ESP8266 esp8266(&huart2);
 
-// ==================== C++ 类实现 ====================
+// ==================== C++ class implementation ====================
 
 ESP8266::ESP8266(UART_HandleTypeDef *huart) {
   _huart = huart;
@@ -96,7 +113,7 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
 
       if (strstr((char *)_rx_buffer, "ERROR") != NULL ||
           strstr((char *)_rx_buffer, "FAIL") != NULL) {
-        /* Communication failure: keep boardLed on until next success */
+        /* Communication failure: blink warn LED without blocking */
         clearRxBuffer();
         esp_led_failure();
         return false;
@@ -235,7 +252,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
           strstr((char *)_rx_buffer, "FAIL") != NULL) {
         LOG_E("ESP", "Got ERROR/FAIL after %lums, rx=%u bytes",
               (unsigned long)(HAL_GetTick() - start), _rx_index);
-        /* Communication failure: keep boardLed on until next success */
+        /* Communication failure: blink warn LED without blocking */
         clearRxBuffer();
         esp_led_failure();
         return false;
@@ -255,7 +272,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
   LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes",
         (unsigned long)timeout_ms, _rx_index);
-  /* Communication failure: keep boardLed on until next success */
+  /* Communication failure: blink warn LED without blocking */
   clearRxBuffer();
   esp_led_failure();
   return false;
@@ -457,16 +474,35 @@ bool ESP8266::getRSSI(int *rssi) {
 
   const char *cmds[] = {"AT+CWJAP?", "AT+CWJAP_CUR?"};
   for (unsigned i = 0; i < sizeof(cmds) / sizeof(cmds[0]); ++i) {
+    char tx[24];
+    int n = snprintf(tx, sizeof(tx), "%s\r\n", cmds[i]);
+    if (n <= 0 || n >= (int)sizeof(tx)) continue;
+
     clearRxBuffer();
-    if (!sendCommand(cmds[i], "OK", 1800)) continue;
-    int v = 0;
-    if (esp_parse_rssi_from_cwjap((const char *)_rx_buffer, &v)) {
-      *rssi = v;
-      LOG_D("ESP", "RSSI=%d dBm", v);
-      return true;
+    HAL_UART_Transmit(_huart, (uint8_t *)tx, (uint16_t)n, 300);
+
+    uint32_t start = HAL_GetTick();
+    while (HAL_GetTick() - start < 900U) {
+      processPendingData();
+      const char *rx = (const char *)_rx_buffer;
+      if (_rx_overflow) break;
+      if (strstr(rx, "OK")) {
+        int v = 0;
+        if (esp_parse_rssi_from_cwjap(rx, &v)) {
+          *rssi = v;
+          LOG_D("ESP", "RSSI=%d dBm", v);
+          clearRxBuffer();
+          return true;
+        }
+        break;
+      }
+      if (strstr(rx, "ERROR") || strstr(rx, "FAIL")) break;
+      HAL_Delay(10);
+      SysWatchdog_Tick();
     }
   }
 
+  clearRxBuffer();
   return false;
 }
 
@@ -474,7 +510,7 @@ bool ESP8266::sendString(const char *str) {
   return sendData((const uint8_t *)str, strlen(str));
 }
 
-// ==================== C 接口实现 ====================
+// ==================== C interface implementation ====================
 
 void ESP8266_Init(void) { esp8266.init(); }
 

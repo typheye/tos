@@ -1,14 +1,12 @@
 /**
  ******************************************************************************
  * @file    libvan.h
- * @author  Binchao Hu, Yutao Cheng
- * @brief   Utility library for value-to-value conversions
- *          This file provides functions for converting floating point values
- *          to strings with various formatting options.
+ * @author  Typheye
+ * @brief   Libvan interface.
  ******************************************************************************
  * @attention
  *
- * Copyright (c) 2026 JanPNP Development Team. All rights reserved.
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
  *
  * This software is licensed under terms that can be found in the LICENSE file
  * in the root directory of this software component.

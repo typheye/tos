@@ -1,6 +1,18 @@
 /**
+ ******************************************************************************
  * @file    tos_api.cpp
- * @brief   TOS cloud API client: OTA check plus async heartbeat commands.
+ * @author  Typheye
+ * @brief   TOS cloud API client implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "tos_api.h"
@@ -28,6 +40,9 @@ extern Buzzer buzzer1;
 #define TOS_START_DELAY_MS 2500U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
 #define TOS_NET_STUCK_MS       30000U
+#define TOS_RSSI_REFRESH_MS     60000U
+#define TOS_RSSI_RETRY_MS       15000U
+#define TOS_RSSI_IDLE_BUDGET_MS 1800U
 #define TOS_ACK_MAX_CMDS   5
 #define TOS_MAX_CMD_OBJ     448U
 
@@ -127,17 +142,34 @@ static const char *response_body(const char *resp) {
 
 static void note_transport_failure(const char *where);
 
+static bool rssi_valid(int rssi) {
+  return rssi < 0 && rssi >= -127;
+}
+
 static int cached_rssi(bool refresh) {
   (void)refresh;
-  uint32_t now = HAL_GetTick();
-  /* Heartbeat must be non-blocking.  Do not send AT+CWJAP? here; keep the
-   * last cached value and let future explicit telemetry code refresh it at a
-   * controlled time. */
-  if (g_last_rssi == 0) {
-    g_last_rssi = wlan_enabled() ? -99 : 0;
-    g_last_rssi_refresh_ms = now;
+  if (!wlan_enabled()) return 0;
+  return rssi_valid(g_last_rssi) ? g_last_rssi : -99;
+}
+
+static void maybe_refresh_rssi(uint32_t now) {
+  if (!wlan_enabled() || g_offline_for_this_boot || !network_ready()) return;
+  if (g_ack_body[0]) return;
+  if (g_last_rssi_refresh_ms != 0U) {
+    uint32_t interval = rssi_valid(g_last_rssi) ? TOS_RSSI_REFRESH_MS : TOS_RSSI_RETRY_MS;
+    if ((uint32_t)(now - g_last_rssi_refresh_ms) < interval) return;
   }
-  return g_last_rssi;
+
+  int rssi = 0;
+  g_last_rssi_refresh_ms = now;
+  if (ESP8266_GetRSSI(&rssi) && rssi_valid(rssi)) {
+    if (g_last_rssi != rssi) {
+      LOG_D("TAPI", "RSSI cache: %d dBm", rssi);
+    }
+    g_last_rssi = rssi;
+  } else if (!rssi_valid(g_last_rssi)) {
+    g_last_rssi = -99;
+  }
 }
 
 static bool build_heartbeat_body(char *out, size_t out_sz) {
@@ -606,6 +638,8 @@ void TosApi_Init(void) {
   g_cloud_was_online = false;
   g_offline_for_this_boot = online_intended_config() && !network_ready();
   g_transport_fail_count = 0;
+  g_last_rssi = wlan_enabled() ? -99 : 0;
+  g_last_rssi_refresh_ms = 0;
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
         g_device_id, (unsigned long)TOS_HEARTBEAT_MS,
@@ -714,7 +748,11 @@ void TosApi_Tick(void) {
 
   if (g_phase != TOS_PHASE_IDLE) return;
   if (ns == NET_ASYNC_DONE || ns == NET_ASYNC_FAILED) Net_AsyncReset();
-  if (!time_due(now, g_next_heartbeat_ms)) return;
+  if (!time_due(now, g_next_heartbeat_ms)) {
+    uint32_t until_hb = g_next_heartbeat_ms - now;
+    if (until_hb > TOS_RSSI_IDLE_BUDGET_MS) maybe_refresh_rssi(now);
+    return;
+  }
 
   if (!wlan_enabled()) {
     /* User-selected offline mode: no cloud traffic and no system error. */

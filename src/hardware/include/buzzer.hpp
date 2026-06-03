@@ -1,12 +1,12 @@
 /**
  ******************************************************************************
  * @file    buzzer.hpp
- * @author  Binchao Hu, Yutao Cheng
- * @brief   Solenoid buzzer control class
+ * @author  Typheye
+ * @brief   Buzzer interface.
  ******************************************************************************
  * @attention
  *
- * Copyright (c) 2026 JanPNP Development Team. All rights reserved.
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
  *
  * This software is licensed under terms that can be found in the LICENSE file
  * in the root directory of this software component.

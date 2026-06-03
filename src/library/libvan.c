@@ -1,14 +1,12 @@
 /**
  ******************************************************************************
  * @file    libvan.c
- * @author  Binchao Hu, Yutao Cheng
- * @brief   Utility library implementation
- *          This file provides the implementation of float to string conversion
- *          functions with various formatting options.
+ * @author  Typheye
+ * @brief   Libvan implementation.
  ******************************************************************************
  * @attention
  *
- * Copyright (c) 2026 JanPNP Development Team. All rights reserved.
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
  *
  * This software is licensed under terms that can be found in the LICENSE file
  * in the root directory of this software component.

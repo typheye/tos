@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    hotspot_activity.cpp
+ * @author  Typheye
+ * @brief   Hotspot Activity implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "include/hotspot_activity.hpp"
 #include "components/include/alert.hpp"
 #include "components/include/keyboard.hpp"

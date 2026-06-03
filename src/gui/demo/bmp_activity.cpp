@@ -1,11 +1,18 @@
 /**
+ ******************************************************************************
  * @file    bmp_activity.cpp
- * @brief   BMP180 Barometric Pressure Sensor Demo
+ * @author  Typheye
+ * @brief   Bmp Activity implementation.
+ ******************************************************************************
+ * @attention
  *
- * Menu:
- *   00 Return
- *   01 Real-time
- *   02 Chart
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "include/bmp_activity.hpp"

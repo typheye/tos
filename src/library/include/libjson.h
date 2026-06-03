@@ -1,9 +1,18 @@
 /**
+ ******************************************************************************
  * @file    libjson.h
- * @brief   Lightweight JSON parser — C-compatible, no malloc
+ * @author  Typheye
+ * @brief   Libjson interface.
+ ******************************************************************************
+ * @attention
  *
- * All functions operate on a raw C string buffer (e.g. an HTTP response).
- * No dynamic memory allocation — safe for embedded use.
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #ifndef LIBJSON_H

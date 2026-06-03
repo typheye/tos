@@ -1,13 +1,18 @@
 /**
+ ******************************************************************************
  * @file    wlan_activity.cpp
- * @brief   WLAN Settings
+ * @author  Typheye
+ * @brief   Wlan Activity implementation.
+ ******************************************************************************
+ * @attention
  *
- * Menu:
- *   00 Return
- *   01 WLAN <ON/OFF>
- *      Scanning... / Connected
- *   02 Auto Connect <ON/OFF>
- *   03 Saved (N)
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "include/wlan_activity.hpp"

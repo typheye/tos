@@ -1,14 +1,18 @@
 /**
+ ******************************************************************************
  * @file    i2c_activity.cpp
- * @brief   I2C Bus Scanner
+ * @author  Typheye
+ * @brief   I2C Activity implementation.
+ ******************************************************************************
+ * @attention
  *
- * Flow:
- *   1. Show scanning screen with progress
- *   2. Scan all addresses 0x08–0x77
- *   3. Display results as scrollable list
- *      - 00 Return
- *      -  - NAME (0x00)  (per found device)
- *   4. ENTER on a device shows detail popup via alert_show
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "include/i2c_activity.hpp"

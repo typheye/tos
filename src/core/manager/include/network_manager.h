@@ -1,15 +1,18 @@
 /**
+ ******************************************************************************
  * @file    network_manager.h
- * @brief   Unified network request manager — HTTP GET/POST via ESP8266
+ * @author  Typheye
+ * @brief   Network Manager interface.
+ ******************************************************************************
+ * @attention
  *
- * All network communication is routed through this module so that
- * - LED feedback (boardLed / warnLed) is applied uniformly,
- * - hard-disabled check is enforced,
- * - raw AT commands are encapsulated in one place.
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
  *
- * LED rules:
- *   Request succeeds        → boardLed  blink once (100 ms)
- *   Request fails / timeout → warnLed   ON (until next success)
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #ifndef NETWORK_MANAGER_H
@@ -51,7 +54,7 @@ void Net_LedSuccess(void);
 
 /**
  * @brief  Apply LED feedback for a failed network operation.
- *         warnLed ON.
+ *         warnLed blinks for 300 ms.
  */
 void Net_LedFailure(void);
 
@@ -63,7 +66,7 @@ void Net_LedFailure(void);
  *
  *         LED rules are applied automatically:
  *           success → boardLed blink (100 ms)
- *           failure → warnLed ON
+ *           failure → warnLed blink 300 ms
  *
  * @param  host        Target hostname (e.g. "www.baidu.com")
  * @param  port        TCP port (usually 80)

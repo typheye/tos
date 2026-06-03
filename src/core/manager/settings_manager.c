@@ -1,7 +1,20 @@
 /**
+ ******************************************************************************
  * @file    settings_manager.c
- * @brief   Settings manager — Flash-backed persistent config
+ * @author  Typheye
+ * @brief   Settings Manager implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
+
 #include "settings_manager.h"
 #include "hardware/include/esp8266.hpp"
 #include "hardware/include/sfhd.h"

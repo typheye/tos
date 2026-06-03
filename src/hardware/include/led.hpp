@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    led.hpp
+ * @author  Typheye
+ * @brief   Led interface.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #ifndef __LED_HPP
 #define __LED_HPP
 
@@ -15,6 +32,10 @@ void LED_BoardOff(void);
 void LED_BoardBlink100ms(void);
 void LED_WarnOn(void);
 void LED_WarnOff(void);
+/* Non-blocking 300 ms warning pulse. The actual off edge is serviced from
+ * SysWatchdog_Tick(), so network/UI paths never block for LED feedback. */
+void LED_WarnBlink300ms(void);
+void LED_ServiceTick(void);
 
 #ifdef __cplusplus
 }

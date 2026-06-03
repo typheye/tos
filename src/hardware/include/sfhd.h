@@ -1,10 +1,20 @@
 /**
+ ******************************************************************************
  * @file    sfhd.h
- * @brief   STM32F407 Flash 数据存储接口
- * @note    使用 Sector 11 (0x080E0000, 128KB) 作为数据存储区
- *          Sector 10 (0x080C0000, 128KB) 作为备份区
- *          Flash 擦写寿命约 1 万次，频繁写入请使用滚存机制
+ * @author  Typheye
+ * @brief   Sfhd interface.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
+
 #ifndef __SFHD_H
 #define __SFHD_H
 

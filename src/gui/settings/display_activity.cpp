@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    display_activity.cpp
+ * @author  Typheye
+ * @brief   Display Activity implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "include/display_activity.hpp"
 #include "components/include/alert.hpp"
 #include "core/manager/include/settings_manager.h"

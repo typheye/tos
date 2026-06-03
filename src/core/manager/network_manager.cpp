@@ -1,10 +1,18 @@
 /**
+ ******************************************************************************
  * @file    network_manager.cpp
- * @brief   Unified network request manager — HTTP via ESP8266
+ * @author  Typheye
+ * @brief   ESP8266 HTTP network manager implementation.
+ ******************************************************************************
+ * @attention
  *
- * All network communication is routed through this module.
- * LED rules are applied at the low-level I/O boundaries.  Keep LED feedback
- * non-blocking; the network path must not steal UI/brightness time.
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #include "include/network_manager.h"
@@ -42,7 +50,7 @@ static void net_led_success(void) {
 }
 
 static void net_led_failure(void) {
-  warnLed.on();
+  LED_WarnBlink300ms();
 }
 
 /* ── Low-level UART helpers ───────────────────────────────────── */
@@ -365,7 +373,7 @@ static void net_async_finish(bool ok, const char *reason) {
     net_log_response(reason ? reason : "Async fail");
     net_async_close_best_effort();
     esp8266.resetRxBuffer();
-    warnLed.on();
+    LED_WarnBlink300ms();
     if (++g_async_fail_streak >= 3U) {
       LOG_W("NET", "Async fail streak=%u; leaving ESP state untouched", g_async_fail_streak);
       /* Runtime ESP recovery/re-init is intentionally forbidden.  The cloud

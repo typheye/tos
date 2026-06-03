@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    esp8266.hpp
+ * @author  Typheye
+ * @brief   ESP8266 AT driver interface.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #ifndef ESP8266_HPP
 #define ESP8266_HPP
 
@@ -9,63 +26,63 @@
 extern "C" {
 #endif
 
-// ==================== C 兼容接口 ====================
+// ==================== C-compatible interface ====================
 
 /**
- * @brief 初始化 ESP8266
+ * @brief Initialize ESP8266.
  */
 void ESP8266_Init(void);
 
 /**
- * @brief 处理接收到的数据（在中断中调用）
- * @param data 数据指针
- * @param len 数据长度
+ * @brief Process received data from the interrupt path.
+ * @param data Data pointer.
+ * @param len Data length.
  */
 void ESP8266_ProcessRxData(uint8_t *data, uint16_t len);
 
 /**
- * @brief 发送命令
- * @param cmd 命令字符串
- * @param expected_response 期望的响应
- * @param timeout_ms 超时时间
- * @return true 成功, false 失败
+ * @brief Send an AT command.
+ * @param cmd Command string.
+ * @param expected_response Expected response token.
+ * @param timeout_ms Timeout in milliseconds.
+ * @return true on success, false on failure.
  */
 bool ESP8266_SendCommand(const char *cmd, const char *expected_response,
                          uint32_t timeout_ms);
 
 /**
- * @brief 连接 WiFi
- * @param ssid WiFi SSID
- * @param password WiFi 密码
- * @return true 成功, false 失败
+ * @brief Join a Wi-Fi network.
+ * @param ssid Wi-Fi SSID.
+ * @param password Wi-Fi password.
+ * @return true on success, false on failure.
  */
 bool ESP8266_ConnectWiFi(const char *ssid, const char *password);
 
 /**
- * @brief 发送数据
- * @param data 数据指针
- * @param len 数据长度
- * @return true 成功, false 失败
+ * @brief Send raw data.
+ * @param data Data pointer.
+ * @param len Data length.
+ * @return true on success, false on failure.
  */
 bool ESP8266_SendData(const uint8_t *data, uint16_t len);
 
 /**
- * @brief 启动 TCP 连接
- * @param host 主机地址
- * @param port 端口
- * @return true 成功, false 失败
+ * @brief Start a TCP connection.
+ * @param host Host name.
+ * @param port TCP port.
+ * @return true on success, false on failure.
  */
 bool ESP8266_StartTCP(const char *host, uint16_t port);
 
 /**
- * @brief 获取 ESP8266 状态
- * @return 0=断开, 1=连接中, 2=已连接, 3=已获取IP, 4=错误
+ * @brief Get ESP8266 state.
+ * @return 0=disconnected, 1=joining, 2=connected, 3=got IP, 4=error.
  */
 int ESP8266_GetState(void);
 
 /**
- * @brief 检查是否已连接
- * @return true 已连接, false 未连接
+ * @brief Check whether ESP8266 is connected.
+ * @return true if connected, false otherwise.
  */
 bool ESP8266_IsConnected(void);
 void ESP8266_Disconnect(void);
@@ -73,9 +90,9 @@ bool ESP8266_GetIP(char *buf, uint16_t sz);
 bool ESP8266_GetRSSI(int *rssi);
 
 /**
- * @brief 检查 ESP8266 是否处于硬断开状态
- *        硬断开 = 模块初始化失败，物理上不可用
- * @return true 硬断开（不可用）, false 正常
+ * @brief Check whether ESP8266 is unavailable for this boot.
+ *        Hard-disabled means the module failed boot-time initialization.
+ * @return true if unavailable, false if usable.
  */
 bool ESP8266_IsHardDisabled(void);
 
@@ -92,7 +109,7 @@ void ESP8266_ClearRecoveryFailureCount(void);
 }
 #endif
 
-// ==================== C++ 类定义 ====================
+// ==================== C++ class definition ====================
 
 #ifdef __cplusplus
 
@@ -116,10 +133,10 @@ public:
   uint16_t recoveryFailureCount(void) const { return _recover_failures; }
   void clearRecoveryFailureCount(void) { _recover_failures = 0; }
 
-  // 数据处理（在中断中调用）
+  // Data processing, called from the interrupt path
   void processRxData(uint8_t *data, uint16_t len);
 
-  // 在 ESP8266 类中添加以下方法声明
+  // ESP8266 helper methods
   bool scanNetworks(void);
   void disconnect(void);
   bool getIP(char *ip_buffer, uint16_t buffer_size);
@@ -135,8 +152,8 @@ public:
 
 private:
   UART_HandleTypeDef *_huart;
-  int _state; // 0=断开, 1=连接中, 2=已连接, 3=已获取IP
-  bool _hard_disabled; // true = temporarily unreachable, recovery may clear it
+  int _state; // 0=disconnected, 1=joining, 2=TCP connected, 3=got IP
+  bool _hard_disabled; // true = unavailable for this boot
   uint32_t _last_recover_ms;
   uint8_t _recover_attempts;
   uint16_t _recover_failures;
@@ -149,7 +166,7 @@ private:
   void parseResponse(const char *response);
 };
 
-// 全局实例声明
+// Global instance声明
 extern ESP8266 esp8266;
 
 #endif // __cplusplus

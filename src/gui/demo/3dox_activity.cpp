@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    3dox_activity.cpp
+ * @author  Typheye
+ * @brief   3Dox Activity implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "demo/include/3dox_activity.hpp"
 #include "hardware/include/key.hpp"
 #include "hardware/include/lcd.hpp"

@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    libehw.cpp
+ * @author  Typheye
+ * @brief   Libehw implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "include/libehw.h"
 #include "hardware/include/jy901s.hpp"
 #include "hardware/include/bmp180.hpp"

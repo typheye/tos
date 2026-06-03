@@ -1,4 +1,21 @@
 /**
+ ******************************************************************************
+ * @file    lib3dox.c
+ * @author  Typheye
+ * @brief   Lib3Dox implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
+/**
  * lib3dox.c - 渐进式路径追踪渲染器
  * 移植自 STC8H 原版，适配 STM32F407
  * 三角形数据原样来自 51 版本，确保几何完全一致

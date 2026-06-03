@@ -1,10 +1,18 @@
 /**
+ ******************************************************************************
  * @file    syslog.h
- * @brief   Unified logging system — Linux-kernel-style formatted output
- * @format  [timestamp] [LEVEL] [MOD  ] [task      ] message
+ * @author  Typheye
+ * @brief   Syslog interface.
+ ******************************************************************************
+ * @attention
  *
- * ANSI colors are OFF by default. Define SYSLOG_USE_COLOR to enable.
- * Compile-time level filtering via SYSLOG_MAX_LEVEL (default: DEBUG).
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
  */
 
 #ifndef SYSLOG_H
