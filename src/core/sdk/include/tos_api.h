@@ -19,6 +19,25 @@
 #define TOS_API_H
 
 #include <stdbool.h>
+#include "core/include/config.h"
+#include "core/manager/include/emotion_manager.h"
+#include "core/manager/include/network_manager.h"
+#include "core/manager/include/settings_manager.h"
+#ifdef __cplusplus
+#include "hardware/include/buzzer.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/esp8266.hpp"
+#endif
+#include "include/libjson.h"
+#include "main.h"
+#include "core/sys/include/systime.h"
+#include "core/sys/include/syswatchdog.h"
+#include "core/sys/include/syshandle.h"
+#include "core/sys/include/syslog.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

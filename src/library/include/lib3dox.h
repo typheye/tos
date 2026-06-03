@@ -19,6 +19,10 @@
 #define __LIB3D_H
 
 #include <stdint.h>
+#include <float.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define RENDER_WIDTH 160
 #define RENDER_HEIGHT 80

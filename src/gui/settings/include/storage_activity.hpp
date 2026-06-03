@@ -17,5 +17,16 @@
 
 #ifndef STORAGE_ACTIVITY_HPP
 #define STORAGE_ACTIVITY_HPP
+#include "core/sys/include/systime.h"
+#include "core/sys/include/syshandle.h"
+#include "ff.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "hardware/include/tsdio.hpp"
+#include "include/libpd.h"
+#include "core/sys/include/syslog.h"
+#include <cstdio>
+
 void storage_activity_run(void);
 #endif

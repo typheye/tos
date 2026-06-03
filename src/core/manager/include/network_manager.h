@@ -20,6 +20,17 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#ifdef __cplusplus
+#include "hardware/include/esp8266.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/led.hpp"
+#endif
+#include "include/syshandle.h"
+#include "core/sys/include/syslog.h"
+#include "core/sys/include/syswatchdog.h"
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {

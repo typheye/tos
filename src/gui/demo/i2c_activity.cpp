@@ -16,14 +16,7 @@
  */
 
 #include "include/i2c_activity.hpp"
-#include "components/include/alert.hpp"
-#include "core/sys/include/systime.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include "main.h"
-#include <cstdio>
+
 
 extern KeyManager keyManager;
 extern I2C_HandleTypeDef hi2c1;

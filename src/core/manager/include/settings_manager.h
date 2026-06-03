@@ -20,6 +20,15 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#ifdef __cplusplus
+#include "hardware/include/esp8266.hpp"
+#else
+bool ESP8266_IsHardDisabled(void);
+#endif
+#include "hardware/include/sfhd.h"
+#include "core/sys/include/syslog.h"
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {

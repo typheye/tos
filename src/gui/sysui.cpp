@@ -16,18 +16,7 @@
  */
 
 #include "include/sysui.hpp"
-#include "core/sdk/include/tos_api.h"
-#include "core/sys/include/systime.h"
-#include "gui/demo/include/demo_activity.hpp"
-#include "gui/miniapp/hid_tools/include/app.h"
-#include "gui/include/settings.hpp"
-#include "gui/miniapp/file_manager/include/app.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/launcher.hpp"
-#include "include/libpd.h"
-#include "syslog.h"
+
 
 extern LCD boardLCD;
 extern TRTC boardTRTC;

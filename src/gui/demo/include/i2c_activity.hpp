@@ -17,13 +17,21 @@
 
 #ifndef I2C_ACTIVITY_HPP
 #define I2C_ACTIVITY_HPP
+#include "components/include/alert.hpp"
+#include "core/sys/include/systime.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include "main.h"
+#include <cstdio>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void i2c_scan_activity(void);
-void i2c_scan_activity_gui(void); // 新增 GUI 版本
+void i2c_scan_activity_gui(void); 
 
 #ifdef __cplusplus
 }

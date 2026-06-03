@@ -1,8 +1,8 @@
 /**
  ******************************************************************************
- * @file    app.h
+ * @file    pages.hpp
  * @author  Typheye
- * @brief   App interface.
+ * @brief   pages interface.
  ******************************************************************************
  * @attention
  *
@@ -15,46 +15,20 @@
  ******************************************************************************
  */
 
-#ifndef FILE_MANAGER_APP_H
-#define FILE_MANAGER_APP_H
-#ifdef __cplusplus
+#ifndef PAGES_HPP_
+#define PAGES_HPP_
 #include "components/include/alert.hpp"
-#endif
-#ifdef __cplusplus
-#include "components/include/confirm.hpp"
-#endif
-#include "core/manager/include/file_manager.h"
-#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/syshandle.h"
 #include "core/sys/include/systime.h"
-#include "fatfs.h"
-#ifdef __cplusplus
+#include "hardware/include/jy901s.hpp"
 #include "hardware/include/key.hpp"
-#endif
-#ifdef __cplusplus
 #include "hardware/include/lcd.hpp"
-#endif
-#include "hardware/include/sfhd.h"
-#ifdef __cplusplus
+#include "hardware/include/thid.hpp"
 #include "hardware/include/trtc.hpp"
-#endif
-#ifdef __cplusplus
-#include "hardware/include/tsdio.hpp"
-#endif
+#include "gui/miniapp/hid_tools/include/hid_tools_pages.hpp"
 #include "include/libpd.h"
-#include "core/sys/include/syslog.h"
-#include <stdio.h>
-#include <string.h>
-#include <strings.h>
+#include <cstdio>
+#include <cstring>
+#include <math.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void file_manager_run(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* PAGES_HPP_ */

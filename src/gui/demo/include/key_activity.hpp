@@ -17,6 +17,12 @@
 
 #ifndef KEY_ACTIVITY_HPP
 #define KEY_ACTIVITY_HPP
+#include "core/sys/include/systime.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include <cstdio>
 
 #ifdef __cplusplus
 extern "C" {

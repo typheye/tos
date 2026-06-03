@@ -17,6 +17,15 @@
 
 #ifndef DISPLAY_ACTIVITY_HPP
 #define DISPLAY_ACTIVITY_HPP
+#include "components/include/alert.hpp"
+#include "core/manager/include/settings_manager.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include <cstdio>
+#include "core/sys/include/syslog.h"
+#include "core/sys/include/systime.h"
 
 void display_activity_run(void);
 

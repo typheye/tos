@@ -1,8 +1,8 @@
 /**
  ******************************************************************************
- * @file    lib3dgyro.h
+ * @file    syscalls_override.h
  * @author  Typheye
- * @brief   Lib3Dgyro interface.
+ * @brief   syscalls_override interface.
  ******************************************************************************
  * @attention
  *
@@ -15,22 +15,11 @@
  ******************************************************************************
  */
 
-#ifndef __LIB3DGYRO_H
-#define __LIB3DGYRO_H
+#ifndef SYSCALLS_OVERRIDE_H_
+#define SYSCALLS_OVERRIDE_H_
+#include "main.h"
+#include <errno.h>
+#include <stdarg.h>
+#include <stdio.h>
 
-#include <stdint.h>
-#include "library/include/libpd.h"
-#include <math.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void gyro_cube_init(int16_t center_x, int16_t center_y, int16_t size);
-void gyro_cube_draw(float roll, float pitch, float yaw);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* SYSCALLS_OVERRIDE_H_ */

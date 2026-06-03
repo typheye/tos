@@ -15,14 +15,8 @@
  ******************************************************************************
  */
 
-#include "systime.h"
-#include "../manager/include/network_manager.h"
-#include "../manager/include/settings_manager.h"
-#include "hardware/include/esp8266.hpp"
-#include "hardware/include/trtc.hpp"
-#include "syslog.h"
-#include <cstdio>
-#include <cstring>
+#include "include/systime.h"
+
 
 extern TRTC boardTRTC;
 extern UART_HandleTypeDef huart2;

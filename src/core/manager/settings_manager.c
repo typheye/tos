@@ -15,12 +15,8 @@
  ******************************************************************************
  */
 
-#include "settings_manager.h"
-#include "hardware/include/esp8266.hpp"
-#include "hardware/include/sfhd.h"
-#include "syslog.h"
-#include <stdio.h>
-#include <string.h>
+#include "include/settings_manager.h"
+
 
 #define CCMRAM __attribute__((section(".ccmram")))
 static CCMRAM Settings_t g_settings;

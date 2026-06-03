@@ -16,30 +16,27 @@
  */
 
 #include "include/libfs.h"
-#include "diskio.h"
-#include "ff.h"
+
 /* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
 extern bool TSDIO_IsHardDisabled(void);
-#include <stdlib.h>
-#include <string.h>
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
 #endif
 
-// FATFS 对象
+
 static CCMRAM FATFS fs;
 
-// 当前工作目录
+
 static CCMRAM char current_dir[256] = "0:";
 
-// 最近错误码
+
 static CCMRAM FS_Status_t last_error = FS_OK;
 
-// 文件系统是否已挂载
+
 static CCMRAM bool is_mounted = false;
 
-// 将 FATFS 错误码转换为 FS_Status_t
+
 static FS_Status_t fatfs_error_to_fs(FRESULT res) {
   switch (res) {
   case FR_OK:
@@ -87,7 +84,7 @@ static FS_Status_t fatfs_error_to_fs(FRESULT res) {
   }
 }
 
-// 转换 FATFS 文件模式
+
 static BYTE fatfs_open_mode(FS_Mode_t mode) {
   BYTE fatfs_mode = 0;
 
@@ -117,7 +114,7 @@ static BYTE fatfs_open_mode(FS_Mode_t mode) {
   return fatfs_mode;
 }
 
-// 转换 FATFS 文件属性
+
 static void fatfs_to_file_info(FILINFO *fat_info, FS_FileInfo_t *info) {
   if (!fat_info || !info)
     return;
@@ -130,7 +127,7 @@ static void fatfs_to_file_info(FILINFO *fat_info, FS_FileInfo_t *info) {
   info->name[sizeof(info->name) - 1] = '\0';
 }
 
-// ========== 文件系统初始化和管理 ==========
+
 
 FS_Status_t FS_Init(void) {
   last_error = FS_OK;
@@ -256,7 +253,7 @@ FS_Status_t FS_GetVolumeInfo(const char *path, uint32_t *total_mb,
   return FS_OK;
 }
 
-// ========== 文件和目录操作 ==========
+
 
 FS_Status_t FS_Open(FS_FileHandle *file, const char *path, FS_Mode_t mode) {
   FRESULT res;
@@ -452,7 +449,7 @@ bool FS_Eof(FS_FileHandle file) {
   return (f_eof(fil) != 0);
 }
 
-// ========== 目录操作 ==========
+
 
 FS_Status_t FS_OpenDir(FS_DirHandle *dir, const char *path) {
   FRESULT res;
@@ -548,7 +545,7 @@ FS_Status_t FS_CreateDir(const char *path) {
 
 FS_Status_t FS_RemoveDir(const char *path) { return FS_Remove(path); }
 
-// ========== 文件操作 ==========
+
 
 FS_Status_t FS_Remove(const char *path) {
   FRESULT res;
@@ -661,7 +658,7 @@ FS_Status_t FS_ChangeDir(const char *path) {
   return FS_OK;
 }
 
-// ========== 便捷函数 ==========
+
 
 FS_Status_t FS_WriteFile(const char *path, const void *data, uint32_t size) {
   FS_FileHandle file;
@@ -821,7 +818,7 @@ FS_Status_t FS_ListDir(const char *path, FS_FileInfo_t *infos,
   return FS_OK;
 }
 
-// ========== 错误处理 ==========
+
 
 FS_Status_t FS_GetLastError(void) { return last_error; }
 

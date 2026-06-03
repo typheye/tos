@@ -17,6 +17,15 @@
 
 #ifndef KEYBOARD_HPP
 #define KEYBOARD_HPP
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/syswatchdog.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "include/libpd.h"
+#include "include/pot.hpp"
+#include <cstdio>
+#include <cstring>
+#include "core/sys/include/syslog.h"
 
 // Opens an ASCII keyboard overlay for password entry.
 // title: shown at top (e.g. "WiFi Password")

@@ -21,6 +21,14 @@
 #include "main.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include "hardware/include/led.hpp"
+#include "hardware/include/usart.hpp"
+#include "include/syshandle.h"
+#include "core/sys/include/syslog.h"
+#include "core/sys/include/syswatchdog.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -166,7 +174,7 @@ private:
   void parseResponse(const char *response);
 };
 
-// Global instance声明
+
 extern ESP8266 esp8266;
 
 #endif // __cplusplus

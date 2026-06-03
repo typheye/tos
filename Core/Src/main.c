@@ -34,7 +34,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#ifdef __cplusplus
 #include "hardware/include/esp8266.hpp" // 确保 ESP8266 函数可用
+#endif
 #include <stdio.h>                      // 添加这个头文件 for printf
 #include "core/sys/include/syswatchdog.h"
 

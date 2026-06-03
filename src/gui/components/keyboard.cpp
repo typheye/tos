@@ -16,15 +16,7 @@
  */
 
 #include "include/keyboard.hpp"
-#include "core/sdk/include/tos_api.h"
-#include "core/sys/include/syswatchdog.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "include/libpd.h"
-#include "include/pot.hpp"
-#include <cstdio>
-#include <cstring>
-#include "syslog.h"
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

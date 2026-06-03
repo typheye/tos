@@ -15,10 +15,8 @@
  ******************************************************************************
  */
 
-#include "main.h"
-#include <errno.h>
-#include <stdarg.h>
-#include <stdio.h>
+#include "include/syscalls_override.h"
+
 
 extern UART_HandleTypeDef huart1;
 

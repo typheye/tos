@@ -16,21 +16,7 @@
  */
 
 #include "include/demo_activity.hpp"
-#include "core/sdk/include/tos_api.h"
-#include "core/sys/include/systime.h"
-#include "gui/include/settings.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/3dox_activity.hpp"
-#include "include/bmp_activity.hpp"
-#include "include/i2c_activity.hpp"
-#include "include/jyro_activity.hpp"
-#include "include/key_activity.hpp"
-#include "include/libpd.h"
-#include "include/sn74hc00n_activity.hpp"
-#include "include/tcs3472_activity.hpp"
-#include <cstdio>
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

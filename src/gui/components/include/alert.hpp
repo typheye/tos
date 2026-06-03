@@ -17,6 +17,15 @@
 
 #ifndef ALERT_HPP
 #define ALERT_HPP
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/syswatchdog.h"
+#include "core/sys/include/systime.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include <cstring>
+#include "core/sys/include/syslog.h"
 
 // Show a blocking alert popup. User presses ENTER to dismiss.
 void alert_show(const char *title, const char *msg);

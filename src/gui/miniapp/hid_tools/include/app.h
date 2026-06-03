@@ -17,6 +17,21 @@
 
 #ifndef HID_TOOLS_APP_H
 #define HID_TOOLS_APP_H
+#ifdef __cplusplus
+#include "gui/miniapp/hid_tools/include/hid_tools_pages.hpp"
+#endif
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/systime.h"
+#ifdef __cplusplus
+#include "hardware/include/key.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/lcd.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/trtc.hpp"
+#endif
+#include "include/libpd.h"
 
 #ifdef __cplusplus
 extern "C" {

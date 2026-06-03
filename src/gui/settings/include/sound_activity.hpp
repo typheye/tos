@@ -17,6 +17,13 @@
 
 #ifndef SOUND_ACTIVITY_HPP
 #define SOUND_ACTIVITY_HPP
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include <cstdio>
+#include "core/sys/include/syslog.h"
+#include "core/sys/include/systime.h"
 
 void sound_activity_run(void);
 

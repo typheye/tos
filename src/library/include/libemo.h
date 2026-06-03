@@ -19,6 +19,10 @@
 #define __LIBEMO_H
 
 #include <stdint.h>
+#include "include/lcd.h"
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -16,15 +16,13 @@
  */
 
 #include "include/sfhd.h"
-#include "syslog.h"
-#include <stdio.h>
-#include <string.h>
 
-/* ========== 内部宏 ========== */
-#define FLASH_TIMEOUT    500u   /* 操作超时(ms) */
+
+
+#define FLASH_TIMEOUT    500u   
 #define ALIGN4(x)        (((uint32_t)(x) + 3u) & ~3u)
 
-/* ========== 内部: 等待 Flash 就绪 ========== */
+
 static __attribute__((unused)) Flash_Status_t wait_ready(uint32_t timeout) {
   uint32_t tick = HAL_GetTick();
   while (HAL_FLASH_GetError() != 0) {
@@ -33,11 +31,11 @@ static __attribute__((unused)) Flash_Status_t wait_ready(uint32_t timeout) {
   return FLASH_OK;
 }
 
-/* ========== 内部: 解锁/上锁 ========== */
+
 static inline void flash_unlock(void) { HAL_FLASH_Unlock(); }
 static inline void flash_lock(void)   { HAL_FLASH_Lock(); }
 
-/* ========== 擦除单个扇区 ========== */
+
 static Flash_Status_t erase_sector(uint32_t sector, uint32_t addr) {
   flash_unlock();
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
@@ -56,7 +54,7 @@ static Flash_Status_t erase_sector(uint32_t sector, uint32_t addr) {
   return (st == HAL_OK) ? FLASH_OK : FLASH_ERR_ERASE;
 }
 
-/* ========== 内部: 编程一个字(32bit) ========== */
+
 static Flash_Status_t program_word(uint32_t addr, uint32_t data) {
   flash_unlock();
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
@@ -67,7 +65,7 @@ static Flash_Status_t program_word(uint32_t addr, uint32_t data) {
   return ret;
 }
 
-/* ========== 内部: 编程多字 ========== */
+
 static Flash_Status_t program_words(uint32_t addr, const uint32_t *data, uint32_t count) {
   for (uint32_t i = 0; i < count; i++) {
     Flash_Status_t st = program_word(addr + i * 4, data[i]);
@@ -76,7 +74,7 @@ static Flash_Status_t program_words(uint32_t addr, const uint32_t *data, uint32_
   return FLASH_OK;
 }
 
-/* ========== CRC32 (标准多项式 0x04C11DB7) ========== */
+
 uint32_t Flash_CRC32(const uint32_t *pData, uint32_t size) {
   uint32_t crc = 0xFFFFFFFFu;
   const uint8_t *p = (const uint8_t *)pData;
@@ -88,7 +86,7 @@ uint32_t Flash_CRC32(const uint32_t *pData, uint32_t size) {
   return ~crc;
 }
 
-/* ========== 内部: 校验 4 字节对齐 ========== */
+
 static Flash_Status_t check_align(const uint32_t *pData, uint32_t size) {
   if (((uint32_t)pData & 0x3) != 0) return FLASH_ERR_ALIGN;
   if ((size & 0x3) != 0) return FLASH_ERR_ALIGN;
@@ -96,11 +94,9 @@ static Flash_Status_t check_align(const uint32_t *pData, uint32_t size) {
   return FLASH_OK;
 }
 
-/* ==================================================================
- * 公共 API
- * ================================================================== */
 
-/* ---------- 擦除数据扇区 ---------- */
+
+
 Flash_Status_t Flash_Erase_Sector(void) {
   Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
   LOG_I("FLASH", "Erase sector %d: %s", FLASH_DATA_SECTOR,
@@ -108,7 +104,7 @@ Flash_Status_t Flash_Erase_Sector(void) {
   return st;
 }
 
-/* ---------- 写入（覆盖） ---------- */
+
 Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   Flash_Status_t st = check_align(pData, dataSize);
   if (st != FLASH_OK) return st;
@@ -119,7 +115,7 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   hdr.datasize = dataSize;
   hdr.crc      = Flash_CRC32(pData, dataSize);
 
-  /* 将 header 和 data 打包到 record 数组 */
+  
   memcpy(&record[0], &hdr, sizeof(hdr));
   memcpy((uint8_t *)&record[0] + sizeof(hdr), pData, dataSize);
   uint32_t total = sizeof(hdr) + dataSize;
@@ -133,7 +129,7 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   return st;
 }
 
-/* ---------- 读取 ---------- */
+
 Flash_Status_t Flash_Read(uint32_t *pData, uint32_t dataSize) {
   Flash_Status_t st = check_align(pData, dataSize);
   if (st != FLASH_OK) return st;
@@ -156,7 +152,7 @@ Flash_Status_t Flash_Read(uint32_t *pData, uint32_t dataSize) {
   return FLASH_OK;
 }
 
-/* ---------- 带备份安全写入 ---------- */
+
 Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize) {
   Flash_Status_t st = check_align(pData, dataSize);
   if (st != FLASH_OK) return st;
@@ -172,20 +168,20 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
   memcpy(&buf[0], &hdr, sizeof(hdr));
   memcpy((uint8_t *)&buf[0] + sizeof(hdr), pData, dataSize);
 
-  /* Step 1: 将现有数据备份到备份区 */
+  
   st = erase_sector(FLASH_BACKUP_SECTOR, FLASH_BACKUP_ADDR);
   if (st != FLASH_OK) return st;
   st = program_words(FLASH_BACKUP_ADDR, buf, words);
   if (st != FLASH_OK) return st;
   LOG_I("FLASH", "Backup saved (%lu bytes)", (unsigned long)total);
 
-  /* Step 2: 擦除数据区并写入新数据 */
+  
   st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
   if (st != FLASH_OK) return st;
   st = program_words(FLASH_DATA_ADDR, buf, words);
   if (st != FLASH_OK) {
     LOG_E("FLASH", "Write FAILED — restoring from backup");
-    /* 从备份恢复 */
+    
     for (uint32_t i = 0; i < words; i++)
       buf[i] = *(volatile uint32_t *)(FLASH_BACKUP_ADDR + i * 4);
     st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
@@ -194,13 +190,13 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
     return FLASH_ERR_PROGRAM;
   }
 
-  /* Step 3: 清除备份（写零到魔术字即标记无效） */
+  
   program_word(FLASH_BACKUP_ADDR, 0);
   LOG_I("FLASH", "Write with backup OK (%lu bytes)", (unsigned long)dataSize);
   return FLASH_OK;
 }
 
-/* ---------- 启动时检查并恢复备份 ---------- */
+
 bool Flash_Check_Backup(void) {
   volatile uint32_t *magic = (volatile uint32_t *)FLASH_BACKUP_ADDR;
   if (*magic != FLASH_RECORD_MAGIC) return false;
@@ -214,19 +210,15 @@ bool Flash_Check_Backup(void) {
   Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
   if (st == FLASH_OK) {
     program_words(FLASH_DATA_ADDR, buf, words);
-    program_word(FLASH_BACKUP_ADDR, 0); /* 清除备份标记 */
+    program_word(FLASH_BACKUP_ADDR, 0); 
     LOG_I("FLASH", "Backup restored OK");
   }
   return true;
 }
 
-/* ==================================================================
- * 滚存写入（延长 Flash 寿命）
- * 每条记录 = 8 字节头 + 用户数据，在扇区内顺序写入
- * 扇区写满后擦除并从头开始
- * ================================================================== */
 
-/* 内部: 查找最后一条有效记录的位置（通过 datasize 字段步进） */
+
+
 static uint32_t rolling_find_last(void) {
   uint32_t last = FLASH_DATA_ADDR;
   uint32_t addr = FLASH_DATA_ADDR;
@@ -259,13 +251,13 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
   memcpy((uint8_t *)&buf[0] + sizeof(hdr), pData, dataSize);
   uint32_t words = (total + 3) / 4;
 
-  /* 找到写入位置 */
+  
   uint32_t last = rolling_find_last();
   uint32_t next = last + slot_size;
   if (last == FLASH_DATA_ADDR && ((Flash_Record_Header_t *)FLASH_DATA_ADDR)->magic != FLASH_RECORD_MAGIC)
-    next = FLASH_DATA_ADDR; /* 首次写入 */
+    next = FLASH_DATA_ADDR; 
 
-  /* 扇区写满则擦除重来 */
+  
   if (next + slot_size > FLASH_DATA_ADDR + FLASH_DATA_SIZE) {
     LOG_W("FLASH", "Rolling sector full, erasing...");
     st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
@@ -290,7 +282,7 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
     return FLASH_ERR_CRC;
   }
 
-  /* 读取数据 — 使用 hdr->datasize（写入时保存的真实大小）进行 CRC 校验 */
+  
   uint32_t storedSize = hdr->datasize;
   if (storedSize > FLASH_RECORD_MAX) {
     LOG_E("FLASH", "Corrupt record: datasize=%lu exceeds max", (unsigned long)storedSize);
@@ -311,7 +303,7 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
   return FLASH_OK;
 }
 
-/* ---------- 调试打印 ---------- */
+
 void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize) {
   const uint8_t *p = (const uint8_t *)pData;
   char hex[160];
@@ -327,10 +319,6 @@ void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize) {
  * SD / FatFs formatting helper
  * ================================================================== */
 
-#include "diskio.h"
-#include "fatfs.h"
-#include "ff.h"
-#include "syshandle.h"
 
 #ifndef SFHD_SD_WORK_SECTOR_SIZE
 #define SFHD_SD_WORK_SECTOR_SIZE 512U

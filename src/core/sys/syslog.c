@@ -15,8 +15,8 @@
  ******************************************************************************
  */
 
-#include "syslog.h"
-#include "stm32f4xx_hal.h"
+#include "include/syslog.h"
+
 
 /* Hand-rolled uint32→dec (avoids newlib-nano snprintf issues) */
 static int u32dec(uint32_t v, char *b) {

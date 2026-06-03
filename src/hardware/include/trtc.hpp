@@ -23,25 +23,26 @@
 #include "stm32f4xx_hal.h"
 #include <cstring>
 #include <stdio.h>
+#include "core/sys/include/syslog.h"
 
-// 时间结构体（简化版）
+
 typedef struct {
   uint8_t hours;
   uint8_t minutes;
   uint8_t seconds;
 } Time_t;
 
-// 日期结构体
+
 typedef struct {
-  uint8_t year;    // 相对于 2000 年的偏移，如 25 表示 2025 年
+  uint8_t year;    
   uint8_t month;   // 1-12
   uint8_t date;    // 1-31
-  uint8_t weekday; // 1-7 (周一=1, 周日=7，根据 HAL 定义)
+  uint8_t weekday; 
 } Date_t;
 
-class TRTC { // ✅ 改名
+class TRTC { 
 public:
-  TRTC(); // ✅ 改名
+  TRTC(); 
   void init();
   void setTime(uint8_t hours, uint8_t minutes, uint8_t seconds);
   void setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday);
@@ -62,6 +63,6 @@ private:
   void syncFromHAL(void);
 };
 
-extern TRTC boardTRTC; // ✅ 改名
+extern TRTC boardTRTC; 
 
 #endif

@@ -16,13 +16,7 @@
  */
 
 #include "include/network_manager.h"
-#include "hardware/include/esp8266.hpp"
-#include "hardware/include/led.hpp"
-#include "include/syshandle.h"
-#include "syslog.h"
-#include "core/sys/include/syswatchdog.h"
-#include <cstdio>
-#include <cstring>
+
 
 /* ── Externals ────────────────────────────────────────────────── */
 
@@ -36,6 +30,7 @@ extern uint8_t  esp8266_data_ready;
 }
 
 static const size_t NET_RX_SIZE = 2048;
+static const size_t NET_ASYNC_RESPONSE_SIZE = 3072;
 
 /* ── LED helpers ──────────────────────────────────────────────── */
 
@@ -277,7 +272,7 @@ struct NetAsyncCtx {
   uint16_t port;
   char request[1024];
   uint16_t req_len;
-  char response[1536];
+  char response[NET_ASYNC_RESPONSE_SIZE];
   uint32_t timeout_ms;
   uint32_t step_start_ms;
   uint32_t last_rx_ms;

@@ -19,6 +19,12 @@
 #define __SYSWATCHDOG_H
 
 #include <stdint.h>
+#include "iwdg.h"
+#include "hardware/include/lcd.h"
+#include "core/include/syshandle.h"
+#include "stm32f4xx_hal.h"
+#include "core/sys/include/syslog.h"
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {

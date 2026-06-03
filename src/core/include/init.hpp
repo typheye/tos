@@ -1,8 +1,8 @@
 /**
  ******************************************************************************
- * @file    time_activity.hpp
+ * @file    init.hpp
  * @author  Typheye
- * @brief   Time Activity interface.
+ * @brief   init interface.
  ******************************************************************************
  * @attention
  *
@@ -15,28 +15,23 @@
  ******************************************************************************
  */
 
-#ifndef TIME_ACTIVITY_HPP
-#define TIME_ACTIVITY_HPP
-#include "components/include/alert.hpp"
-#include "components/include/keyboard.hpp"
+#ifndef INIT_HPP_
+#define INIT_HPP_
+#include "core/include/tos.hpp"
+#include "core/manager/include/emotion_manager.h"
 #include "core/manager/include/settings_manager.h"
+#include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"
-#include "hardware/include/esp8266.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
+#include "core/sys/include/syswatchdog.h"
+#include "demo/include/bmp_activity.hpp"
+#include "demo/include/i2c_activity.hpp"
+#include "demo/include/jyro_activity.hpp"
+#include "demo/include/key_activity.hpp"
+#include "demo/include/sd_activity.hpp"
+#include "include/lcd.h"
 #include "core/sys/include/syslog.h"
-#include <cstdio>
+#include "include/lib3dox.h"
+#include "main.h"
+#include <stdio.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void time_activity_run(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* INIT_HPP_ */

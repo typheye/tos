@@ -15,15 +15,9 @@
  ******************************************************************************
  */
 
-#include "syshandle.h"
+#include "include/syshandle.h"
 
-#include "hardware/include/lcd.h"
-#include "library/include/libpd.h"
-#include "main.h"
-#include "tim.h"
-#include "syslog.h"
-#include "syswatchdog.h"
-#include <stdio.h>
+
 
 /* C-compatible LED wrappers (defined in hardware/led.cpp) */
 extern void LED_ErrorOn(void);

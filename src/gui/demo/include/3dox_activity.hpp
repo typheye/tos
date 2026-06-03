@@ -17,6 +17,13 @@
 
 #ifndef _3DOX_ACTIVITY_HPP
 #define _3DOX_ACTIVITY_HPP
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/usart.hpp"
+#include "include/lib3dox.h"
+#include "include/libpd.h"
+#include "core/sys/include/syslog.h"
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {

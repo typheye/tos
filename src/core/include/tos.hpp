@@ -49,6 +49,9 @@ extern "C" {
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include "core/sdk/include/tos_api.h"
+#include "stm32f4xx_hal.h"
+#include "core/sys/include/syswatchdog.h"
 
 // ── Demo type ─────────────────────────────────────────────────
 enum class DemoType {
@@ -68,8 +71,8 @@ public:
   TOS();
   ~TOS();
 
-  void init();  // 初始化系统 (implemented in core/init.cpp)
-  void start(); // 启动主循环
+  void init();  
+  void start(); 
 
 private:
   bool initialized_;

@@ -16,21 +16,7 @@
  */
 
 #include "include/settings.hpp"
-#include "core/sdk/include/tos_api.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include "settings/include/hotspot_activity.hpp"
-#include "settings/include/wlan_activity.hpp"
-#include "settings/include/storage_activity.hpp"
-#include "settings/include/display_activity.hpp"
-#include "settings/include/sound_activity.hpp"
-#include "settings/include/time_activity.hpp"
-#include "settings/include/about_activity.hpp"
-#include <cstdio>
-#include "syslog.h"
-#include "core/sys/include/systime.h"
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

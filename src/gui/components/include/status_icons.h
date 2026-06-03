@@ -20,6 +20,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "include/libpd.h"
+#include "gui/components/include/icons.h"
 
 #ifdef __cplusplus
 extern "C" {

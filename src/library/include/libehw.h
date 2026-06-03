@@ -19,6 +19,18 @@
 #define __LIBEHW_H
 
 #include <stdint.h>
+#ifdef __cplusplus
+#include "hardware/include/jy901s.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/bmp180.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/tcs3472.hpp"
+#endif
+#include <math.h>
+#include <stdio.h>
+#include "core/sys/include/syslog.h"
 
 #ifdef __cplusplus
 extern "C" {

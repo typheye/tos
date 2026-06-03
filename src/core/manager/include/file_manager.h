@@ -22,6 +22,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "ff.h"
+#include "core/include/syshandle.h"
+#include "core/sys/include/syslog.h"
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {

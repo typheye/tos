@@ -15,19 +15,8 @@
  ******************************************************************************
  */
 
-#include "components/include/alert.hpp"
-#include "core/sys/include/syshandle.h"
-#include "core/sys/include/systime.h"
-#include "hardware/include/jy901s.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/thid.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/hid_tools_pages.hpp"
-#include "include/libpd.h"
-#include <cstdio>
-#include <cstring>
-#include <math.h>
+#include "include/pages.hpp"
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

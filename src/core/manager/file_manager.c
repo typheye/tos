@@ -15,14 +15,11 @@
  ******************************************************************************
  */
 
-#include "file_manager.h"
+#include "include/file_manager.h"
 
-#include "syshandle.h"
+
 /* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
 extern bool TSDIO_IsHardDisabled(void);
-#include "syslog.h"
-#include <stdio.h>
-#include <string.h>
 
 static bool g_fmcore_mounted = false;
 

@@ -15,22 +15,8 @@
  ******************************************************************************
  */
 
-#include "tos_api.h"
-#include "../include/config.h"
-#include "core/manager/include/emotion_manager.h"
-#include "core/manager/include/network_manager.h"
-#include "core/manager/include/settings_manager.h"
-#include "hardware/include/buzzer.hpp"
-#include "hardware/include/esp8266.hpp"
-#include "include/libjson.h"
-#include "main.h"
-#include "core/sys/include/systime.h"
-#include "core/sys/include/syswatchdog.h"
-#include "core/sys/include/syshandle.h"
-#include "syslog.h"
-#include <cstring>
-#include <cstdio>
-#include <cstdint>
+#include "include/tos_api.h"
+
 
 extern Buzzer buzzer1;
 
@@ -524,7 +510,7 @@ static bool poll_commands_once(void) {
   char path[96];
   snprintf(path, sizeof(path), "/v1/device/%s/commands", g_device_id);
 
-  char resp[1536];
+  char resp[2048];
   memset(resp, 0, sizeof(resp));
   LOG_I("TAPI", "Polling commands fallback");
   if (!Net_HttpGet(TOS_API_HOST, TOS_API_PORT, path, resp, sizeof(resp), TOS_CMD_GET_TIMEOUT_MS)) {
@@ -601,7 +587,7 @@ static void start_ack_or_schedule(void) {
     if (g_last_hb_malformed) {
       should_poll = true;
       g_last_hb_malformed = false;
-    } else if (++g_empty_hb_cycles >= 15U) { /* about every 30 s safety poll */
+    } else if (++g_empty_hb_cycles >= 60U) { /* low-rate safety poll */
       should_poll = true;
       g_empty_hb_cycles = 0;
     }

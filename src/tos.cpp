@@ -16,10 +16,7 @@
  */
 
 #include "core/include/tos.hpp"
-#include "core/sdk/include/tos_api.h"
-#include "include/sysui.hpp"
-#include "stm32f4xx_hal.h"
-#include "core/sys/include/syswatchdog.h"
+
 
 TOS::TOS() : initialized_(false), tick_count_(0) {}
 

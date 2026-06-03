@@ -17,6 +17,7 @@
 
 #include "include/libvan.h"
 
+
 #define MAX_PRECISION 6
 #define MIN_PRECISION 0
 #define BUFFER_SIZE 16

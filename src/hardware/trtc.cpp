@@ -16,14 +16,13 @@
  */
 
 #include "include/trtc.hpp"
-#include "syslog.h"
-#include <stdio.h>
+
 
 extern RTC_HandleTypeDef hrtc;
 
 TRTC boardTRTC;
 
-// 构造函数
+
 TRTC::TRTC() {
   initialized = false;
   memset(&sTime, 0, sizeof(sTime));
@@ -40,18 +39,18 @@ void TRTC::syncToHAL() {
   HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 }
 
-// ========== 修复：等待 LSE 稳定并增加重试 ==========
+
 void TRTC::init() {
   if (initialized)
     return;
 
   LOG_I("RTC", "Initializing...");
 
-  // 1. 使能电源时钟和备份域访问（关键！）
+  
   __HAL_RCC_PWR_CLK_ENABLE();
   HAL_PWR_EnableBkUpAccess();
 
-  // 2. 等待 LSE 晶振稳定（最多 3 秒）
+  
   uint32_t start = HAL_GetTick();
   uint8_t lse_ready = 0;
 
@@ -69,12 +68,12 @@ void TRTC::init() {
     LOG_W("RTC", "LSE not ready! RTC may not work correctly");
   }
 
-  // 3. 重新初始化 RTC（确保配置正确）
+  
   HAL_StatusTypeDef ret;
   int retry = 5;
 
   do {
-    // 重置 RTC 配置
+    
     hrtc.Instance = RTC;
     hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
     hrtc.Init.AsynchPrediv = 127;
@@ -94,27 +93,27 @@ void TRTC::init() {
 
   if (ret != HAL_OK) {
     LOG_F("RTC", "Cannot initialize RTC!");
-    initialized = true; // 标记为已初始化，避免无限重试
+    initialized = true; 
     return;
   }
 
-  // 4. 尝试读取时间，如果无效则设置默认值
+  
   syncFromHAL();
 
-  // 验证时间是否有效
+  
   if (sTime.Hours > 23 || sTime.Minutes > 59 || sTime.Seconds > 59 ||
       sDate.Year > 99 || sDate.Month > 12 || sDate.Date > 31) {
     LOG_W("RTC", "Invalid time detected, setting default...");
 
-    // 设置默认时间 2025-01-01 00:00:00
+    
     sTime.Hours = 0;
     sTime.Minutes = 0;
     sTime.Seconds = 0;
     sTime.TimeFormat = RTC_HOURFORMAT_24;
-    sDate.Year = 25; // 2025年
+    sDate.Year = 25; 
     sDate.Month = 1;
     sDate.Date = 1;
-    sDate.WeekDay = 4; // 星期四（2025-01-01 是周三？需要调整）
+    sDate.WeekDay = 4; 
 
     syncToHAL();
     syncFromHAL();

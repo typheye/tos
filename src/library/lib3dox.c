@@ -15,20 +15,13 @@
  ******************************************************************************
  */
 
-/**
- * lib3dox.c - 渐进式路径追踪渲染器
- * 移植自 STC8H 原版，适配 STM32F407
- * 三角形数据原样来自 51 版本，确保几何完全一致
- */
+
 #include "include/lib3dox.h"
-#include <float.h>
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+
 
 #define CCMRAM __attribute__((section(".ccmram")))
 
-/* ========== 向量和矩阵 ========== */
+
 typedef struct {
   float x, y, z;
 } vec3_t;
@@ -41,7 +34,7 @@ typedef struct {
   vec3_t E1, E2, normal;
 } triangle_t;
 
-/* ========== 全局状态 ========== */
+
 static CCMRAM mat4_t T;
 static CCMRAM mat4_t view;
 static CCMRAM triangle_t triangles[32];
@@ -83,7 +76,7 @@ static float bsdf_pdf;
 
 volatile int render_progress = 0;
 
-/* 常量 */
+
 #define SPP 1
 #define MAX_DEPTH 2
 #define INV_PI 0.318310f
@@ -91,14 +84,14 @@ volatile int render_progress = 0;
 #define EPSILON 0.000001f
 #define LIGHT_AREA 0.0893f
 
-/* 基础宏 */
+
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define abs(x) ((x) > 0 ? x : -(x))
 #define radians(x) ((x) * 0.017453f)
 #define rand01() ((float)rand() / (float)RAND_MAX)
 
-/* 向量宏 */
+
 #define V3_ASSIGN(r, v)                                                        \
   do {                                                                         \
     (r).x = (v).x;                                                             \
@@ -284,7 +277,7 @@ volatile int render_progress = 0;
 
 #define BALANCEHEURISTIC(a, b) ((a) / ((a) + (b)))
 
-/* ========== 原始51三角形数据（768个float，一字不差） ========== */
+
 static const float raw_triangles[] = {
     -0.240000f, 1.980000f,  -0.220000f, 0.230000f,  1.980000f,  0.160000f,
     -0.240000f, 1.980000f,  -0.220000f, 0.230000f,  1.980000f,  0.160000f,
@@ -420,15 +413,14 @@ static void init_scene(void) {
     return;
   const float *p = raw_triangles;
   for (int i = 0; i < 32; i++) {
-    /* 每个三角形占24个float: bbmin(3), bbmax(3), v0(3), v1(3), v2(3), E1(3),
-     * E2(3), normal(3) */
+    
     vec3_t bbmin_t, bbmax_t, v0, v1, v2, normal;
     V3_ASSIGN_S3(bbmin_t, p[0], p[1], p[2]);
     V3_ASSIGN_S3(bbmax_t, p[3], p[4], p[5]);
     V3_ASSIGN_S3(v0, p[6], p[7], p[8]);
     V3_ASSIGN_S3(v1, p[9], p[10], p[11]);
     V3_ASSIGN_S3(v2, p[12], p[13], p[14]);
-    V3_ASSIGN_S3(normal, p[21], p[22], p[23]); // 法线位于末尾3个float
+    V3_ASSIGN_S3(normal, p[21], p[22], p[23]); 
 
     V3_ASSIGN(triangles[i].bbmin, bbmin_t);
     V3_ASSIGN(triangles[i].bbmax, bbmax_t);
@@ -481,7 +473,7 @@ static uint16_t tone_to_history565(vec3_t sample, uint16_t prev, uint32_t prev_c
   return (uint16_t)(((uint16_t)r << 11) | ((uint16_t)g << 5) | (uint16_t)b);
 }
 
-/* ========== 求交函数 ========== */
+
 static uint8_t bb_intersect(void) {
   V3_SUB(t0, bbmin, ray.start);
   V3_MUL_ASSIGN(t0, ray.inv_direction);
@@ -540,14 +532,14 @@ static void intersect(void) {
   }
 }
 
-/* ========== 材质 ========== */
+
 static void Reflectance(int8_t i) {
   if (i == 8 || i == 9)
-    V3_ASSIGN_S3(reflectance, 0.05f, 0.65f, 0.05f); // 绿色
+    V3_ASSIGN_S3(reflectance, 0.05f, 0.65f, 0.05f); 
   else if (i == 10 || i == 11)
-    V3_ASSIGN_S3(reflectance, 0.65f, 0.05f, 0.05f); // 红色
+    V3_ASSIGN_S3(reflectance, 0.65f, 0.05f, 0.05f); 
   else
-    V3_ASSIGN_S(reflectance, 0.65f); // 灰色
+    V3_ASSIGN_S(reflectance, 0.65f); 
 }
 
 static uint8_t sampleBSDF(void) {
@@ -563,7 +555,7 @@ static uint8_t sampleBSDF(void) {
   return bsdf_pdf > 0 ? 1 : 0;
 }
 
-/* ========== 光源采样 ========== */
+
 static void linearCombination(void) {
   linear_r.x = DOT(linear_x, linear_t);
   linear_r.y = DOT(linear_y, linear_t);
@@ -668,7 +660,7 @@ static vec3_t sampleRay(void) {
   }
 }
 
-/* ========== 初始化 ========== */
+
 void render_init(void) {
   init_scene();
   V3_ASSIGN_S3(eye, 0, 1, 3.5f);
@@ -686,7 +678,7 @@ void render_init(void) {
   srand(12345);
 }
 
-/* ========== 单步渲染 ========== */
+
 int render_step(pixel_callback_t pixel_cb) {
   int x = current_x, y = current_y;
   int w = RENDER_WIDTH, h = RENDER_HEIGHT;

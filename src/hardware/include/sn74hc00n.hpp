@@ -20,13 +20,15 @@
 
 #include "main.h"
 #include <stdint.h>
+#include "core/sys/include/syslog.h"
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// ==================== 引脚定义 ====================
-// HC00N 的 4 个输出引脚 (1Y, 2Y, 3Y, 4Y) 连接到 MCU
+
+
 #define HC00N_OUT1_PORT GPIOE
 #define HC00N_OUT1_PIN GPIO_PIN_13 // 1Y
 
@@ -39,11 +41,11 @@ extern "C" {
 #define HC00N_OUT4_PORT GPIOE
 #define HC00N_OUT4_PIN GPIO_PIN_10 // 4Y
 
-// ==================== 逻辑电平定义 ====================
+
 #define HC00N_HIGH 1
 #define HC00N_LOW 0
 
-// ==================== 开关输入组合 ====================
+
 #define SW1A_MASK 0x01
 #define SW1B_MASK 0x02
 #define SW2A_MASK 0x04
@@ -53,7 +55,7 @@ extern "C" {
 #define SW4A_MASK 0x40
 #define SW4B_MASK 0x80
 
-// ==================== 数据结构 ====================
+
 typedef struct {
   uint8_t sw1A;
   uint8_t sw1B;
@@ -72,35 +74,35 @@ typedef struct {
   uint8_t output4;
 } HC00N_Outputs_t;
 
-// ==================== 类接口 ====================
+
 class SN74HC00N {
 public:
   SN74HC00N();
 
-  // 初始化
+  
   void init(void);
   bool isInitialized(void) { return _initialized; }
 
-  // 读取所有 4 个输出引脚状态
+  
   uint8_t readOutputByte(void);
   HC00N_Outputs_t readOutputs(void);
   uint8_t readOutput(uint8_t channel);
 
-  // 静态 NAND 逻辑函数 (可以在外部直接调用)
+  
   static uint8_t nandGate(uint8_t a, uint8_t b);
   static uint8_t calculateNANDOutput(uint8_t switches);
 
-  // 更新状态
+  
   void updateFromSwitches(uint8_t switchStates);
 
-  // 获取状态
+  
   HC00N_Switches_t getSwitchStates(void);
   HC00N_Outputs_t getActualOutputs(void);
 
-  // 验证
+  
   bool verifyOutputs(uint8_t switches);
 
-  // 调试
+  
   void debugPrint(void);
 
 private:

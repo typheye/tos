@@ -16,22 +16,22 @@
  */
 
 #include "include/jy901s.hpp"
-#include <stdio.h>
 
-// 外部 I2C 句柄 (由 CubeMX 生成)
+
+
 extern I2C_HandleTypeDef hi2c1;
 
-// 全局实例
+
 JY901S boardJY901S;
 
-// 构造函数
+
 JY901S::JY901S() {
   _hi2c = &hi2c1;
-  _addr = JY901S_ADDR; // 0xA0 (8位地址)
+  _addr = JY901S_ADDR; 
   _initialized = false;
 }
 
-// 初始化
+
 void JY901S::init(void) {
   if (_initialized)
     return;
@@ -43,10 +43,10 @@ void JY901S::init(void) {
   }
 }
 
-// 检查连接
+
 bool JY901S::checkConnection(void) {
   uint8_t test = 0;
-  // 尝试读取版本号
+  
   if (HAL_I2C_Mem_Read(_hi2c, _addr, JY901S_VERSION, I2C_MEMADD_SIZE_8BIT,
                        &test, 1, 100) == HAL_OK) {
     return true;
@@ -54,7 +54,7 @@ bool JY901S::checkConnection(void) {
   return false;
 }
 
-// 读取指定寄存器的值 (16位)
+
 int16_t JY901S::readReg16(uint8_t reg) {
   uint8_t buffer[2];
 
@@ -66,24 +66,24 @@ int16_t JY901S::readReg16(uint8_t reg) {
   return (int16_t)(buffer[0] | (buffer[1] << 8));
 }
 
-// 批量读取数据
+
 void JY901S::readRegs(uint8_t reg, uint8_t *buffer, uint8_t len) {
   HAL_I2C_Mem_Read(_hi2c, _addr, reg, I2C_MEMADD_SIZE_8BIT, buffer, len, 100);
 }
 
-// 读取单个寄存器
+
 bool JY901S::readReg(uint8_t reg, uint8_t *value) {
   return HAL_I2C_Mem_Read(_hi2c, _addr, reg, I2C_MEMADD_SIZE_8BIT, value, 1,
                           100) == HAL_OK;
 }
 
-// 写入单个寄存器
+
 bool JY901S::writeReg(uint8_t reg, uint8_t value) {
   return HAL_I2C_Mem_Write(_hi2c, _addr, reg, I2C_MEMADD_SIZE_8BIT, &value, 1,
                            100) == HAL_OK;
 }
 
-// 读取原始数据
+
 JY901S_Raw_t JY901S::readRaw(void) {
   JY901S_Raw_t raw;
   uint8_t buffer[26];
@@ -110,12 +110,12 @@ JY901S_Raw_t JY901S::readRaw(void) {
   return raw;
 }
 
-// 读取转换后的数据
+
 JY901S_Data_t JY901S::readData(void) {
   JY901S_Raw_t raw = readRaw();
   JY901S_Data_t data;
 
-  // JY901 的数据格式：原始值 / 100 = 实际值
+  
   data.acc_x = raw.acc_x / 100.0f;
   data.acc_y = raw.acc_y / 100.0f;
   data.acc_z = raw.acc_z / 100.0f;
@@ -132,13 +132,13 @@ JY901S_Data_t JY901S::readData(void) {
   data.mag_y = raw.mag_y;
   data.mag_z = raw.mag_z;
 
-  // 温度：原始值 / 100
+  
   data.temperature = raw.temperature / 100.0f;
 
   return data;
 }
 
-// 读取加速度
+
 void JY901S::readAccel(float *x, float *y, float *z) {
   JY901S_Data_t data = readData();
   if (x)
@@ -149,7 +149,7 @@ void JY901S::readAccel(float *x, float *y, float *z) {
     *z = data.acc_z;
 }
 
-// 读取角速度
+
 void JY901S::readGyro(float *x, float *y, float *z) {
   JY901S_Data_t data = readData();
   if (x)
@@ -160,7 +160,7 @@ void JY901S::readGyro(float *x, float *y, float *z) {
     *z = data.gyro_z;
 }
 
-// 读取欧拉角
+
 void JY901S::readAngle(float *roll, float *pitch, float *yaw) {
   JY901S_Data_t data = readData();
   if (roll)
@@ -171,7 +171,7 @@ void JY901S::readAngle(float *roll, float *pitch, float *yaw) {
     *yaw = data.yaw;
 }
 
-// 读取磁场
+
 void JY901S::readMag(float *x, float *y, float *z) {
   JY901S_Data_t data = readData();
   if (x)
@@ -182,13 +182,13 @@ void JY901S::readMag(float *x, float *y, float *z) {
     *z = data.mag_z;
 }
 
-// 读取温度
+
 float JY901S::readTemp(void) {
   int16_t temp_raw = readReg16(JY901S_TEMP);
   return temp_raw / 100.0f;
 }
 
-// 读取版本号
+
 uint8_t JY901S::readVersion(void) {
   uint8_t version;
   if (readReg(JY901S_VERSION, &version)) {

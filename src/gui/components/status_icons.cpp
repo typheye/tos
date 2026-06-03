@@ -16,10 +16,9 @@
  */
 
 #include "include/status_icons.h"
-#include "include/libpd.h"
+
 
 /* Include the auto-generated icon data */
-#include "include/icons.h"
 
 /* Pixel callback for icon_draw_bitmap_msb */
 static void put_pixel(int x, int y, void *user) {

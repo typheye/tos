@@ -24,6 +24,16 @@
 #include "main.h"
 #include <cstdio>
 #include <cstring>
+#include "core/sdk/include/tos_api.h"
+#include "core/sys/include/systime.h"
+#include "gui/demo/include/demo_activity.hpp"
+#include "gui/miniapp/hid_tools/include/app.h"
+#include "gui/include/settings.hpp"
+#include "gui/miniapp/file_manager/include/app.h"
+#include "hardware/include/trtc.hpp"
+#include "gui/include/launcher.hpp"
+#include "include/libpd.h"
+#include "core/sys/include/syslog.h"
 
 #define UI_DASHBOARD    0
 #define UI_LAUNCHER     1

@@ -15,14 +15,9 @@
  ******************************************************************************
  */
 
-#include "syswatchdog.h"
+#include "include/syswatchdog.h"
 
-#include "iwdg.h"
-#include "hardware/include/lcd.h"
-#include "syshandle.h"
-#include "stm32f4xx_hal.h"
-#include "syslog.h"
-#include <stdio.h>
+
 
 extern void LED_ServiceTick(void);
 

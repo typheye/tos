@@ -16,17 +16,7 @@
  */
 
 #include "include/time_activity.hpp"
-#include "components/include/alert.hpp"
-#include "components/include/keyboard.hpp"
-#include "core/manager/include/settings_manager.h"
-#include "core/sys/include/systime.h"
-#include "hardware/include/esp8266.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include "syslog.h"
-#include <cstdio>
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

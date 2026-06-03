@@ -16,12 +16,7 @@
  */
 
 #include "include/libehw.h"
-#include "hardware/include/jy901s.hpp"
-#include "hardware/include/bmp180.hpp"
-#include "hardware/include/tcs3472.hpp"
-#include <math.h>
-#include <stdio.h>
-#include "syslog.h"
+
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))

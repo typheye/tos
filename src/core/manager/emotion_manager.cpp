@@ -16,10 +16,7 @@
  */
 
 #include "include/emotion_manager.h"
-#include "syslog.h"
-#include "main.h"
-#include <cstdio>
-#include <cstring>
+
 
 static char g_manual_expr[16];
 static char g_auto_expr[16];

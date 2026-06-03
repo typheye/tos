@@ -16,7 +16,7 @@
  */
 
 #include "include/thid.hpp"
-#include <cstring>
+
 
 extern "C" USBD_HandleTypeDef hUsbDeviceFS;
 

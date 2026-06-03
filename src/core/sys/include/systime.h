@@ -19,6 +19,17 @@
 #define SYSTIME_H
 
 #include <stdbool.h>
+#include "core/manager/include/network_manager.h"
+#include "core/manager/include/settings_manager.h"
+#ifdef __cplusplus
+#include "hardware/include/esp8266.hpp"
+#endif
+#ifdef __cplusplus
+#include "hardware/include/trtc.hpp"
+#endif
+#include "core/sys/include/syslog.h"
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {

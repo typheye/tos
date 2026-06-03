@@ -16,15 +16,7 @@
  */
 
 #include "include/display_activity.hpp"
-#include "components/include/alert.hpp"
-#include "core/manager/include/settings_manager.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include <cstdio>
-#include "syslog.h"
-#include "core/sys/include/systime.h"
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

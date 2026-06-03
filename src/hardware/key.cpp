@@ -16,9 +16,9 @@
  */
 
 #include "include/key.hpp"
-#include "core/sdk/include/tos_api.h"
 
-// ==================== Switch 实现 ====================
+
+
 
 Switch::Switch(GPIO_TypeDef *port, uint16_t pin, bool inverted)
     : _port(port), _pin(pin), _inverted(inverted), _initialized(false) {}
@@ -34,15 +34,15 @@ bool Switch::isOn(void) {
     return false;
   GPIO_PinState state = HAL_GPIO_ReadPin(_port, _pin);
   if (_inverted) {
-    return state == GPIO_PIN_RESET; // 反转：低电平=ON
+    return state == GPIO_PIN_RESET; 
   } else {
-    return state == GPIO_PIN_SET; // 正常：高电平=ON
+    return state == GPIO_PIN_SET; 
   }
 }
 
 bool Switch::isOff(void) { return !isOn(); }
 
-// ==================== Key 实现 ====================
+
 
 Key::Key(GPIO_TypeDef *port, uint16_t pin, bool inverted)
     : _port(port), _pin(pin), _inverted(inverted), _last_state(false),
@@ -65,9 +65,9 @@ void Key::init(void) {
 bool Key::rawPressed(void) const {
   GPIO_PinState state = HAL_GPIO_ReadPin(_port, _pin);
   if (_inverted) {
-    return state == GPIO_PIN_SET; // 反转：高电平=按下
+    return state == GPIO_PIN_SET; 
   } else {
-    return state == GPIO_PIN_RESET; // 正常：低电平=按下
+    return state == GPIO_PIN_RESET; 
   }
 }
 
@@ -150,11 +150,11 @@ void Key::tick(void) {
 
 void Key::setLongPressTime(uint32_t ms) { _long_press_time = ms; }
 
-// ==================== KeyManager 实现 ====================
+
 
 KeyManager keyManager;
 
-// 覆盖弱符号：DMA 等待期间轮询按键，消除盲窗
+
 void lcd_dma_yield(void) {
   TosApi_Tick();
   keyManager.collision_A8.tick();
@@ -163,7 +163,7 @@ void lcd_dma_yield(void) {
 }
 
 void KeyManager::init(void) {
-  // 初始化所有开关
+  
   sw1_E0.init();
   sw2_G13.init();
   sw3_E2.init();
@@ -180,7 +180,7 @@ void KeyManager::init(void) {
   sw_sd_detect.init();
   sw_mute.init();
 
-  // 初始化按键
+  
   collision_A8.init();
   collision_D0.init();
   btn_enter.init();

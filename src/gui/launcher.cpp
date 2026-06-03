@@ -16,17 +16,7 @@
  */
 
 #include "include/launcher.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "core/manager/include/emotion_manager.h"
-#include "core/sdk/include/tos_api.h"
-#include "core/sys/include/syswatchdog.h"
-#include "library/include/libehw.h"
-#include "library/include/libemo.h"
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include "syslog.h"
+
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))

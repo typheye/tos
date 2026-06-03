@@ -20,6 +20,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "core/sys/include/syslog.h"
+#include "main.h"
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {

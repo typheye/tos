@@ -16,13 +16,7 @@
  */
 
 #include "include/sound_activity.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include <cstdio>
-#include "syslog.h"
-#include "core/sys/include/systime.h"
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

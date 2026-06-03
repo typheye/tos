@@ -17,21 +17,30 @@
 
 #ifndef __BMP_ACTIVITY_HPP
 #define __BMP_ACTIVITY_HPP
+#include "components/include/alert.hpp"
+#include "core/sys/include/systime.h"
+#include "hardware/include/bmp180.hpp"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include "include/libvan.h"
+#include <cstdio>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// BMP180 GUI 主菜单
+
 void bmp180_activity(void);
 
-// 实时显示模式（温度/气压/海拔）
+
 void bmp180_display_activity(void);
 
-// 图表模式（气压/温度曲线）
+
 void bmp180_chart_activity(void);
 
-// 校准设置
+
 void bmp180_calibrate_activity(void);
 
 #ifdef __cplusplus

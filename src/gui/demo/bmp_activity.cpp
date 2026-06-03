@@ -16,15 +16,7 @@
  */
 
 #include "include/bmp_activity.hpp"
-#include "components/include/alert.hpp"
-#include "core/sys/include/systime.h"
-#include "hardware/include/bmp180.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include "include/libvan.h"
-#include <cstdio>
+
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))

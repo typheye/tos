@@ -21,6 +21,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "ff.h"
+#include "hardware/include/lcd.h"
+#include "library/include/libpd.h"
+#include "main.h"
+#include "tim.h"
+#include "core/sys/include/syslog.h"
+#include "core/sys/include/syswatchdog.h"
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -15,14 +15,8 @@
  ******************************************************************************
  */
 
-#include "demo/include/3dox_activity.hpp"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/usart.hpp"
-#include "include/lib3dox.h"
-#include "include/libpd.h"
-#include "syslog.h"
-#include <stdio.h>
+#include "include/3dox_activity.hpp"
+
 
 extern USART boardSerial;
 extern KeyManager keyManager;

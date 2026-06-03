@@ -15,15 +15,8 @@
  ******************************************************************************
  */
 
-#include "hardware/include/esp8266.hpp"
-#include "hardware/include/led.hpp"
-#include "hardware/include/usart.hpp"
-#include "include/syshandle.h"
-#include "syslog.h"
-#include "core/sys/include/syswatchdog.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "include/esp8266.hpp"
+
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram"), aligned(4)))

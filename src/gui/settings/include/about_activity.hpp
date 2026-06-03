@@ -17,6 +17,18 @@
 
 #ifndef ABOUT_ACTIVITY_HPP
 #define ABOUT_ACTIVITY_HPP
+#include "components/include/alert.hpp"
+#include "components/include/confirm.hpp"
+#include "core/include/config.h"
+#include "core/manager/include/settings_manager.h"
+#include "core/sys/include/systime.h"
+#include "core/sdk/include/tos_api.h"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/sfhd.h"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include <cstdio>
 
 #ifdef __cplusplus
 extern "C" {

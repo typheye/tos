@@ -16,16 +16,7 @@
  */
 
 #include "include/tcs3472_activity.hpp"
-#include "components/include/alert.hpp"
-#include "core/sys/include/systime.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "include/libpd.h"
-#include "include/libvan.h"
-#include "include/tcs3472.hpp"
-#include "syslog.h"
-#include <cstdio>
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

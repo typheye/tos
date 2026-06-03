@@ -16,9 +16,7 @@
  */
 
 #include "include/libjson.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
 
 /* ── helpers ──────────────────────────────────────────────────── */
 

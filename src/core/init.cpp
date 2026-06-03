@@ -15,26 +15,12 @@
  ******************************************************************************
  */
 
-#include "core/include/tos.hpp"
-#include "core/manager/include/emotion_manager.h"
-#include "core/manager/include/settings_manager.h"
-#include "core/sdk/include/tos_api.h"
-#include "core/sys/include/systime.h"
-#include "core/sys/include/syswatchdog.h"
-#include "demo/include/bmp_activity.hpp"
-#include "demo/include/i2c_activity.hpp"
-#include "demo/include/jyro_activity.hpp"
-#include "demo/include/key_activity.hpp"
-#include "demo/include/sd_activity.hpp"
-#include "include/lcd.h"
-#include "syslog.h"
+#include "include/init.hpp"
+
 
 extern "C" {
-#include "include/lib3dox.h"
 }
 
-#include "main.h"
-#include <stdio.h>
 
 extern USART boardSerial;
 extern TRTC boardTRTC;
@@ -57,7 +43,7 @@ extern THID boardHID;
 void TOS::init() {
   boardSerial.init();
 
-  // LED 初始化
+  
   boardLed.init();
   warnLed.init();
   errorLed.init();
@@ -71,9 +57,9 @@ void TOS::init() {
 
   PD_ShowSplashFadeStart(300);
 
-  // ========== 关键：RTC 放在较前位置，但需要等待 LSE ==========
-  // RTC 会自己等待 LSE 稳定，不需要额外延时
-  boardTRTC.init(); // 已修复，内部会等待 LSE 并重试
+  
+  
+  boardTRTC.init(); 
 
   boardSDIO.init();
   if (TSDIO_IsHardDisabled()) {
@@ -179,6 +165,6 @@ void TOS::init() {
 
   PD_SplashFinish(100);
 
-  // 设置默认界面为启动器
+  
   SysUI::setActivity(UI_PET);
 }

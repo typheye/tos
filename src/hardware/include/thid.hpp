@@ -27,6 +27,8 @@ extern "C" {
 #include "usbd_custom_hid_if.h"
 #include "usbd_customhid.h"
 #include "usbd_def.h"
+#include <cstring>
+
 }
 
 /*

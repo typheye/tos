@@ -19,6 +19,7 @@
 #define __LED_HPP
 
 #include "main.h"
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,7 +44,7 @@ void LED_ServiceTick(void);
 
 class LED {
 public:
-  // polarity: true = 高电平点亮, false = 低电平点亮
+  
   LED(GPIO_TypeDef *port, uint16_t pin, bool polarity = true);
 
   void init(void);
@@ -55,7 +56,7 @@ public:
 private:
   GPIO_TypeDef *_port;
   uint16_t _pin;
-  bool _polarity; // true: 高电平点亮, false: 低电平点亮
+  bool _polarity; 
 };
 
 extern LED boardLed;

@@ -16,23 +16,7 @@
  */
 
 #include "include/app.h"
-#include "components/include/alert.hpp"
-#include "components/include/confirm.hpp"
-#include "core/manager/include/file_manager.h"
-#include "core/sdk/include/tos_api.h"
-#include "core/sys/include/syshandle.h"
-#include "core/sys/include/systime.h"
-#include "fatfs.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/sfhd.h"
-#include "hardware/include/trtc.hpp"
-#include "hardware/include/tsdio.hpp"
-#include "include/libpd.h"
-#include "syslog.h"
-#include <cstdio>
-#include <cstring>
-#include <strings.h>
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

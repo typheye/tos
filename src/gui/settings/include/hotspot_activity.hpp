@@ -17,5 +17,18 @@
 
 #ifndef HOTSPOT_ACTIVITY_HPP
 #define HOTSPOT_ACTIVITY_HPP
+#include "components/include/alert.hpp"
+#include "components/include/keyboard.hpp"
+#include "core/manager/include/settings_manager.h"
+#include "core/sys/include/systime.h"
+#include "hardware/include/esp8266.hpp"
+#include "hardware/include/key.hpp"
+#include "hardware/include/lcd.hpp"
+#include "hardware/include/trtc.hpp"
+#include "include/libpd.h"
+#include "core/sys/include/syslog.h"
+#include <cstdio>
+#include <cstring>
+
 void hotspot_activity_run(void);
 #endif

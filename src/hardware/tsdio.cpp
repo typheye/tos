@@ -16,17 +16,17 @@
  */
 
 #include "include/tsdio.hpp"
-#include "syslog.h"
 
-// 外部 SDIO 句柄 (由 CubeMX 生成)
+
+
 extern SD_HandleTypeDef hsd;
 
-// 全局实例
+
 TSDIO boardSDIO;
 
 extern USART boardSerial;
 
-// 构造函数
+
 TSDIO::TSDIO() {
   initialized = false;
   _hard_disabled = false;
@@ -34,7 +34,7 @@ TSDIO::TSDIO() {
   memset(&card_info, 0, sizeof(card_info));
 }
 
-// 等待 SD 卡就绪
+
 bool TSDIO::waitForReady(uint32_t timeout_ms) {
   uint32_t start = HAL_GetTick();
 
@@ -51,7 +51,7 @@ bool TSDIO::waitForReady(uint32_t timeout_ms) {
   return false;
 }
 
-// 更新卡信息
+
 void TSDIO::updateCardInfo(void) {
   HAL_SD_CardInfoTypeDef hal_card_info;
 
@@ -66,14 +66,14 @@ void TSDIO::updateCardInfo(void) {
   }
 }
 
-// 初始化 SD 卡
-// 初始化 SD 卡
+
+
 SDCard_Status_t TSDIO::init(void) {
   HAL_SD_CardInfoTypeDef hal_card_info;
 
   LOG_I("SDIO", "Starting init...");
 
-  // 1. 初始化 SDIO 接口
+  
   LOG_I("SDIO", "Calling HAL_SD_Init...");
   if (HAL_SD_Init(&hsd) != HAL_OK) {
     LOG_E("SDIO", "HAL_SD_Init FAILED");
@@ -83,17 +83,17 @@ SDCard_Status_t TSDIO::init(void) {
   }
   LOG_I("SDIO", "HAL_SD_Init OK");
 
-  // 2. 重要：等待卡上电完成
+  
   HAL_Delay(200);
 
-  // 3. 检查卡是否插入 (通过检查卡状态)
+  
   LOG_I("SDIO", "Checking card presence...");
   LOG_I("SDIO", "Card state after init: %ld", (long)HAL_SD_GetCardState(&hsd));
 
-  // 4. 获取卡信息
+  
   LOG_I("SDIO", "Getting card info...");
 
-  // 尝试多次获取卡信息
+  
   int retry = 5;
   while (retry--) {
     if (HAL_SD_GetCardInfo(&hsd, &hal_card_info) == HAL_OK) {
@@ -119,13 +119,13 @@ SDCard_Status_t TSDIO::init(void) {
           (unsigned long)hal_card_info.CardType, (unsigned long)hal_card_info.BlockSize,
           (unsigned long)hal_card_info.BlockNbr);
 
-  // 5. 配置总线宽度 (先尝试 1-bit，成功后再试 4-bit)
+  
   LOG_I("SDIO", "Configuring bus width...");
 
-  // 先用 1-bit 模式验证读写是否正常
+  
   card_info.bus_width = 1;
 
-// 可选：尝试 4-bit 模式
+
 #ifdef SDIO_BUS_WIDE_4B
   if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) == HAL_OK) {
     card_info.bus_width = 4;
@@ -135,7 +135,7 @@ SDCard_Status_t TSDIO::init(void) {
   }
 #endif
 
-  // 6. 更新卡信息
+  
   card_info.block_size = hal_card_info.BlockSize;
   card_info.block_count = hal_card_info.BlockNbr;
   card_info.capacity_mb =
@@ -143,7 +143,7 @@ SDCard_Status_t TSDIO::init(void) {
                  (1024 * 1024));
   card_info.card_type = hal_card_info.CardType;
 
-  // 7. 等待卡就绪
+  
   LOG_I("SDIO", "Waiting for card ready...");
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Card ready timeout");
@@ -158,7 +158,7 @@ SDCard_Status_t TSDIO::init(void) {
   return SD_CARD_OK;
 }
 
-// 获取 SD 卡状态
+
 SDCard_Status_t TSDIO::getStatus(void) {
   if (!initialized) {
     return SD_CARD_NOT_READY;
@@ -175,7 +175,7 @@ SDCard_Status_t TSDIO::getStatus(void) {
   return SD_CARD_OK;
 }
 
-// 获取 SD 卡信息
+
 SDCard_Info_t TSDIO::getInfo(void) {
   if (!initialized) {
     updateCardInfo();
@@ -183,7 +183,7 @@ SDCard_Info_t TSDIO::getInfo(void) {
   return card_info;
 }
 
-// 读取单个扇区
+
 SDCard_Status_t TSDIO::readSector(uint8_t *buffer, uint32_t sector) {
   if (!initialized) {
     return SD_CARD_NOT_READY;
@@ -200,8 +200,8 @@ SDCard_Status_t TSDIO::readSector(uint8_t *buffer, uint32_t sector) {
   return SD_CARD_OK;
 }
 
-// 写入单个扇区
-// 在 writeSector 函数开头添加
+
+
 SDCard_Status_t TSDIO::writeSector(uint8_t *buffer, uint32_t sector) {
   if (!initialized) {
     return SD_CARD_NOT_READY;
@@ -211,17 +211,17 @@ SDCard_Status_t TSDIO::writeSector(uint8_t *buffer, uint32_t sector) {
     return SD_CARD_WRITE_PROTECT;
   }
 
-  // 对于 SDHC/SDXC 卡 (容量 > 2GB)，扇区地址需要使用块地址
-  // HAL 库会自动处理，但这里做显式检查
+  
+  
 
-  // 获取卡类型
+  
   HAL_SD_CardInfoTypeDef card_info;
   HAL_SD_GetCardInfo(&hsd, &card_info);
 
   LOG_I("SDIO", "Write Card Type: %lu, Sector: %lu",
           (unsigned long)card_info.CardType, (unsigned long)sector);
 
-  // 对于 SDHC/SDXC，CardType 是 1
+  
   if (card_info.CardType == 1) {
     LOG_I("SDIO", "Write SDHC/SDXC card detected");
   }
@@ -239,7 +239,7 @@ SDCard_Status_t TSDIO::writeSector(uint8_t *buffer, uint32_t sector) {
   return SD_CARD_OK;
 }
 
-// 读取多个扇区
+
 SDCard_Status_t TSDIO::readMultiSector(uint8_t *buffer, uint32_t sector,
                                        uint32_t count) {
   if (!initialized) {
@@ -257,7 +257,7 @@ SDCard_Status_t TSDIO::readMultiSector(uint8_t *buffer, uint32_t sector,
   return SD_CARD_OK;
 }
 
-// 写入多个扇区
+
 SDCard_Status_t TSDIO::writeMultiSector(uint8_t *buffer, uint32_t sector,
                                         uint32_t count) {
   if (!initialized) {
@@ -280,7 +280,7 @@ SDCard_Status_t TSDIO::writeMultiSector(uint8_t *buffer, uint32_t sector,
   return SD_CARD_OK;
 }
 
-// 擦除块
+
 SDCard_Status_t TSDIO::eraseBlock(uint32_t start_sector, uint32_t end_sector) {
   if (!initialized) {
     return SD_CARD_NOT_READY;
@@ -301,17 +301,17 @@ SDCard_Status_t TSDIO::eraseBlock(uint32_t start_sector, uint32_t end_sector) {
   return SD_CARD_OK;
 }
 
-// 检查 SD 卡是否插入
+
 bool TSDIO::isInserted(void) {
   if (_hard_disabled) return false;
   HAL_SD_CardInfoTypeDef card_info_test;
   return (HAL_SD_GetCardInfo(&hsd, &card_info_test) == HAL_OK);
 }
 
-// 检查 SD 卡是否写保护
+
 bool TSDIO::isWriteProtected(void) { return write_protected; }
 
-// 自我测试
+
 bool TSDIO::selfTest(void) {
   uint8_t write_buf[512];
   uint8_t read_buf[512];
@@ -320,7 +320,7 @@ bool TSDIO::selfTest(void) {
     return false;
   }
 
-  // 准备测试数据
+  
   for (int i = 0; i < 512; i++) {
     write_buf[i] = (uint8_t)(i & 0xFF);
   }
@@ -333,11 +333,11 @@ bool TSDIO::selfTest(void) {
     test_sector = 10;
   }
 
-  // 读取原始数据以便恢复
+  
   uint8_t backup_buf[512];
   readSector(backup_buf, test_sector);
 
-  // 写入测试数据
+  
   if (writeSector(write_buf, test_sector) != SD_CARD_OK) {
     writeSector(backup_buf, test_sector);
     return false;
@@ -345,27 +345,27 @@ bool TSDIO::selfTest(void) {
 
   HAL_Delay(10);
 
-  // 读取测试数据
+  
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {
     writeSector(backup_buf, test_sector);
     return false;
   }
 
-  // 比较数据
+  
   bool test_passed = (memcmp(write_buf, read_buf, 512) == 0);
 
-  // 恢复原始数据
+  
   writeSector(backup_buf, test_sector);
 
   return test_passed;
 }
 
-// 在 tsdio.cpp 中替换 directWriteTest 函数
+
 bool TSDIO::directWriteTest(void) {
   uint8_t write_buf[512];
   uint8_t read_buf[512];
 
-  // 先获取卡信息
+  
   HAL_SD_CardInfoTypeDef card_info;
   if (HAL_SD_GetCardInfo(&hsd, &card_info) != HAL_OK) {
     LOG_E("SDIO", "Direct Test: Cannot get card info");
@@ -376,19 +376,19 @@ bool TSDIO::directWriteTest(void) {
           (unsigned long)card_info.CardType, (unsigned long)card_info.BlockSize,
           (unsigned long)card_info.BlockNbr);
 
-  // 使用一个安全的测试扇区
-  uint32_t test_sector = 1000; // 改用扇区 1000
+  
+  uint32_t test_sector = 1000; 
   if (test_sector >= card_info.BlockNbr) {
     test_sector = card_info.BlockNbr - 100;
   }
   LOG_I("SDIO", "Direct Test: Using test sector: %lu", (unsigned long)test_sector);
 
-  // 准备数据
+  
   for (int i = 0; i < 512; i++) {
     write_buf[i] = (uint8_t)(i % 256);
   }
 
-  // 等待卡就绪
+  
   LOG_I("SDIO", "Direct Test: Checking card state...");
   HAL_SD_CardStateTypeDef state;
   for (int i = 0; i < 1000; i++) {
@@ -402,7 +402,7 @@ bool TSDIO::directWriteTest(void) {
 
   LOG_I("SDIO", "Direct Test: Writing sector...");
 
-  // 写入
+  
   HAL_StatusTypeDef result =
       HAL_SD_WriteBlocks(&hsd, write_buf, test_sector, 1, HAL_MAX_DELAY);
   LOG_I("SDIO", "Direct Test: HAL_SD_WriteBlocks result: %d", result);
@@ -411,7 +411,7 @@ bool TSDIO::directWriteTest(void) {
     uint32_t error_code = HAL_SD_GetError(&hsd);
     LOG_E("SDIO", "Direct Test: Error code: 0x%08lX", (unsigned long)error_code);
 
-    // 打印错误位（只打印存在的）
+    
     LOG_D("SDIO", "Direct Test: Error flags -- checking...");
     if (error_code & HAL_SD_ERROR_NONE)
       LOG_D("SDIO", "  NONE");
@@ -451,7 +451,7 @@ bool TSDIO::directWriteTest(void) {
 
   LOG_I("SDIO", "Direct Test: Write OK, waiting for completion...");
 
-  // 等待写入完成
+  
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Direct Test: Wait timeout");
     return false;
@@ -473,7 +473,7 @@ bool TSDIO::directWriteTest(void) {
     return false;
   }
 
-  /* 显示前32字节 */
+  
   {
     char hex[128];
     int pos = 0;
@@ -483,7 +483,7 @@ bool TSDIO::directWriteTest(void) {
     LOG_D("SDIO", "Direct Test: first 32 bytes: %s", hex);
   }
 
-  // 比较数据
+  
   if (memcmp(write_buf, read_buf, 512) == 0) {
     LOG_I("SDIO", "Direct Test: PASSED!");
     return true;
@@ -493,33 +493,33 @@ bool TSDIO::directWriteTest(void) {
   }
 }
 
-// 在 tsdio.cpp 中添加
+
 bool TSDIO::simpleWriteTest(void) {
   uint8_t write_buf[512];
   uint8_t read_buf[512];
 
   LOG_I("SDIO", "Simple Test: Starting...");
 
-  // 获取卡信息
+  
   HAL_SD_CardInfoTypeDef card_info;
   if (HAL_SD_GetCardInfo(&hsd, &card_info) != HAL_OK) {
     LOG_E("SDIO", "Simple Test: Cannot get card info");
     return false;
   }
 
-  // 使用扇区 100（应该安全）
+  
   uint32_t test_sector = 100;
   if (test_sector >= card_info.BlockNbr) {
     test_sector = card_info.BlockNbr / 2;
   }
   LOG_I("SDIO", "Simple Test: Using sector %lu", (unsigned long)test_sector);
 
-  // 准备数据
+  
   for (int i = 0; i < 512; i++) {
     write_buf[i] = (uint8_t)((i + HAL_GetTick()) & 0xFF);
   }
 
-  // 写入
+  
   if (writeSector(write_buf, test_sector) != SD_CARD_OK) {
     LOG_E("SDIO", "Simple Test: Write failed");
     return false;
@@ -527,13 +527,13 @@ bool TSDIO::simpleWriteTest(void) {
 
   HAL_Delay(10);
 
-  // 读取
+  
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {
     LOG_E("SDIO", "Simple Test: Read failed");
     return false;
   }
 
-  // 验证
+  
   if (memcmp(write_buf, read_buf, 512) == 0) {
     LOG_I("SDIO", "Simple Test: PASSED");
     return true;
@@ -543,6 +543,6 @@ bool TSDIO::simpleWriteTest(void) {
   }
 }
 
-// ==================== C 接口 ====================
+
 
 bool TSDIO_IsHardDisabled(void) { return boardSDIO.isHardDisabled(); }

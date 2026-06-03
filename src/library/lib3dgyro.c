@@ -16,8 +16,7 @@
  */
 
 #include "include/lib3dgyro.h"
-#include "include/libpd.h"
-#include <math.h>
+
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -35,7 +34,7 @@ static CCMRAM int16_t g_center_x = 120;
 static CCMRAM int16_t g_center_y = 120;
 static CCMRAM int16_t g_cube_size = 80;
 
-// 保存上一帧的投影坐标
+
 static CCMRAM int16_t last_proj_x[8] = {0};
 static CCMRAM int16_t last_proj_y[8] = {0};
 static CCMRAM int16_t last_edges[12][4] = {0};
@@ -81,7 +80,7 @@ void gyro_cube_draw(float roll, float pitch, float yaw) {
   int16_t proj_x[8], proj_y[8];
   float scale = g_cube_size / 100.0f;
 
-  // 计算当前投影
+  
   for (int i = 0; i < 8; i++) {
     rotated[i][0] = cube_vertices[i][0] * scale;
     rotated[i][1] = cube_vertices[i][1] * scale;
@@ -93,19 +92,19 @@ void gyro_cube_draw(float roll, float pitch, float yaw) {
   }
 
   if (!first_frame) {
-    // 只清除上一帧的棱
+    
     PD_SetColor(LCD_COLOR_BLACK);
     for (int i = 0; i < 12; i++) {
       PD_DrawLine(last_edges[i][0], last_edges[i][1], last_edges[i][2],
                   last_edges[i][3]);
     }
-    // 清除上一帧的顶点
+    
     for (int i = 0; i < 8; i++) {
       PD_DrawCircle(last_proj_x[i], last_proj_y[i], 4);
     }
   }
 
-  // 绘制当前帧
+  
   PD_SetColor(LCD_COLOR_WHITE);
   for (int i = 0; i < 12; i++) {
     int idx1 = cube_edges[i][0];
@@ -117,7 +116,7 @@ void gyro_cube_draw(float roll, float pitch, float yaw) {
     last_edges[i][3] = proj_y[idx2];
   }
 
-  // 绘制顶点（黄色）
+  
   PD_SetColor(LCD_COLOR_YELLOW);
   for (int i = 0; i < 8; i++) {
     PD_DrawCircle(proj_x[i], proj_y[i], 3);

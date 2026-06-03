@@ -16,16 +16,7 @@
  */
 
 #include "include/storage_activity.hpp"
-#include "core/sys/include/systime.h"
-#include "core/sys/include/syshandle.h"
-#include "ff.h"
-#include "hardware/include/key.hpp"
-#include "hardware/include/lcd.hpp"
-#include "hardware/include/trtc.hpp"
-#include "hardware/include/tsdio.hpp"
-#include "include/libpd.h"
-#include "syslog.h"
-#include <cstdio>
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -33,7 +24,7 @@ extern TSDIO boardSDIO;
 
 static bool sd_present = false;
 static uint32_t sd_cap_kb = 0;
-static int sd_used_pct = 0;   // SD 卡已用百分比
+static int sd_used_pct = 0;   
 static uint32_t builtin_cap_kb = 1024; // 1MB flash
 static int builtin_used_pct = 0;
 
@@ -105,22 +96,22 @@ static const char *fmt_size(uint32_t kb) {
 
 // ============ Get free % from FATFS ============
 
-/* 获取 SD 卡文件系统已用百分比和总容量 */
+
 static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   *used_pct = 0;
   *total_kb = 0;
 
-  /* SD 卡在 FatFs 中挂载为 0: */
+  
   const char *path = "0:";
   FATFS fs;
   bool need_unmount = false;
 
-  /* 尝试直接查询（假设 0: 已经挂载） */
+  
   DWORD free_clusters;
   FATFS *fs_ptr;
   FRESULT res = f_getfree(path, &free_clusters, &fs_ptr);
 
-  /* 如果未挂载，临时挂载再查 */
+  
   if (res != FR_OK) {
     res = f_mount(&fs, path, 1);
     if (res != FR_OK) {
