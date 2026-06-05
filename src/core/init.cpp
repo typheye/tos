@@ -16,6 +16,7 @@
  */
 
 #include "include/init.hpp"
+#include "core/manager/include/file_manager.h"
 
 
 extern "C" {
@@ -40,6 +41,44 @@ extern SN74HC00N boardHC00N;
 extern Potentiometer boardPot;
 extern THID boardHID;
 
+static void cleanup_system_volume_information(void) {
+  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized() || !boardSDIO.isInserted()) {
+    return;
+  }
+
+  FRESULT mount_res = FMCore_Mount(NULL, false);
+  if (mount_res != FR_OK) {
+    LOG_W("MAIN", "SVI cleanup skipped: mount => %s(%d)",
+          FMCore_FResultName(mount_res), (int)mount_res);
+    return;
+  }
+
+  FILINFO info;
+  FRESULT stat_res = FMCore_Stat("0:/System Volume Information", &info, false);
+  if (stat_res == FR_NO_FILE || stat_res == FR_NO_PATH) {
+    return;
+  }
+  if (stat_res != FR_OK) {
+    LOG_W("MAIN", "SVI cleanup skipped: stat => %s(%d)",
+          FMCore_FResultName(stat_res), (int)stat_res);
+    return;
+  }
+  if ((info.fattrib & AM_DIR) == 0U) {
+    LOG_W("MAIN", "SVI cleanup skipped: not a directory");
+    return;
+  }
+
+  SysWatchdog_FeedNow();
+  FRESULT del_res = FMCore_Delete("0:/System Volume Information", true, false);
+  if (del_res == FR_OK) {
+    LOG_I("MAIN", "Removed SD System Volume Information");
+  } else {
+    LOG_W("MAIN", "SVI cleanup failed: %s(%d)",
+          FMCore_FResultName(del_res), (int)del_res);
+  }
+  SysWatchdog_FeedNow();
+}
+
 void TOS::init() {
   boardSerial.init();
 
@@ -63,7 +102,9 @@ void TOS::init() {
 
   boardSDIO.init();
   if (TSDIO_IsHardDisabled()) {
-    LOG_W("MAIN", "SD card is hard-disabled — SD features unavailable");
+    LOG_W("MAIN", "SD card is hard-disabled - SD features unavailable");
+  } else {
+    cleanup_system_volume_information();
   }
 
   keyManager.init();

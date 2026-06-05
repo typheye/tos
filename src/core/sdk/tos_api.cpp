@@ -26,6 +26,8 @@ extern Buzzer buzzer1;
 #define TOS_START_DELAY_MS 2500U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
 #define TOS_NET_STUCK_MS       30000U
+#define TOS_NET_SOFT_STUCK_RETRY_MS 30000U
+#define TOS_STATION_PROBE_MIN_MS 30000U
 #define TOS_IP_REFRESH_MS      300000U
 #define TOS_IP_RETRY_MS        10000U
 #define TOS_RSSI_REFRESH_MS     60000U
@@ -62,6 +64,7 @@ static bool g_esp_init_ok_this_boot = false;
 static int g_last_rssi = 0;
 static uint32_t g_last_rssi_refresh_ms = 0;
 static uint8_t g_station_probe_fail_count = 0;
+static uint32_t g_last_station_probe_ms = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -673,6 +676,7 @@ void TosApi_Init(void) {
   g_last_rssi = wlan_enabled() ? -99 : 0;
   g_last_rssi_refresh_ms = 0;
   g_station_probe_fail_count = 0;
+  g_last_station_probe_ms = 0;
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
         g_device_id, (unsigned long)TOS_HEARTBEAT_MS,
@@ -700,30 +704,43 @@ static void note_transport_failure(const char *where) {
   if (g_transport_fail_count == 0U) return;
   if (offline_ms < TOS_NET_STUCK_MS) return;
 
+  /* Cloud/ESP8266 AT transport stalls are recoverable and must not reset the
+   * whole product.  The log that triggered this change showed CIPSTART and
+   * probe commands returning "busy p..." while the STA IP had recently been
+   * valid.  Escalating that condition to SYS_ERR_NET_TRANSPORT_STUCK caused a
+   * needless reboot during normal packet loss / AT busy windows. */
   if (Net_IsHardDisabled()) {
-    LOG_E("TAPI", "ESP8266 became hard-disabled after a proven online session");
-  } else if (Net_HasStationIP()) {
+    LOG_W("TAPI", "ESP8266 hard-disabled after online session; cloud retry paused");
+    return;
+  }
+
+  if (g_last_station_probe_ms != 0U &&
+      (uint32_t)(now - g_last_station_probe_ms) < TOS_STATION_PROBE_MIN_MS) {
+    LOG_W("TAPI", "Cloud silent for %lums; station probe throttled, keep retrying",
+          (unsigned long)offline_ms);
+    return;
+  }
+  g_last_station_probe_ms = now;
+
+  if (Net_HasStationIP()) {
     g_station_probe_fail_count = 0;
     LOG_W("TAPI", "Cloud silent for %lums, but STA IP is alive; keep retrying",
           (unsigned long)offline_ms);
     g_last_ip_refresh_ms = 0;
     maybe_refresh_ip(HAL_GetTick());
     return;
-  } else {
-    if (g_station_probe_fail_count < 255U) g_station_probe_fail_count++;
-    if (g_station_probe_fail_count < 2U || offline_ms < 45000U) {
-      LOG_W("TAPI", "Cloud silent for %lums, STA IP probe fail #%u; defer syshandle",
-            (unsigned long)offline_ms, (unsigned)g_station_probe_fail_count);
-      return;
-    }
   }
 
-  /* Once this boot has proven it was online, only a local ESP/LAN failure is a
-   * whole-system network fault.  Server-side silence or weak-WLAN packet loss
-   * should not crash the UI if the ESP still has a STA IP. */
-  LOG_E("TAPI", "Cloud transport stuck for %lums; entering syshandle",
-        (unsigned long)offline_ms);
-  SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
+  if (g_station_probe_fail_count < 255U) g_station_probe_fail_count++;
+  LOG_W("TAPI", "Cloud silent for %lums, STA IP probe fail #%u; non-fatal retry",
+        (unsigned long)offline_ms, (unsigned)g_station_probe_fail_count);
+
+  /* Best-effort client cleanup is intentionally light: do not reset USB/UI and
+   * do not reinitialize the ESP here.  The next heartbeat retry will rebuild a
+   * fresh TCP session through the normal async path. */
+  ESP8266_ClearRecoveryFailureCount();
+  g_last_ip_refresh_ms = 0;
+  schedule_heartbeat(TOS_NET_SOFT_STUCK_RETRY_MS);
 }
 
 void TosApi_Tick(void) {
