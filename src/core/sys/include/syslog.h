@@ -20,6 +20,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include "ff.h"
 #include "stm32f4xx_hal.h"
 
 #ifdef __cplusplus
@@ -38,6 +42,10 @@ typedef enum {
 /* ========== Compile-time max level (override in project config) ========== */
 #ifndef SYSLOG_MAX_LEVEL
 #define SYSLOG_MAX_LEVEL  SYSLOG_DEBUG
+#endif
+
+#ifndef SYSLOG_FILE_MAX_LEVEL
+#define SYSLOG_FILE_MAX_LEVEL SYSLOG_INFO
 #endif
 
 /* ========== Recommended module tags (5 chars max, passed as string literal) ==========
@@ -85,6 +93,10 @@ typedef enum {
  */
 void SysLog_Write(SysLog_Level_t level, const char *mod, const char *task,
                   const char *file, int line, const char *fmt, ...);
+void SysLog_Print(SysLog_Level_t level, const char *mod, const char *fmt, ...);
+void SysLog_WriteFatalDump(uint32_t code, const char *name);
+void SysLog_DisableFileOutput(void);
+bool SysLog_IsFileOutputDisabled(void);
 
 /**
  * @brief  Get the millisecond tick used for timestamps
@@ -93,39 +105,39 @@ void SysLog_Write(SysLog_Level_t level, const char *mod, const char *task,
 uint32_t SysLog_GetTick(void);
 
 /* ========== Timestamp helper ========== */
-const char *syslog_ts(void);  /* returns "[sssss.mmm]" from HAL_GetTick() */
+const char *syslog_ts(void);  /* fixed 8-digit timestamp from HAL_GetTick() */
 
 /* ========== Per-level macros — printf DIRECT ========== */
 
 #define LOG_FATAL(mod, task, fmt, ...) \
-  printf("%s [FATAL] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+  SysLog_Print(SYSLOG_FATAL, mod, fmt, ##__VA_ARGS__)
 
 #define LOG_ERROR(mod, task, fmt, ...) \
-  printf("%s [ERROR] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+  SysLog_Print(SYSLOG_ERROR, mod, fmt, ##__VA_ARGS__)
 
 #define LOG_WARN(mod, task, fmt, ...) \
-  printf("%s [WARN ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+  SysLog_Print(SYSLOG_WARN, mod, fmt, ##__VA_ARGS__)
 
 #if SYSLOG_MAX_LEVEL >= 3
 #define LOG_INFO(mod, task, fmt, ...) \
-  printf("%s [INFO ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+  SysLog_Print(SYSLOG_INFO, mod, fmt, ##__VA_ARGS__)
 #else
 #define LOG_INFO(...)  ((void)0)
 #endif
 
 #if SYSLOG_MAX_LEVEL >= 4
 #define LOG_DEBUG(mod, task, fmt, ...) \
-  printf("%s [DEBUG] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+  SysLog_Print(SYSLOG_DEBUG, mod, fmt, ##__VA_ARGS__)
 #else
 #define LOG_DEBUG(...) ((void)0)
 #endif
 
 /* ========== Shortcut macros ========== */
-#define LOG_F(mod, fmt, ...)  printf("%s [FATAL] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
-#define LOG_E(mod, fmt, ...)  printf("%s [ERROR] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
-#define LOG_W(mod, fmt, ...)  printf("%s [WARN ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
-#define LOG_I(mod, fmt, ...)  printf("%s [INFO ] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
-#define LOG_D(mod, fmt, ...)  printf("%s [DEBUG] [%-5s] " fmt "\r\n", syslog_ts(), mod, ##__VA_ARGS__)
+#define LOG_F(mod, fmt, ...)  SysLog_Print(SYSLOG_FATAL, mod, fmt, ##__VA_ARGS__)
+#define LOG_E(mod, fmt, ...)  SysLog_Print(SYSLOG_ERROR, mod, fmt, ##__VA_ARGS__)
+#define LOG_W(mod, fmt, ...)  SysLog_Print(SYSLOG_WARN, mod, fmt, ##__VA_ARGS__)
+#define LOG_I(mod, fmt, ...)  SysLog_Print(SYSLOG_INFO, mod, fmt, ##__VA_ARGS__)
+#define LOG_D(mod, fmt, ...)  SysLog_Print(SYSLOG_DEBUG, mod, fmt, ##__VA_ARGS__)
 
 #ifdef __cplusplus
 }

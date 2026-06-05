@@ -19,6 +19,7 @@
 #define INIT_HPP_
 #include "core/include/tos.hpp"
 #include "core/manager/include/emotion_manager.h"
+#include "core/manager/include/hid_manager.h"
 #include "core/manager/include/settings_manager.h"
 #include "core/sdk/include/tos_api.h"
 #include "core/sys/include/systime.h"

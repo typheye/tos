@@ -26,6 +26,7 @@ extern void LED_WarnOff(void);
 
 static volatile uint32_t g_last_exception_code = SYS_ERR_NONE;
 static volatile uint8_t g_in_exception = 0;
+static volatile uint8_t g_skip_dump_once = 0;
 static uint32_t g_draw_code = SYS_ERR_NONE;
 static int g_draw_seconds = 6;
 
@@ -43,6 +44,8 @@ static void syshandle_force_reset(void) {
 
 uint32_t SysHandle_GetLastCode(void) { return g_last_exception_code; }
 
+bool SysHandle_IsInException(void) { return g_in_exception != 0U; }
+
 const char *SysHandle_CodeName(uint32_t code) {
   switch (code) {
   case SYS_ERR_NONE: return "NONE";
@@ -56,6 +59,7 @@ const char *SysHandle_CodeName(uint32_t code) {
   case SYS_ERR_SD_BROWSER_FAILED: return "SD_BROWSER_FAILED";
   case SYS_ERR_SD_FILE_OP_FAILED: return "SD_FILE_OP_FAILED";
   case SYS_ERR_SD_PATH_TOO_LONG: return "SD_PATH_TOO_LONG";
+  case SYS_ERR_SD_LOG_FAILED: return "SD_LOG_FAILED";
   case SYS_ERR_UI_STORAGE_PROBE: return "UI_STORAGE_PROBE";
   case SYS_ERR_UI_FILE_MANAGER: return "UI_FILE_MANAGER";
   case SYS_ERR_UI_HID_TOOLS: return "UI_HID_TOOLS";
@@ -144,6 +148,9 @@ static void syshandle_render(void) {
 }
 
 void SysHandle_Exception(uint32_t code) {
+  uint8_t skip_dump = g_skip_dump_once;
+  g_skip_dump_once = 0U;
+
   if (g_in_exception) {
     /* A second fatal error while rendering syshandle usually means LCD/SPI/NET
      * code re-entered the exception path.  Reset immediately instead of
@@ -161,6 +168,10 @@ void SysHandle_Exception(uint32_t code) {
   LED_WarnOff();
   LED_ErrorOn();
 
+  if (!skip_dump) {
+    SysLog_WriteFatalDump(code, SysHandle_CodeName(code));
+  }
+
   LOG_F("SYSH", "System exception: 0x%08lX %s", (unsigned long)code,
         SysHandle_CodeName(code));
 
@@ -177,6 +188,12 @@ void SysHandle_Exception(uint32_t code) {
   }
 
   syshandle_force_reset();
+}
+
+void SysHandle_ExceptionNoDump(uint32_t code) {
+  SysLog_DisableFileOutput();
+  g_skip_dump_once = 1U;
+  SysHandle_Exception(code);
 }
 
 void SysHandle_Fatal(uint32_t code) { SysHandle_Exception(code); }

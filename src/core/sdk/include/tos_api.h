@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include "core/include/config.h"
 #include "core/manager/include/emotion_manager.h"
+#include "core/manager/include/hid_manager.h"
 #include "core/manager/include/network_manager.h"
 #include "core/manager/include/settings_manager.h"
 #ifdef __cplusplus

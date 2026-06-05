@@ -24,6 +24,7 @@
 #include "ff.h"
 #include "core/include/syshandle.h"
 #include "core/sys/include/syslog.h"
+#include "core/sys/include/syswatchdog.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -49,9 +50,22 @@ FRESULT FMCore_ListDir(const char *path, FMCore_Entry *entries, uint16_t max_ent
 FRESULT FMCore_CreateDir(const char *path, bool fatal_on_storage_error);
 FRESULT FMCore_CreateFile(const char *path, const void *data, uint32_t len,
                           bool fatal_on_storage_error);
+FRESULT FMCore_WriteFile(const char *path, const void *data, uint32_t len,
+                         bool fatal_on_storage_error);
+FRESULT FMCore_ReadFile(const char *path, void *buf, uint32_t max_len,
+                        uint32_t *out_len, bool fatal_on_storage_error);
+FRESULT FMCore_AppendFile(const char *path, const void *data, uint32_t len,
+                          bool fatal_on_storage_error);
 FRESULT FMCore_Delete(const char *path, bool recursive, bool fatal_on_storage_error);
 FRESULT FMCore_CopyFile(const char *src, const char *dst, bool fatal_on_storage_error);
 FRESULT FMCore_InitLayout(bool fatal_on_storage_error);
+bool FMCore_IsInitialized(void);
+FRESULT FMCore_NextIndexedPath(const char *dir, const char *ext,
+                               char *out, size_t out_sz);
+FRESULT FMCore_AppendBootLog(const char *line, uint32_t len);
+bool FMCore_IsBootLogFaultFatal(void);
+FRESULT FMCore_WriteSystemDump(uint32_t code, const char *name,
+                               const char *extra);
 
 const char *FMCore_FResultName(FRESULT res);
 bool FMCore_JoinPath(const char *base, const char *name, char *out, size_t out_sz);

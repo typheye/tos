@@ -160,9 +160,32 @@ static bool net_raw_at(const char *cmd, const char *ok1,
   return ok;
 }
 
-static void net_log_response(const char *label) {
+static bool net_raw_at_capture(const char *cmd, const char *ok1,
+                               uint32_t timeout_ms, uint32_t settle_ms,
+                               char *out, size_t out_sz,
+                               const char *ok2 = nullptr,
+                               const char *ok3 = nullptr) {
+  char tx[128];
+  int n = snprintf(tx, sizeof(tx), "%s\r\n", cmd);
+  if (out && out_sz > 0U) out[0] = '\0';
+  if (n <= 0 || n >= (int)sizeof(tx)) return false;
+
+  net_raw_begin();
+  HAL_UART_Transmit(&huart2, (uint8_t *)tx, (uint16_t)n, 1000);
+  bool ok = net_raw_collect(ok1, ok2, ok3, timeout_ms, settle_ms, false, true);
+  if (out && out_sz > 0U) {
+    const char *rx = esp8266.getRxBuffer();
+    size_t copy_len = rx ? strlen(rx) : 0U;
+    if (copy_len >= out_sz) copy_len = out_sz - 1U;
+    if (rx && copy_len > 0U) memcpy(out, rx, copy_len);
+    out[copy_len] = '\0';
+  }
+  net_raw_end();
+  return ok;
+}
+
+static void net_log_response_text(const char *label, const char *resp) {
   char summary[128];
-  const char *resp = esp8266.getRxBuffer();
   size_t j = 0;
 
   for (size_t i = 0; resp && resp[i] && j + 1 < sizeof(summary); ++i) {
@@ -173,6 +196,10 @@ static void net_log_response(const char *label) {
   }
   summary[j] = '\0';
   LOG_D("NET", "%s: %s", label, summary);
+}
+
+static void net_log_response(const char *label) {
+  net_log_response_text(label, esp8266.getRxBuffer());
 }
 
 static const char *net_http_header_start(const char *rx) {
@@ -562,15 +589,20 @@ void Net_PrepareClient(void) {
 }
 
 bool Net_HasStationIP(void) {
-  bool status_ok = net_raw_at("AT+CIPSTATUS", "OK", 2500, 40);
-  net_log_response(status_ok ? "CIPSTATUS" : "CIPSTATUS fail");
+  char status_resp[128];
+  char cifsr_resp[256];
+  bool status_ok = net_raw_at_capture("AT+CIPSTATUS", "OK", 3000, 60,
+                                      status_resp, sizeof(status_resp));
+  net_log_response_text(status_ok ? "CIPSTATUS" : "CIPSTATUS fail",
+                        status_resp);
 
-  bool cifr_ok = net_raw_at("AT+CIFSR", "OK", 2500, 40);
-  net_log_response(cifr_ok ? "CIFSR" : "CIFSR fail");
+  bool cifr_ok = net_raw_at_capture("AT+CIFSR", "OK", 3000, 60,
+                                    cifsr_resp, sizeof(cifsr_resp));
+  net_log_response_text(cifr_ok ? "CIFSR" : "CIFSR fail", cifsr_resp);
 
-  if (!cifr_ok) return status_ok;
-  const char *rx = esp8266.getRxBuffer();
-  return (rx && strstr(rx, "STAIP") && !strstr(rx, "\"0.0.0.0\""));
+  if (!cifr_ok) return false;
+  return strstr(cifsr_resp, "STAIP") != nullptr &&
+         strstr(cifsr_resp, "\"0.0.0.0\"") == nullptr;
 }
 
 /* ── TCP ──────────────────────────────────────────────────────── */

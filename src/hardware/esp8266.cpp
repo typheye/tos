@@ -400,8 +400,14 @@ bool ESP8266::scanNetworks(void) {
 }
 
 bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
+  if (!ip_buffer || buffer_size == 0U) return false;
+  ip_buffer[0] = '\0';
+
   clearRxBuffer();
-  sendCommand("AT+CIFSR", "", 2000);
+  if (!sendCommand("AT+CIFSR", "OK", 2000)) {
+    clearRxBuffer();
+    return false;
+  }
 
   const char *ip_start = strstr((char *)_rx_buffer, "STAIP");
   if (ip_start) {
@@ -411,9 +417,10 @@ bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
       const char *ip_end = strchr(ip_start, '"');
       if (ip_end) {
         uint16_t len = ip_end - ip_start;
-        if (len < buffer_size) {
+        if (len < buffer_size && len > 0U) {
           strncpy(ip_buffer, ip_start, len);
           ip_buffer[len] = '\0';
+          if (strcmp(ip_buffer, "0.0.0.0") == 0) return false;
           return true;
         }
       }

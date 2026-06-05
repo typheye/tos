@@ -125,6 +125,10 @@ const Diskio_drvTypeDef  SD_Driver =
  */
 #include <stdio.h>
 #include "syslog.h"
+#include "syswatchdog.h"
+
+#undef SD_TIMEOUT
+#define SD_TIMEOUT 3000U
 
 #ifndef SFHD_SD_USE_POLLING_WRITE
 #define SFHD_SD_USE_POLLING_WRITE 1
@@ -152,6 +156,7 @@ static uint8_t SFHD_SD_WriteBlocks_Polling(uint32_t *pData,
       WriteStatus = 1;
       return MSD_OK;
     }
+    SysWatchdog_Tick();
   }
 
   LOG_E("SDIO", "poll write state timeout: sector=%lu count=%lu state=%u",

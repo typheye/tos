@@ -157,6 +157,7 @@ void TOS::init() {
   }
 
   EmotionManager_Init();
+  HidManager_Init();
   TosApi_Init();
 
   SysUI::init();
