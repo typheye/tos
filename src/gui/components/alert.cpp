@@ -56,17 +56,29 @@ void alert_show(const char *title, const char *msg) {
         int msg_y = 33;
         const char *p = msg;
         while (*p && msg_y < 200) {
-          /* Find end of this line (\n or \0) */
+          /* Find end of this segment (\n or \0) */
           const char *eol = p;
           while (*eol && *eol != '\n') eol++;
-          int len = eol - p;
-          /* Truncate to screen width if needed */
-          if (len > 22) len = 22;
-          char line[24];
-          memcpy(line, p, len); line[len] = '\0';
-          PD_DrawString(16, msg_y, line);
-          msg_y += 20;
-          p = (*eol == '\n') ? eol + 1 : eol;
+          while (*p == ' ') p++;
+
+          while (p < eol && msg_y < 200) {
+            int len = (int)(eol - p);
+            if (len > 22) {
+              /* Word-wrap: find last space before the 22-char limit */
+              int brk = 22;
+              while (brk > 0 && p[brk] != ' ') brk--;
+              if (brk == 0) brk = 22;
+              len = brk;
+            }
+            char line[24];
+            memcpy(line, p, len); line[len] = '\0';
+            PD_DrawString(16, msg_y, line);
+            msg_y += 20;
+            p += len;
+            while (*p == ' ') p++;
+          }
+
+          if (*p == '\n') p++;
         }
 
         PD_DrawFooterCenter("ENTER", NULL, NULL);
