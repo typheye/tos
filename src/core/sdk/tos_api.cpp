@@ -29,10 +29,13 @@ extern Buzzer buzzer1;
 #define TOS_HEARTBEAT_TIMEOUT_MS 11000U
 #define TOS_ACK_TIMEOUT_MS       8000U
 #define TOS_NET_STUCK_MS       30000U
+#define TOS_NET_FATAL_STUCK_MS 300000U
+#define TOS_NET_FATAL_FAILS         8U
+#define TOS_NET_FATAL_PROBE_FAILS   2U
 #define TOS_NET_SOFT_STUCK_RETRY_MS 15000U
 #define TOS_STATION_PROBE_MIN_MS 90000U
 #define TOS_TRANSPORT_MAINTAIN_MS 60000U
-#define TOS_WIFI_REJOIN_MIN_MS 300000U
+#define TOS_WIFI_REJOIN_MIN_MS 120000U
 #define TOS_FALLBACK_EMPTY_CYCLES 180U
 #define TOS_IP_REFRESH_MS      300000U
 #define TOS_IP_RETRY_MS        10000U
@@ -40,6 +43,9 @@ extern Buzzer buzzer1;
 #define TOS_RSSI_RETRY_MS       15000U
 #define TOS_RSSI_IDLE_BUDGET_MS 1800U
 #define TOS_ACK_MAX_CMDS   5
+#define TOS_ACK_MAX_RETRIES 5U
+#define TOS_ACK_RETRY_BASE_MS 10000U
+#define TOS_ACK_RETRY_MAX_MS  60000U
 #define TOS_MAX_CMD_OBJ     448U
 
 enum TosApiPhase {
@@ -73,8 +79,12 @@ static uint8_t g_station_probe_fail_count = 0;
 static uint32_t g_last_station_probe_ms = 0;
 static uint32_t g_last_transport_maintenance_ms = 0;
 static uint32_t g_last_wifi_rejoin_ms = 0;
+static uint8_t g_wifi_rejoin_fail_count = 0;
 static uint32_t g_last_hid_report_try_ms = 0;
 static uint32_t g_hid_seq_in_flight = 0;
+static uint8_t g_ack_retry_count = 0;
+static uint32_t g_next_ack_retry_ms = 0;
+static bool g_station_ip_confirmed = false;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -89,6 +99,19 @@ static uint32_t transport_retry_delay(void) {
   uint32_t retry = TOS_RETRY_MS + ((uint32_t)g_transport_fail_count - 1U) * 3000U;
   if (retry > TOS_RETRY_MAX_MS) retry = TOS_RETRY_MAX_MS;
   return retry;
+}
+
+static uint32_t ack_retry_delay(void) {
+  uint32_t delay = TOS_ACK_RETRY_BASE_MS;
+  for (uint8_t i = 1U; i < g_ack_retry_count; ++i) {
+    if (delay >= TOS_ACK_RETRY_MAX_MS / 2U) {
+      delay = TOS_ACK_RETRY_MAX_MS;
+      break;
+    }
+    delay *= 2U;
+  }
+  if (delay > TOS_ACK_RETRY_MAX_MS) delay = TOS_ACK_RETRY_MAX_MS;
+  return delay;
 }
 
 static void build_device_id(void) {
@@ -124,6 +147,7 @@ static bool online_intended_config(void) {
 static bool network_ready(void) {
   if (!wlan_enabled()) return false;
   if (Net_IsHardDisabled()) return false;
+  if (g_transport_fail_count >= 2U) return g_station_ip_confirmed;
   int state = ESP8266_GetState();
   /* Some ESP8266 AT firmwares stay in STATUS:2 while TCP requests still work.
    * Once cloud has been reached in this boot, keep treating WLAN as usable
@@ -148,6 +172,52 @@ static int response_code(const char *resp) {
 
 static const char *response_body(const char *resp) {
   return json_extract_body(resp);
+}
+
+static int response_http_status(const char *resp) {
+  const char *http = resp ? strstr(resp, "HTTP/") : nullptr;
+  int status = -1;
+  if (http) (void)sscanf(http, "HTTP/%*u.%*u %d", &status);
+  return status;
+}
+
+static void mark_cloud_transport_ok(void) {
+  g_last_cloud_ok_ms = HAL_GetTick();
+  g_cloud_was_online = true;
+  g_transport_fail_count = 0;
+  g_station_ip_confirmed = true;
+  g_station_probe_fail_count = 0;
+  g_wifi_rejoin_fail_count = 0;
+  g_last_station_probe_ms = 0;
+  g_last_transport_maintenance_ms = 0;
+  g_last_wifi_rejoin_ms = 0;
+  ESP8266_ClearRecoveryFailureCount();
+}
+
+static void clear_pending_ack(void) {
+  g_ack_body[0] = '\0';
+  g_ack_retry_count = 0;
+  g_next_ack_retry_ms = 0;
+  g_reboot_after_ack = false;
+}
+
+static bool retain_ack_for_retry(const char *reason) {
+  if (g_ack_retry_count < 255U) g_ack_retry_count++;
+  if (g_ack_retry_count >= TOS_ACK_MAX_RETRIES) {
+    LOG_E("TAPI", "Ack dropped after %u failures (%s); heartbeat resumed",
+          (unsigned)g_ack_retry_count, reason ? reason : "unknown");
+    clear_pending_ack();
+    schedule_heartbeat(1000U);
+    return false;
+  }
+
+  uint32_t delay = ack_retry_delay();
+  g_next_ack_retry_ms = HAL_GetTick() + delay;
+  LOG_W("TAPI", "Ack retained, retry %u/%u in %lums; heartbeat remains active",
+        (unsigned)g_ack_retry_count, (unsigned)TOS_ACK_MAX_RETRIES,
+        (unsigned long)delay);
+  schedule_heartbeat(TOS_HEARTBEAT_MS);
+  return true;
 }
 
 static void note_transport_failure(const char *where);
@@ -253,12 +323,16 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
 
   g_last_station_probe_ms = now;
   if (Net_HasStationIP()) {
+    g_station_ip_confirmed = true;
     g_station_probe_fail_count = 0;
+    g_wifi_rejoin_fail_count = 0;
     update_cached_ip_from_esp();
-    LOG_W("TAPI", "STA IP alive during cloud silence; keep retrying");
+    LOG_W("TAPI", "STA IP alive during cloud silence; transport retry enabled");
+    schedule_heartbeat(1000U);
     return;
   }
 
+  g_station_ip_confirmed = false;
   if (g_station_probe_fail_count < 255U) g_station_probe_fail_count++;
   LOG_W("TAPI", "STA IP probe fail #%u during cloud silence",
         (unsigned)g_station_probe_fail_count);
@@ -277,10 +351,16 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
   LOG_W("TAPI", "STA IP lost; rejoining current AP: %s", ssid);
   Net_LightCleanup();
   if (ESP8266_ConnectWiFi(ssid, pwd ? pwd : "")) {
+    g_station_ip_confirmed = true;
     g_station_probe_fail_count = 0;
+    g_wifi_rejoin_fail_count = 0;
     g_last_ip_refresh_ms = 0;
     update_cached_ip_from_esp();
     schedule_heartbeat(1000U);
+  } else {
+    if (g_wifi_rejoin_fail_count < 255U) g_wifi_rejoin_fail_count++;
+    LOG_W("TAPI", "STA rejoin failed #%u",
+          (unsigned)g_wifi_rejoin_fail_count);
   }
 }
 
@@ -643,6 +723,8 @@ static bool parse_commands_from_body(const char *body, const char *source,
       if (reboot_out) *reboot_out = reboot;
       snprintf(g_ack_path, sizeof(g_ack_path),
                "/v1/device/%s/commands/ack", g_device_id);
+      g_ack_retry_count = 0;
+      g_next_ack_retry_ms = 0;
       LOG_D("TAPI", "Ack body ready, bytes=%u", (unsigned)strlen(g_ack_body));
       return true;
     }
@@ -690,19 +772,19 @@ static bool parse_heartbeat_response(const char *resp) {
     return false;
   }
 
-  g_ack_body[0] = '\0';
   bool reboot = false;
-  bool has_cmd = parse_commands_from_body(body, "HB", &reboot);
-  g_last_hb_malformed = g_last_cmd_parse_malformed;
+  bool has_cmd = false;
+  if (!g_ack_body[0]) {
+    has_cmd = parse_commands_from_body(body, "HB", &reboot);
+    g_last_hb_malformed = g_last_cmd_parse_malformed;
+  } else {
+    /* A previous ACK is still pending. Keep heartbeat transport alive without
+     * overwriting or re-executing commands that are waiting for acknowledgement. */
+    g_last_hb_malformed = false;
+    LOG_D("TAPI", "Heartbeat commands deferred while ACK is pending");
+  }
   if (has_cmd) g_empty_hb_cycles = 0;
-  g_last_cloud_ok_ms = HAL_GetTick();
-  g_cloud_was_online = true;
-  g_transport_fail_count = 0;
-  g_station_probe_fail_count = 0;
-  g_last_station_probe_ms = 0;
-  g_last_transport_maintenance_ms = 0;
-  g_last_wifi_rejoin_ms = 0;
-  ESP8266_ClearRecoveryFailureCount();
+  mark_cloud_transport_ok();
   if (g_hid_seq_in_flight == HidManager_GetReportSeq()) {
     HidManager_ClearReportDirty();
   }
@@ -757,6 +839,14 @@ static void start_ack_or_schedule(void) {
   }
 
   if (g_ack_body[0]) {
+    uint32_t now = HAL_GetTick();
+    if (g_next_ack_retry_ms != 0U &&
+        !time_due(now, g_next_ack_retry_ms)) {
+      g_phase = TOS_PHASE_IDLE;
+      schedule_heartbeat(TOS_HEARTBEAT_MS);
+      return;
+    }
+
     if (Net_AsyncHttpPostStart(TOS_API_HOST, TOS_API_PORT, g_ack_path,
                                g_ack_body, (uint16_t)strlen(g_ack_body),
                                TOS_ACK_TIMEOUT_MS)) {
@@ -765,6 +855,9 @@ static void start_ack_or_schedule(void) {
     }
     LOG_W("TAPI", "Ack start failed");
     note_transport_failure("ack-start");
+    (void)retain_ack_for_retry("start");
+    g_phase = TOS_PHASE_IDLE;
+    return;
   }
   g_phase = TOS_PHASE_IDLE;
   schedule_heartbeat(TOS_HEARTBEAT_MS);
@@ -790,8 +883,12 @@ void TosApi_Init(void) {
   g_last_station_probe_ms = 0;
   g_last_transport_maintenance_ms = 0;
   g_last_wifi_rejoin_ms = 0;
+  g_wifi_rejoin_fail_count = 0;
   g_last_hid_report_try_ms = 0;
   g_hid_seq_in_flight = 0;
+  g_ack_retry_count = 0;
+  g_next_ack_retry_ms = 0;
+  g_station_ip_confirmed = network_ready();
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
         g_device_id, (unsigned long)TOS_HEARTBEAT_MS,
@@ -817,35 +914,33 @@ static void note_transport_failure(const char *where) {
   if (!g_cloud_was_online || g_last_cloud_ok_ms == 0) return;
 
   if (g_transport_fail_count == 0U) return;
+  if (g_transport_fail_count >= 2U) g_station_ip_confirmed = false;
   if (offline_ms < TOS_NET_STUCK_MS) return;
 
-  /* Cloud/ESP8266 AT transport stalls are recoverable and must not reset the
-   * whole product.  The log that triggered this change showed CIPSTART and
-   * probe commands returning "busy p..." while the STA IP had recently been
-   * valid.  Escalating that condition to SYS_ERR_NET_TRANSPORT_STUCK caused a
-   * needless reboot during normal packet loss / AT busy windows. */
   if (Net_IsHardDisabled()) {
-    LOG_W("TAPI", "ESP8266 hard-disabled after online session; cloud retry paused");
-    return;
+    LOG_E("TAPI", "ESP8266 hard-disabled after a proven online session");
+    SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
   }
 
   maintain_transport_after_silence(now, offline_ms);
 
-  /* Report silence at a low rate.  Active maintenance/probing is handled above
-   * and rate-limited so it cannot collide with every failed HTTP attempt. */
-  if (g_last_station_probe_ms == 0U ||
-      (uint32_t)(now - g_last_station_probe_ms) >= TOS_STATION_PROBE_MIN_MS) {
-    g_last_station_probe_ms = now;
-    if (ip_valid(g_last_ip)) {
-      LOG_W("TAPI", "Cloud silent for %lums, cached STA IP %s; keep retrying",
-            (unsigned long)offline_ms, g_last_ip);
-    } else {
-      LOG_W("TAPI", "Cloud silent for %lums; skip active STA probe, keep retrying",
-            (unsigned long)offline_ms);
-    }
+  /* A live STA with a dead cloud endpoint is not a device fault.  Escalate only
+   * after the AT interface cannot prove a station IP, at least one AP rejoin
+   * also failed, and the outage persisted for five minutes. */
+  if (offline_ms >= TOS_NET_FATAL_STUCK_MS &&
+      g_transport_fail_count >= TOS_NET_FATAL_FAILS &&
+      g_station_probe_fail_count >= TOS_NET_FATAL_PROBE_FAILS &&
+      g_wifi_rejoin_fail_count > 0U) {
+    LOG_E("TAPI",
+          "ESP transport stuck: offline=%lums fail=%u probe=%u rejoin=%u",
+          (unsigned long)offline_ms, (unsigned)g_transport_fail_count,
+          (unsigned)g_station_probe_fail_count,
+          (unsigned)g_wifi_rejoin_fail_count);
+    SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
   }
 
-  ESP8266_ClearRecoveryFailureCount();
+  LOG_W("TAPI", "Cloud silent for %lums; retrying with backoff",
+        (unsigned long)offline_ms);
   schedule_heartbeat(TOS_NET_SOFT_STUCK_RETRY_MS);
 }
 
@@ -861,6 +956,7 @@ void TosApi_Tick(void) {
   if (g_phase == TOS_PHASE_HEARTBEAT && ns != NET_ASYNC_BUSY) {
     bool ok = false;
     if (ns == NET_ASYNC_DONE) {
+      mark_cloud_transport_ok();
       ok = parse_heartbeat_response(Net_AsyncResponse());
     } else if (ns == NET_ASYNC_FAILED) {
       note_transport_failure("heartbeat");
@@ -878,20 +974,17 @@ void TosApi_Tick(void) {
 
   if (g_phase == TOS_PHASE_ACK && ns != NET_ASYNC_BUSY) {
     bool ack_ok = false;
+    bool ack_api_failure = false;
     if (ns == NET_ASYNC_DONE) {
-      int code = response_code(Net_AsyncResponse());
-      ack_ok = (code == 0);
-      if (ack_ok) {
-        g_last_cloud_ok_ms = HAL_GetTick();
-        g_cloud_was_online = true;
-        g_transport_fail_count = 0;
-        g_station_probe_fail_count = 0;
-        g_last_station_probe_ms = 0;
-        g_last_transport_maintenance_ms = 0;
-        g_last_wifi_rejoin_ms = 0;
-        ESP8266_ClearRecoveryFailureCount();
-      }
-      LOG_I("TAPI", "Ack %s", ack_ok ? "OK" : "API fail");
+      const char *resp = Net_AsyncResponse();
+      int code = response_code(resp);
+      int status = response_http_status(resp);
+      ack_ok = (code == 0) ||
+               (code < 0 && status >= 200 && status < 300);
+      ack_api_failure = !ack_ok;
+      mark_cloud_transport_ok();
+      LOG_I("TAPI", "Ack %s (http=%d code=%d)",
+            ack_ok ? "OK" : "API fail", status, code);
     } else if (ns == NET_ASYNC_FAILED) {
       note_transport_failure("ack");
     }
@@ -900,22 +993,17 @@ void TosApi_Tick(void) {
     g_phase = TOS_PHASE_IDLE;
 
     if (ack_ok) {
-      g_ack_body[0] = '\0';
+      bool reboot_after_ack = g_reboot_after_ack;
+      clear_pending_ack();
       schedule_heartbeat(HidManager_IsReportDirty() ? 0U : TOS_HEARTBEAT_MS);
 
-      if (g_reboot_after_ack) {
+      if (reboot_after_ack) {
         LOG_I("TAPI", "Reboot command acknowledged, resetting");
         HAL_Delay(30);
         NVIC_SystemReset();
       }
     } else {
-      /* Commands are marked delivered by the backend once included in a
-       * heartbeat response. If the ack POST fails and we drop g_ack_body, the
-       * backend will not resend them and the console looks random/unreliable.
-       * Keep the ack body and retry it before the next heartbeat.
-       */
-      LOG_W("TAPI", "Ack retained, retry soon");
-      schedule_heartbeat(5000U);
+      (void)retain_ack_for_retry(ack_api_failure ? "API" : "transport");
     }
     return;
   }
@@ -962,7 +1050,9 @@ void TosApi_Tick(void) {
     return;
   }
 
-  if (g_ack_body[0]) {
+  if (g_ack_body[0] &&
+      (g_next_ack_retry_ms == 0U ||
+       time_due(now, g_next_ack_retry_ms))) {
     start_ack_or_schedule();
     return;
   }

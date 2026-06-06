@@ -22,6 +22,7 @@
 
 extern ESP8266 esp8266;
 extern UART_HandleTypeDef huart2;
+extern volatile uint32_t uart2_rx_count;
 
 extern "C" {
 extern uint8_t  esp8266_global_buffer[];
@@ -31,6 +32,7 @@ extern uint8_t  esp8266_data_ready;
 
 static const size_t NET_RX_SIZE = 2048;
 static const size_t NET_ASYNC_RESPONSE_SIZE = 3072;
+static const uint32_t NET_ASYNC_SETUP_BUDGET_MS = 18000U;
 
 /* The ESP8266 AT interface is strictly serial.  Synchronous raw AT helpers
  * call SysWatchdog_Tick() while waiting for replies; the watchdog may in turn
@@ -434,6 +436,7 @@ struct NetAsyncCtx {
   uint32_t last_rx_ms;
   uint16_t last_rx_len;
   uint32_t request_start_ms;
+  uint32_t uart_rx_start;
 };
 
 static NetAsyncCtx g_async = {NET_ASYNC_IDLE};
@@ -557,7 +560,10 @@ static void net_async_finish(bool ok, const char *reason) {
     }
 
     if (++g_async_fail_streak >= 3U) {
-      LOG_W("NET", "Async fail streak=%u; TCP cleanup only, no ESP reset", g_async_fail_streak);
+      LOG_W("NET",
+            "Async fail streak=%u step=%u uart_rx=%lu; TCP cleanup only",
+            g_async_fail_streak, (unsigned)g_async.step,
+            (unsigned long)(uart2_rx_count - g_async.uart_rx_start));
       net_dns_cache_clear();
       g_async_fail_streak = 0;
     }
@@ -623,6 +629,7 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
         (unsigned)g_async.req_len);
   g_async.state = NET_ASYNC_BUSY;
   g_async.request_start_ms = HAL_GetTick();
+  g_async.uart_rx_start = uart2_rx_count;
   net_async_send_line(NET_ASYNC_STEP_CLOSE, "AT+CIPCLOSE");
   return true;
 }
@@ -653,8 +660,10 @@ void Net_AsyncTick(void) {
    * arrives exactly at the timeout edge can still be parsed below.  The caller
    * now gives heartbeat/ACK a realistic whole-request budget, so this guard is a
    * deadlock escape hatch rather than a normal network deadline. */
+  uint32_t total_timeout_ms = g_async.timeout_ms + NET_ASYNC_SETUP_BUDGET_MS;
+  if (total_timeout_ms < g_async.timeout_ms) total_timeout_ms = 0xFFFFFFFFU;
   if (g_async.request_start_ms != 0U &&
-      (uint32_t)(now - g_async.request_start_ms) > g_async.timeout_ms) {
+      (uint32_t)(now - g_async.request_start_ms) > total_timeout_ms) {
     const char *rx = esp8266.getRxBuffer();
     bool has_resp = rx && (strstr(rx, "HTTP/") || strstr(rx, "{"));
     bool complete = has_resp && net_http_body_complete(rx);

@@ -57,21 +57,36 @@ ESP8266::ESP8266(UART_HandleTypeDef *huart) {
 }
 
 void ESP8266::clearRxBuffer(void) {
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   _rx_index = 0;
   _rx_overflow = false;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
   esp8266_global_index = 0;
   esp8266_data_ready = 0;
   memset(esp8266_global_buffer, 0, 2048);
+  if (primask == 0U) __enable_irq();
 }
 
 void ESP8266::processPendingData(void) {
-  if (esp8266_data_ready) {
-    esp8266_data_ready = 0;
-    /* LOG_D("ESP", "PROCESS: Got data, len=%d", esp8266_global_index); */
-    processRxData(esp8266_global_buffer, esp8266_global_index);
-    esp8266_global_index = 0;
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+
+  if (!esp8266_data_ready || esp8266_global_index == 0U) {
+    if (primask == 0U) __enable_irq();
+    return;
   }
+
+  uint16_t len = esp8266_global_index;
+  /* Keep the ISR-owned staging buffer atomic with respect to reset/copy.
+   * Without this guard an RX interrupt can append while the foreground resets
+   * the index, losing bytes and joining two unrelated AT responses. */
+  processRxData(esp8266_global_buffer, len);
+  esp8266_global_index = 0;
+  esp8266_data_ready = 0;
+  esp8266_global_buffer[0] = '\0';
+
+  if (primask == 0U) __enable_irq();
 }
 
 void ESP8266::resetRxBuffer(void) { clearRxBuffer(); }

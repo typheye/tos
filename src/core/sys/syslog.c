@@ -25,6 +25,7 @@ extern int ESP8266_GetState(void);
 extern bool ESP8266_IsHardDisabled(void);
 extern bool TSDIO_IsHardDisabled(void);
 extern bool TSDIO_IsInitialized(void);
+extern volatile uint32_t uart2_rx_count;
 extern uint32_t SysHandle_CodeFromFResult(FRESULT res, uint32_t fallback);
 extern void SysHandle_ExceptionNoDump(uint32_t code);
 extern bool SysHandle_IsInException(void);
@@ -202,12 +203,14 @@ void SysLog_WriteFatalDump(uint32_t code, const char *name) {
            "%s"
            "esp_state=%d\r\n"
            "esp_hard_disabled=%u\r\n"
+           "esp_uart_rx_count=%lu\r\n"
            "sdio_initialized=%u\r\n"
            "sdio_hard_disabled=%u\r\n",
            (unsigned long)HAL_GetTick(),
            rtc_line,
            esp_state,
            esp_disabled ? 1U : 0U,
+           (unsigned long)uart2_rx_count,
            sdio_ready ? 1U : 0U,
            sdio_disabled ? 1U : 0U);
 

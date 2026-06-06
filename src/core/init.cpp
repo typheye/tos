@@ -223,7 +223,6 @@ void TOS::init() {
   buzzer1.init();
   boardLCD.init();
   SysWatchdog_Init();
-  SysWatchdog_ShowBootReasonIfAny();
   SysWatchdog_FeedNow();
   HAL_Delay(50);
 
@@ -239,6 +238,10 @@ void TOS::init() {
   } else {
     cleanup_sd_root_whitelist();
   }
+  /* Defer the previous-IWDG error screen until SD/logging is available.
+   * Otherwise the controlled reboot happens before a persistent dump can be
+   * written, leaving an abruptly truncated boot log with no reset reason. */
+  SysWatchdog_ShowBootReasonIfAny();
 
   keyManager.init();
   boardJY901S.init();
