@@ -104,6 +104,9 @@ typedef struct {
 static HidmCommand g_hidm_cmd;
 static const char *g_hidm_status = "idle";
 static char g_hidm_last_error[40] = "ok";
+static uint32_t g_hidm_report_seq = 0U;
+static uint8_t g_hidm_report_dirty = 1U;
+static uint8_t g_hidm_service_guard = 0U;
 
 static bool hidm_time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -369,17 +372,37 @@ static uint8_t hidm_parse_buttons(const char *s, int fallback) {
   return buttons;
 }
 
+static void hidm_mark_report_dirty(const char *status) {
+  if (!status || !status[0]) status = "idle";
+  g_hidm_status = status;
+  if (g_hidm_report_seq < 0xFFFFFFFFUL) g_hidm_report_seq++;
+  else g_hidm_report_seq = 1U;
+  g_hidm_report_dirty = 1U;
+}
+
+static void hidm_update_usb_idle_status(void) {
+  if (g_hidm_cmd.active) return;
+  if (!HidManager_IsConfigured()) {
+    if (strcmp(g_hidm_status, "no_usb") != 0) {
+      hidm_mark_report_dirty("no_usb");
+    }
+  } else if (strcmp(g_hidm_status, "no_usb") == 0) {
+    snprintf(g_hidm_last_error, sizeof(g_hidm_last_error), "ok");
+    hidm_mark_report_dirty("idle");
+  }
+}
+
 static void hidm_set_error(const char *err) {
   if (!err || !err[0]) err = "error";
   snprintf(g_hidm_last_error, sizeof(g_hidm_last_error), "%s", err);
-  g_hidm_status = "error";
+  hidm_mark_report_dirty("error");
 }
 
 static void hidm_complete(void) {
   LOG_I("HIDM", "Command done");
   memset(&g_hidm_cmd, 0, sizeof(g_hidm_cmd));
-  g_hidm_status = HidManager_IsConfigured() ? "idle" : "no_usb";
   snprintf(g_hidm_last_error, sizeof(g_hidm_last_error), "ok");
+  hidm_mark_report_dirty(HidManager_IsConfigured() ? "idle" : "no_usb");
 }
 
 static void hidm_fail(const char *err) {
@@ -458,8 +481,8 @@ static void hidm_queue_start(HidmCommandType type, HidmPhase phase,
   g_hidm_cmd.next_ms = now;
   if (budget_ms > HIDM_MAX_COMMAND_MS) budget_ms = HIDM_MAX_COMMAND_MS;
   g_hidm_cmd.deadline_ms = now + budget_ms;
-  g_hidm_status = "busy";
   snprintf(g_hidm_last_error, sizeof(g_hidm_last_error), "ok");
+  hidm_mark_report_dirty("busy");
 }
 
 static bool hidm_queue_key(uint8_t modifier, uint8_t key, uint16_t hold_ms) {
@@ -526,8 +549,10 @@ static bool hidm_queue_release(void) {
 
 void HidManager_Init(void) {
   memset(&g_hidm_cmd, 0, sizeof(g_hidm_cmd));
-  g_hidm_status = HidManager_IsConfigured() ? "idle" : "no_usb";
   snprintf(g_hidm_last_error, sizeof(g_hidm_last_error), "ok");
+  g_hidm_report_seq = 0U;
+  g_hidm_report_dirty = 0U;
+  hidm_mark_report_dirty(HidManager_IsConfigured() ? "idle" : "no_usb");
 }
 
 bool HidManager_IsConfigured(void) {
@@ -539,6 +564,7 @@ bool HidManager_IsBusy(void) {
 }
 
 const char *HidManager_GetReportStatus(void) {
+  hidm_update_usb_idle_status();
   if (g_hidm_cmd.active) return "busy";
   if (!HidManager_IsConfigured()) return "no_usb";
   return g_hidm_status ? g_hidm_status : "idle";
@@ -546,6 +572,19 @@ const char *HidManager_GetReportStatus(void) {
 
 const char *HidManager_GetLastError(void) {
   return g_hidm_last_error;
+}
+
+uint32_t HidManager_GetReportSeq(void) {
+  return g_hidm_report_seq;
+}
+
+bool HidManager_IsReportDirty(void) {
+  hidm_update_usb_idle_status();
+  return g_hidm_report_dirty != 0U;
+}
+
+void HidManager_ClearReportDirty(void) {
+  g_hidm_report_dirty = 0U;
 }
 
 bool HidManager_QueueCloudCommand(const char *action, const char *json_obj,
@@ -672,16 +711,25 @@ bool HidManager_QueueCloudCommand(const char *action, const char *json_obj,
   return false;
 }
 
-void HidManager_Tick(void) {
+void HidManager_ServiceTick(void) {
   uint32_t now;
 
-  SysWatchdog_Tick();
-  if (!g_hidm_cmd.active) return;
+  if (g_hidm_service_guard) return;
+  g_hidm_service_guard = 1U;
+  hidm_update_usb_idle_status();
+  if (!g_hidm_cmd.active) {
+    g_hidm_service_guard = 0U;
+    return;
+  }
 
   now = HAL_GetTick();
-  if (!hidm_time_due(now, g_hidm_cmd.next_ms)) return;
+  if (!hidm_time_due(now, g_hidm_cmd.next_ms)) {
+    g_hidm_service_guard = 0U;
+    return;
+  }
   if (hidm_time_due(now, g_hidm_cmd.deadline_ms)) {
     hidm_fail("usb timeout");
+    g_hidm_service_guard = 0U;
     return;
   }
 
@@ -754,4 +802,11 @@ void HidManager_Tick(void) {
     hidm_complete();
     break;
   }
+
+  g_hidm_service_guard = 0U;
+}
+
+void HidManager_Tick(void) {
+  SysWatchdog_Tick();
+  HidManager_ServiceTick();
 }

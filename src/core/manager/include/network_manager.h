@@ -51,6 +51,18 @@ bool Net_IsHardDisabled(void);
 void Net_PrepareClient(void);
 
 /**
+ * @brief  Lightweight cleanup for transient ESP8266 TCP stalls.
+ *         Closes stale TCP state and restores single-connection mode without
+ *         resetting or re-initializing the ESP8266.
+ */
+void Net_LightCleanup(void);
+
+/**
+ * @brief  Drop the cached DNS result so the next request resolves again.
+ */
+void Net_ResetDnsCache(void);
+
+/**
  * @brief  Check whether the ESP8266 station has a valid IP.
  */
 bool Net_HasStationIP(void);

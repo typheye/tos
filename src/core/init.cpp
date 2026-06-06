@@ -42,7 +42,8 @@ extern Potentiometer boardPot;
 extern THID boardHID;
 
 static void cleanup_system_volume_information(void) {
-  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized() || !boardSDIO.isInserted()) {
+  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized() ||
+      !FMCore_IsInitialized()) {
     return;
   }
 

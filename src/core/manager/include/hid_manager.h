@@ -44,6 +44,10 @@ bool HidManager_IsBusy(void);
 bool HidManager_IsConfigured(void);
 const char *HidManager_GetReportStatus(void);
 const char *HidManager_GetLastError(void);
+uint32_t HidManager_GetReportSeq(void);
+bool HidManager_IsReportDirty(void);
+void HidManager_ClearReportDirty(void);
+void HidManager_ServiceTick(void);
 
 bool HidManager_QueueCloudCommand(const char *action, const char *json_obj,
                                   const char **err_out);

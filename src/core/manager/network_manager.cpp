@@ -32,6 +32,12 @@ extern uint8_t  esp8266_data_ready;
 static const size_t NET_RX_SIZE = 2048;
 static const size_t NET_ASYNC_RESPONSE_SIZE = 3072;
 
+/* The ESP8266 AT interface is strictly serial.  Synchronous raw AT helpers
+ * call SysWatchdog_Tick() while waiting for replies; the watchdog may in turn
+ * try to advance the async HTTP state machine.  Guard raw AT sections so no
+ * async command is emitted while another AT command is still in progress. */
+static volatile uint8_t g_net_raw_busy = 0;
+
 /* ── LED helpers ──────────────────────────────────────────────── */
 
 static void net_led_success(void) {
@@ -73,6 +79,7 @@ static void net_uart_discard(uint32_t idle_ms) {
 }
 
 static void net_raw_begin(void) {
+  g_net_raw_busy = 1;
   HAL_NVIC_DisableIRQ(USART2_IRQn);
   net_rx_reset();
   esp8266.resetRxBuffer();
@@ -85,6 +92,7 @@ static void net_raw_end(void) {
   net_rx_reset();
   __HAL_UART_CLEAR_OREFLAG(&huart2);
   HAL_NVIC_EnableIRQ(USART2_IRQn);
+  g_net_raw_busy = 0;
 }
 
 static bool net_has_token(const char *buf, const char *a,
@@ -156,6 +164,23 @@ static bool net_raw_at(const char *cmd, const char *ok1,
   net_raw_begin();
   HAL_UART_Transmit(&huart2, (uint8_t *)tx, (uint16_t)n, 1000);
   bool ok = net_raw_collect(ok1, ok2, ok3, timeout_ms, settle_ms, false, true);
+  net_raw_end();
+  return ok;
+}
+
+static bool net_raw_at_best_effort(const char *cmd, const char *ok1,
+                                   uint32_t timeout_ms, uint32_t settle_ms,
+                                   const char *ok2 = nullptr,
+                                   const char *ok3 = nullptr) {
+  char tx[128];
+  int n = snprintf(tx, sizeof(tx), "%s\r\n", cmd);
+  if (n <= 0 || n >= (int)sizeof(tx)) return false;
+
+  net_raw_begin();
+  HAL_UART_Transmit(&huart2, (uint8_t *)tx, (uint16_t)n, 1000);
+  /* Cleanup commands intentionally accept ERROR because no active connection /
+   * unsupported AT subcommand is a harmless outcome in best-effort recovery. */
+  bool ok = net_raw_collect(ok1, ok2, ok3, timeout_ms, settle_ms, false, false);
   net_raw_end();
   return ok;
 }
@@ -279,6 +304,115 @@ static bool net_http_body_complete(const char *rx) {
   return body[n - 1] == '}' || body[n - 1] == ']';
 }
 
+/* ── DNS cache for TCP connect target ──────────────────────────── */
+
+static char g_dns_host[64];
+static char g_dns_ip[24];
+static uint32_t g_dns_ok_ms = 0;
+static uint32_t g_dns_fail_ms = 0;
+
+static void net_dns_cache_clear(void) {
+  g_dns_host[0] = '\0';
+  g_dns_ip[0] = '\0';
+  g_dns_ok_ms = 0;
+  g_dns_fail_ms = 0;
+}
+
+static bool net_is_ipv4_literal(const char *s) {
+  if (!s || !*s) return false;
+  uint8_t dots = 0;
+  uint8_t digits = 0;
+  int octet = 0;
+  bool have_digit = false;
+  for (const char *p = s; ; ++p) {
+    char c = *p;
+    if (c >= '0' && c <= '9') {
+      have_digit = true;
+      digits++;
+      octet = octet * 10 + (c - '0');
+      if (octet > 255 || digits > 3) return false;
+    } else if (c == '.' || c == '\0') {
+      if (!have_digit) return false;
+      if (c == '\0') return dots == 3;
+      dots++;
+      digits = 0;
+      octet = 0;
+      have_digit = false;
+      if (dots > 3) return false;
+    } else {
+      return false;
+    }
+  }
+}
+
+static bool net_extract_cipdomain_ip(const char *resp, char *out, size_t out_sz) {
+  if (!resp || !out || out_sz == 0U) return false;
+  const char *p = strstr(resp, "+CIPDOMAIN:");
+  if (!p) return false;
+  p += strlen("+CIPDOMAIN:");
+  while (*p == ' ' || *p == '\t' || *p == '\"') p++;
+  char ip[24];
+  size_t n = 0;
+  while (*p && *p != '\r' && *p != '\n' && *p != '\"' &&
+         n + 1U < sizeof(ip)) {
+    ip[n++] = *p++;
+  }
+  ip[n] = '\0';
+  if (!net_is_ipv4_literal(ip)) return false;
+  snprintf(out, out_sz, "%s", ip);
+  return true;
+}
+
+static bool net_resolve_host_cached(const char *host, char *out, size_t out_sz) {
+  if (!host || !out || out_sz == 0U) return false;
+  out[0] = '\0';
+
+  if (net_is_ipv4_literal(host)) {
+    snprintf(out, out_sz, "%s", host);
+    return true;
+  }
+
+  uint32_t now = HAL_GetTick();
+  if (strcmp(g_dns_host, host) == 0 && net_is_ipv4_literal(g_dns_ip) &&
+      (uint32_t)(now - g_dns_ok_ms) < 1800000U) {
+    snprintf(out, out_sz, "%s", g_dns_ip);
+    return true;
+  }
+
+  /* If DNS just failed, fall back to the domain for a while.  This keeps cloud
+   * usable on AT firmwares without CIPDOMAIN support. */
+  if (strcmp(g_dns_host, host) == 0 && g_dns_fail_ms != 0U &&
+      (uint32_t)(now - g_dns_fail_ms) < 120000U) {
+    return false;
+  }
+
+  char cmd[128];
+  char resp[192];
+  int n = snprintf(cmd, sizeof(cmd), "AT+CIPDOMAIN=\"%s\"", host);
+  if (n <= 0 || n >= (int)sizeof(cmd)) return false;
+
+  bool ok = net_raw_at_capture(cmd, "OK", 5000, 80, resp, sizeof(resp),
+                               "+CIPDOMAIN:");
+  if (ok && net_extract_cipdomain_ip(resp, out, out_sz)) {
+    snprintf(g_dns_host, sizeof(g_dns_host), "%s", host);
+    snprintf(g_dns_ip, sizeof(g_dns_ip), "%s", out);
+    g_dns_ok_ms = now;
+    g_dns_fail_ms = 0;
+    LOG_I("NET", "DNS cache %s -> %s", host, out);
+    return true;
+  }
+
+  snprintf(g_dns_host, sizeof(g_dns_host), "%s", host);
+  g_dns_fail_ms = now;
+  net_log_response_text("CIPDOMAIN fail", resp);
+  return false;
+}
+
+static const char *net_connect_host(const char *host, char *tmp, size_t tmp_sz) {
+  if (net_resolve_host_cached(host, tmp, tmp_sz)) return tmp;
+  return host;
+}
+
 /* ── Public API ───────────────────────────────────────────────── */
 
 /* ---- Non-blocking HTTP POST --------------------------------------------- */
@@ -296,6 +430,7 @@ struct NetAsyncCtx {
   NetAsyncState_t state;
   NetAsyncStep step;
   char host[64];
+  char connect_host[64];
   uint16_t port;
   char request[1024];
   uint16_t req_len;
@@ -309,9 +444,27 @@ struct NetAsyncCtx {
 
 static NetAsyncCtx g_async = {NET_ASYNC_IDLE};
 static uint8_t g_async_fail_streak = 0;
+static uint8_t g_async_cipstart_fail_streak = 0;
+static uint32_t g_async_tcp_cooldown_until_ms = 0;
 
 static bool net_async_busy(void) {
   return g_async.state == NET_ASYNC_BUSY;
+}
+
+static bool net_async_time_due(uint32_t now, uint32_t target) {
+  return (int32_t)(now - target) >= 0;
+}
+
+static void net_async_tcp_stack_cleanup(void) {
+  LOG_W("NET", "Async TCP close cleanup after CIPSTART failure");
+
+  /* Keep recovery short.  Each new request already sends AT+CIPMUX=0 before
+   * CIPSTART, so doing another blocking CIPMUX here only creates slow frames
+   * and increases the chance of overlapping stale +IPD/CLOSED bytes. */
+  (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 450, 10,
+                               "CLOSED", "ERROR");
+
+  g_async_tcp_cooldown_until_ms = HAL_GetTick() + 800U;
 }
 
 static void net_async_rx_reset(void) {
@@ -380,6 +533,7 @@ static void net_async_close_best_effort(void) {
 static void net_async_finish(bool ok, const char *reason) {
   if (ok) {
     g_async_fail_streak = 0;
+    g_async_cipstart_fail_streak = 0;
     const char *rx = esp8266.getRxBuffer();
     uint16_t copy_len = rx ? (uint16_t)strlen(rx) : 0;
     if (copy_len >= sizeof(g_async.response))
@@ -392,15 +546,25 @@ static void net_async_finish(bool ok, const char *reason) {
     g_async.state = NET_ASYNC_DONE;
     LOG_D("NET", "Async POST done, rx=%u/%u", copy_len, (unsigned)(sizeof(g_async.response) - 1));
   } else {
+    bool cipstart_fail = reason && strstr(reason, "CIPSTART");
     net_log_response(reason ? reason : "Async fail");
     net_async_close_best_effort();
     esp8266.resetRxBuffer();
     LED_WarnBlink300ms();
+
+    if (cipstart_fail) {
+      if (g_async_cipstart_fail_streak < 255U) g_async_cipstart_fail_streak++;
+      if (g_async_cipstart_fail_streak >= 1U) {
+        net_async_tcp_stack_cleanup();
+        g_async_cipstart_fail_streak = 0;
+      }
+    } else if (reason && strstr(reason, "done")) {
+      g_async_cipstart_fail_streak = 0;
+    }
+
     if (++g_async_fail_streak >= 3U) {
-      LOG_W("NET", "Async fail streak=%u; leaving ESP state untouched", g_async_fail_streak);
-      /* Runtime ESP recovery/re-init is intentionally forbidden.  The cloud
-       * policy layer will either keep the product in offline mode or reboot the
-       * whole system through syshandle after the online session is proven stuck. */
+      LOG_W("NET", "Async fail streak=%u; TCP cleanup only, no ESP reset", g_async_fail_streak);
+      net_dns_cache_clear();
       g_async_fail_streak = 0;
     }
     g_async.state = NET_ASYNC_FAILED;
@@ -418,12 +582,21 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
     return false;
   }
 
+  uint32_t now = HAL_GetTick();
+  if (g_async_tcp_cooldown_until_ms != 0U &&
+      !net_async_time_due(now, g_async_tcp_cooldown_until_ms)) {
+    LOG_W("NET", "Async POST delayed: TCP cleanup cooldown");
+    return false;
+  }
+
+  char resolved[64];
+  const char *connect_host = net_connect_host(host, resolved, sizeof(resolved));
+
   memset(&g_async, 0, sizeof(g_async));
-  g_async.state = NET_ASYNC_BUSY;
   g_async.port = port;
   g_async.timeout_ms = timeout_ms ? timeout_ms : 15000U;
-  g_async.request_start_ms = HAL_GetTick();
   strncpy(g_async.host, host, sizeof(g_async.host) - 1);
+  strncpy(g_async.connect_host, connect_host, sizeof(g_async.connect_host) - 1);
 
   int req_len = snprintf(g_async.request, sizeof(g_async.request),
                          "POST %s HTTP/1.0\r\n"
@@ -451,47 +624,71 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
   g_async.request[req_len] = '\0';
   g_async.req_len = (uint16_t)req_len;
 
-  LOG_I("NET", "Async POST %s:%u%s (%uB)",
-        host, (unsigned)port, path, (unsigned)g_async.req_len);
+  LOG_I("NET", "Async POST %s:%u%s via %s (%uB)",
+        host, (unsigned)port, path, g_async.connect_host,
+        (unsigned)g_async.req_len);
+  g_async.state = NET_ASYNC_BUSY;
+  g_async.request_start_ms = HAL_GetTick();
   net_async_send_line(NET_ASYNC_STEP_CLOSE, "AT+CIPCLOSE");
   return true;
 }
 
 void Net_AsyncTick(void) {
+  static uint8_t g_net_async_tick_guard = 0;
+
+  if (g_net_async_tick_guard) return;
+  if (g_net_raw_busy) return;
   if (g_async.state != NET_ASYNC_BUSY) return;
 
-  uint32_t now = HAL_GetTick();
+  g_net_async_tick_guard = 1;
 
-  /* Total-request guard.  Step-level timeouts alone allowed one bad heartbeat
-   * to occupy the ESP8266 state machine for 15+ seconds when CIPSTART or the
-   * HTTP response half-succeeded.  Treat the timeout passed by the caller as a
-   * whole-request budget so UI and watchdog service remain predictable. */
-  if (g_async.request_start_ms != 0U &&
-      (uint32_t)(now - g_async.request_start_ms) > g_async.timeout_ms) {
-    net_async_finish(false, "Async total timeout");
-    return;
-  }
+#define NET_ASYNC_TICK_RETURN() do { \
+    g_net_async_tick_guard = 0; \
+    return; \
+  } while (0)
+
+  uint32_t now = HAL_GetTick();
 
   net_async_pump_rx();
   if (esp8266.hasRxOverflow()) {
     net_async_finish(false, "Async RX overflow");
-    return;
+    NET_ASYNC_TICK_RETURN();
+  }
+
+  /* Total-request guard.  Pump RX before checking the guard so a response that
+   * arrives exactly at the timeout edge can still be parsed below.  The caller
+   * now gives heartbeat/ACK a realistic whole-request budget, so this guard is a
+   * deadlock escape hatch rather than a normal network deadline. */
+  if (g_async.request_start_ms != 0U &&
+      (uint32_t)(now - g_async.request_start_ms) > g_async.timeout_ms) {
+    const char *rx = esp8266.getRxBuffer();
+    bool has_resp = rx && (strstr(rx, "HTTP/") || strstr(rx, "{"));
+    bool complete = has_resp && net_http_body_complete(rx);
+    if (complete) {
+      net_async_finish(true, "HTTP complete at timeout edge");
+    } else {
+      net_async_finish(false, has_resp ? "Async response incomplete" : "Async total timeout");
+    }
+    NET_ASYNC_TICK_RETURN();
   }
 
   switch (g_async.step) {
   case NET_ASYNC_STEP_CLOSE:
-    if (net_async_has("OK", "CLOSED", "ERROR") ||
-        now - g_async.step_start_ms > 1200U) {
+    if ((net_async_has("OK", "CLOSED", "ERROR") &&
+         now - g_async.last_rx_ms > 150U) ||
+        now - g_async.step_start_ms > 2200U) {
       net_async_send_line(NET_ASYNC_STEP_MUX, "AT+CIPMUX=0");
     }
     break;
 
   case NET_ASYNC_STEP_MUX:
-    if (net_async_has("OK") || net_async_has("ERROR") ||
-        now - g_async.step_start_ms > 2500U) {
+    if (((net_async_has("OK") || net_async_has("ERROR")) &&
+         now - g_async.last_rx_ms > 150U) ||
+        now - g_async.step_start_ms > 3000U) {
       char cmd[128];
       int n = snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%u",
-                       g_async.host, (unsigned)g_async.port);
+                       g_async.connect_host[0] ? g_async.connect_host : g_async.host,
+                       (unsigned)g_async.port);
       if (n <= 0 || n >= (int)sizeof(cmd)) {
         net_async_finish(false, "CIPSTART build fail");
       } else {
@@ -503,7 +700,7 @@ void Net_AsyncTick(void) {
   case NET_ASYNC_STEP_START:
     if (net_async_failed_token()) {
       net_async_finish(false, "CIPSTART fail");
-    } else if (net_async_has("CONNECT", "ALREADY CONNECTED", "OK")) {
+    } else if (net_async_has("CONNECT", "ALREADY CONNECTED")) {
       char cmd[32];
       int n = snprintf(cmd, sizeof(cmd), "AT+CIPSEND=%u",
                        (unsigned)g_async.req_len);
@@ -512,7 +709,7 @@ void Net_AsyncTick(void) {
       } else {
         net_async_send_line(NET_ASYNC_STEP_SEND_LEN, cmd);
       }
-    } else if (now - g_async.step_start_ms > 12000U) {
+    } else if (now - g_async.step_start_ms > 15000U) {
       net_async_finish(false, "CIPSTART timeout");
     }
     break;
@@ -557,6 +754,9 @@ void Net_AsyncTick(void) {
     net_async_finish(false, "Async bad state");
     break;
   }
+
+#undef NET_ASYNC_TICK_RETURN
+  g_net_async_tick_guard = 0;
 }
 
 NetAsyncState_t Net_AsyncState(void) { return g_async.state; }
@@ -581,11 +781,31 @@ void Net_LedFailure(void) { net_led_failure(); }
  * legitimately return ERROR when no server / connection exists — this is
  * normal and must NOT be treated as a failure.  Only CIPMUX=0 is essential. */
 void Net_PrepareClient(void) {
-  net_raw_at("AT+CIPSERVER=0", "OK", 1200, 30);
-  net_raw_at("AT+CIPCLOSE", "OK", 1200, 30, "CLOSED", "ERROR");
-  if (!net_raw_at("AT+CIPMUX=0", "OK", 2500, 50)) {
+  (void)net_raw_at_best_effort("AT+CIPSERVER=0", "OK", 1200, 50,
+                               "ERROR");
+  (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 1800, 80,
+                               "CLOSED", "ERROR");
+  (void)net_raw_at_best_effort("AT+CIPMODE=0", "OK", 1500, 60,
+                               "ERROR");
+  if (!net_raw_at_best_effort("AT+CIPMUX=0", "OK", 2500, 80, "ERROR")) {
     net_log_response("CIPMUX=0");
   }
+}
+
+void Net_LightCleanup(void) {
+  if (Net_IsHardDisabled() || net_async_busy() || g_net_raw_busy) return;
+
+  (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 900, 30,
+                               "CLOSED", "ERROR");
+  (void)net_raw_at_best_effort("AT+CIPMODE=0", "OK", 900, 30,
+                               "ERROR");
+  (void)net_raw_at_best_effort("AT+CIPMUX=0", "OK", 1200, 40,
+                               "ERROR");
+  esp8266.resetRxBuffer();
+}
+
+void Net_ResetDnsCache(void) {
+  net_dns_cache_clear();
 }
 
 bool Net_HasStationIP(void) {
@@ -608,12 +828,15 @@ bool Net_HasStationIP(void) {
 /* ── TCP ──────────────────────────────────────────────────────── */
 
 static bool net_tcp_start(const char *host, uint16_t port) {
+  char connect_host_buf[64];
+  const char *connect_host = net_connect_host(host, connect_host_buf,
+                                             sizeof(connect_host_buf));
   char cmd[128];
   int n = snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%u",
-                   host, (unsigned)port);
+                   connect_host, (unsigned)port);
   if (n <= 0 || n >= (int)sizeof(cmd)) return false;
 
-  bool ok = net_raw_at(cmd, "CONNECT", 15000, 120, "ALREADY CONNECTED", "OK");
+  bool ok = net_raw_at(cmd, "CONNECT", 15000, 120, "ALREADY CONNECTED");
   net_log_response(ok ? "CIPSTART" : "CIPSTART fail");
   return ok;
 }

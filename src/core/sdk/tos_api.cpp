@@ -21,13 +21,19 @@
 extern Buzzer buzzer1;
 
 #define TOS_HEARTBEAT_PATH "/v1/device/heartbeat"
-#define TOS_HEARTBEAT_MS   3000U
+#define TOS_HEARTBEAT_MS   5000U
 #define TOS_RETRY_MS       5000U
+#define TOS_RETRY_MAX_MS   20000U
 #define TOS_START_DELAY_MS 2500U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
+#define TOS_HEARTBEAT_TIMEOUT_MS 11000U
+#define TOS_ACK_TIMEOUT_MS       8000U
 #define TOS_NET_STUCK_MS       30000U
-#define TOS_NET_SOFT_STUCK_RETRY_MS 30000U
-#define TOS_STATION_PROBE_MIN_MS 30000U
+#define TOS_NET_SOFT_STUCK_RETRY_MS 15000U
+#define TOS_STATION_PROBE_MIN_MS 90000U
+#define TOS_TRANSPORT_MAINTAIN_MS 60000U
+#define TOS_WIFI_REJOIN_MIN_MS 300000U
+#define TOS_FALLBACK_EMPTY_CYCLES 180U
 #define TOS_IP_REFRESH_MS      300000U
 #define TOS_IP_RETRY_MS        10000U
 #define TOS_RSSI_REFRESH_MS     60000U
@@ -65,6 +71,10 @@ static int g_last_rssi = 0;
 static uint32_t g_last_rssi_refresh_ms = 0;
 static uint8_t g_station_probe_fail_count = 0;
 static uint32_t g_last_station_probe_ms = 0;
+static uint32_t g_last_transport_maintenance_ms = 0;
+static uint32_t g_last_wifi_rejoin_ms = 0;
+static uint32_t g_last_hid_report_try_ms = 0;
+static uint32_t g_hid_seq_in_flight = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -72,6 +82,13 @@ static bool time_due(uint32_t now, uint32_t target) {
 
 static void schedule_heartbeat(uint32_t delay_ms) {
   g_next_heartbeat_ms = HAL_GetTick() + delay_ms;
+}
+
+static uint32_t transport_retry_delay(void) {
+  if (g_transport_fail_count == 0U) return TOS_RETRY_MS;
+  uint32_t retry = TOS_RETRY_MS + ((uint32_t)g_transport_fail_count - 1U) * 3000U;
+  if (retry > TOS_RETRY_MAX_MS) retry = TOS_RETRY_MAX_MS;
+  return retry;
 }
 
 static void build_device_id(void) {
@@ -143,9 +160,23 @@ static bool rssi_valid(int rssi) {
   return rssi < 0 && rssi >= -127;
 }
 
+static void json_str_sanitize(char *out, size_t out_sz, const char *in) {
+  size_t j = 0;
+  if (!out || out_sz == 0U) return;
+  if (!in) in = "";
+  for (size_t i = 0; in[i] && j + 1U < out_sz; ++i) {
+    char c = in[i];
+    if (c == '\"' || c == '\\') c = '_';
+    if ((unsigned char)c < 32U || (unsigned char)c > 126U) c = '_';
+    out[j++] = c;
+  }
+  out[j] = '\0';
+}
+
 static void maybe_refresh_ip(uint32_t now) {
   if (!wlan_enabled() || g_offline_for_this_boot || !network_ready()) return;
   if (g_ack_body[0]) return;
+  if (g_transport_fail_count > 0U) return;
   if (g_last_ip_refresh_ms != 0U) {
     uint32_t interval = ip_valid(g_last_ip) ? TOS_IP_REFRESH_MS : TOS_IP_RETRY_MS;
     if ((uint32_t)(now - g_last_ip_refresh_ms) < interval) return;
@@ -172,6 +203,7 @@ static int cached_rssi(bool refresh) {
 static void maybe_refresh_rssi(uint32_t now) {
   if (!wlan_enabled() || g_offline_for_this_boot || !network_ready()) return;
   if (g_ack_body[0]) return;
+  if (g_transport_fail_count > 0U) return;
   if (g_last_rssi_refresh_ms != 0U) {
     uint32_t interval = rssi_valid(g_last_rssi) ? TOS_RSSI_REFRESH_MS : TOS_RSSI_RETRY_MS;
     if ((uint32_t)(now - g_last_rssi_refresh_ms) < interval) return;
@@ -186,6 +218,69 @@ static void maybe_refresh_rssi(uint32_t now) {
     g_last_rssi = rssi;
   } else if (!rssi_valid(g_last_rssi)) {
     g_last_rssi = -99;
+  }
+}
+
+static void update_cached_ip_from_esp(void) {
+  char ip[24];
+  if (ESP8266_GetIP(ip, sizeof(ip)) && ip_valid(ip)) {
+    if (strcmp(g_last_ip, ip) != 0) {
+      LOG_I("TAPI", "LAN IP: %s", ip);
+    }
+    snprintf(g_last_ip, sizeof(g_last_ip), "%s", ip);
+    g_last_ip_refresh_ms = HAL_GetTick();
+  }
+}
+
+static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) {
+  if (offline_ms < TOS_NET_STUCK_MS) return;
+  if (g_last_transport_maintenance_ms != 0U &&
+      (uint32_t)(now - g_last_transport_maintenance_ms) < TOS_TRANSPORT_MAINTAIN_MS) {
+    return;
+  }
+
+  g_last_transport_maintenance_ms = now;
+  LOG_W("TAPI", "Cloud maintenance: offline=%lums fail=%u",
+        (unsigned long)offline_ms, (unsigned)g_transport_fail_count);
+
+  Net_LightCleanup();
+  Net_ResetDnsCache();
+
+  if (g_last_station_probe_ms != 0U &&
+      (uint32_t)(now - g_last_station_probe_ms) < TOS_STATION_PROBE_MIN_MS) {
+    return;
+  }
+
+  g_last_station_probe_ms = now;
+  if (Net_HasStationIP()) {
+    g_station_probe_fail_count = 0;
+    update_cached_ip_from_esp();
+    LOG_W("TAPI", "STA IP alive during cloud silence; keep retrying");
+    return;
+  }
+
+  if (g_station_probe_fail_count < 255U) g_station_probe_fail_count++;
+  LOG_W("TAPI", "STA IP probe fail #%u during cloud silence",
+        (unsigned)g_station_probe_fail_count);
+
+  if (offline_ms < TOS_WIFI_REJOIN_MIN_MS) return;
+  if (g_last_wifi_rejoin_ms != 0U &&
+      (uint32_t)(now - g_last_wifi_rejoin_ms) < TOS_WIFI_REJOIN_MIN_MS) {
+    return;
+  }
+
+  const char *ssid = SM_Wlan_SSID();
+  const char *pwd = SM_Wlan_PWD();
+  if (!ssid || !ssid[0]) return;
+
+  g_last_wifi_rejoin_ms = now;
+  LOG_W("TAPI", "STA IP lost; rejoining current AP: %s", ssid);
+  Net_LightCleanup();
+  if (ESP8266_ConnectWiFi(ssid, pwd ? pwd : "")) {
+    g_station_probe_fail_count = 0;
+    g_last_ip_refresh_ms = 0;
+    update_cached_ip_from_esp();
+    schedule_heartbeat(1000U);
   }
 }
 
@@ -208,18 +303,23 @@ static bool build_heartbeat_body(char *out, size_t out_sz) {
               ((uint32_t)(now - g_last_full_hb_ms) >= 60000U);
   int rssi = wlan_enabled() ? cached_rssi(full) : 0;
   const char *hid = HidManager_GetReportStatus();
+  uint32_t hid_seq = HidManager_GetReportSeq();
+  char hid_err[48];
+  json_str_sanitize(hid_err, sizeof(hid_err), HidManager_GetLastError());
   int n;
   if (full) {
     n = snprintf(out, out_sz,
                  "{\"di\":\"%s\",\"v\":\"1\",\"vc\":%lu,"
                  "\"b\":\"%s\",\"m\":\"%s\",\"hv\":\"%s\","
                  "\"up\":%lu,\"w\":\"%s\",\"rssi\":%d,"
-                 "\"ip\":\"%s\",\"e\":\"%s\",\"hid\":\"%s\"}",
+                 "\"ip\":\"%s\",\"e\":\"%s\",\"hid\":\"%s\","
+                 "\"hid_seq\":%lu,\"hid_err\":\"%s\"}",
                  g_device_id,
                  (unsigned long)CFG_VERSION_CODE,
                  CFG_BUILD, CFG_MODEL, CFG_HW_REV,
                  (unsigned long)(now / 1000U),
-                 wifi, rssi, ip, expr, hid);
+                 wifi, rssi, ip, expr, hid,
+                 (unsigned long)hid_seq, hid_err);
     if (n > 0 && n < (int)out_sz) {
       g_last_full_hb_ms = now;
       if (g_full_hb_boot_count < 255U) g_full_hb_boot_count++;
@@ -227,9 +327,11 @@ static bool build_heartbeat_body(char *out, size_t out_sz) {
   } else {
     n = snprintf(out, out_sz,
                  "{\"di\":\"%s\",\"up\":%lu,\"w\":\"%s\",\"rssi\":%d,"
-                 "\"ip\":\"%s\",\"e\":\"%s\",\"hid\":\"%s\"}",
+                 "\"ip\":\"%s\",\"e\":\"%s\",\"hid\":\"%s\","
+                 "\"hid_seq\":%lu,\"hid_err\":\"%s\"}",
                  g_device_id, (unsigned long)(now / 1000U),
-                 wifi, rssi, ip, expr, hid);
+                 wifi, rssi, ip, expr, hid,
+                 (unsigned long)hid_seq, hid_err);
   }
   return n > 0 && n < (int)out_sz;
 }
@@ -560,6 +662,8 @@ static bool poll_commands_once(void) {
   LOG_I("TAPI", "Polling commands fallback");
   if (!Net_HttpGet(TOS_API_HOST, TOS_API_PORT, path, resp, sizeof(resp), TOS_CMD_GET_TIMEOUT_MS)) {
     LOG_W("TAPI", "Command fallback GET failed");
+    Net_LightCleanup();
+    Net_ResetDnsCache();
     return false;
   }
 
@@ -595,13 +699,19 @@ static bool parse_heartbeat_response(const char *resp) {
   g_cloud_was_online = true;
   g_transport_fail_count = 0;
   g_station_probe_fail_count = 0;
+  g_last_station_probe_ms = 0;
+  g_last_transport_maintenance_ms = 0;
+  g_last_wifi_rejoin_ms = 0;
   ESP8266_ClearRecoveryFailureCount();
+  if (g_hid_seq_in_flight == HidManager_GetReportSeq()) {
+    HidManager_ClearReportDirty();
+  }
   LOG_I("TAPI", "Heartbeat OK%s", has_cmd ? ", ack pending" : "");
   return true;
 }
 
 static void start_heartbeat(void) {
-  char body[320];
+  char body[448];
   if (!build_heartbeat_body(body, sizeof(body))) {
     LOG_W("TAPI", "Heartbeat body build failed");
     schedule_heartbeat(TOS_RETRY_MS);
@@ -612,14 +722,15 @@ static void start_heartbeat(void) {
     LOG_W("TAPI", "Heartbeat body large: %u", (unsigned)strlen(body));
   }
 
+  g_hid_seq_in_flight = HidManager_GetReportSeq();
   if (Net_AsyncHttpPostStart(TOS_API_HOST, TOS_API_PORT,
                              TOS_HEARTBEAT_PATH, body,
-                             (uint16_t)strlen(body), 6500U)) {
+                             (uint16_t)strlen(body), TOS_HEARTBEAT_TIMEOUT_MS)) {
     g_phase = TOS_PHASE_HEARTBEAT;
     LOG_D("TAPI", "Heartbeat queued, body=%uB expr=%s", (unsigned)strlen(body), EmotionManager_GetReportExpression());
   } else {
     note_transport_failure("heartbeat-start");
-    schedule_heartbeat(TOS_RETRY_MS);
+    schedule_heartbeat(transport_retry_delay());
   }
 }
 
@@ -633,7 +744,7 @@ static void start_ack_or_schedule(void) {
     if (g_last_hb_malformed) {
       should_poll = true;
       g_last_hb_malformed = false;
-    } else if (++g_empty_hb_cycles >= 60U) { /* low-rate safety poll */
+    } else if (++g_empty_hb_cycles >= TOS_FALLBACK_EMPTY_CYCLES) {
       should_poll = true;
       g_empty_hb_cycles = 0;
     }
@@ -648,7 +759,7 @@ static void start_ack_or_schedule(void) {
   if (g_ack_body[0]) {
     if (Net_AsyncHttpPostStart(TOS_API_HOST, TOS_API_PORT, g_ack_path,
                                g_ack_body, (uint16_t)strlen(g_ack_body),
-                               5000U)) {
+                               TOS_ACK_TIMEOUT_MS)) {
       g_phase = TOS_PHASE_ACK;
       return;
     }
@@ -677,6 +788,10 @@ void TosApi_Init(void) {
   g_last_rssi_refresh_ms = 0;
   g_station_probe_fail_count = 0;
   g_last_station_probe_ms = 0;
+  g_last_transport_maintenance_ms = 0;
+  g_last_wifi_rejoin_ms = 0;
+  g_last_hid_report_try_ms = 0;
+  g_hid_seq_in_flight = 0;
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
         g_device_id, (unsigned long)TOS_HEARTBEAT_MS,
@@ -714,32 +829,23 @@ static void note_transport_failure(const char *where) {
     return;
   }
 
-  if (g_last_station_probe_ms != 0U &&
-      (uint32_t)(now - g_last_station_probe_ms) < TOS_STATION_PROBE_MIN_MS) {
-    LOG_W("TAPI", "Cloud silent for %lums; station probe throttled, keep retrying",
-          (unsigned long)offline_ms);
-    return;
+  maintain_transport_after_silence(now, offline_ms);
+
+  /* Report silence at a low rate.  Active maintenance/probing is handled above
+   * and rate-limited so it cannot collide with every failed HTTP attempt. */
+  if (g_last_station_probe_ms == 0U ||
+      (uint32_t)(now - g_last_station_probe_ms) >= TOS_STATION_PROBE_MIN_MS) {
+    g_last_station_probe_ms = now;
+    if (ip_valid(g_last_ip)) {
+      LOG_W("TAPI", "Cloud silent for %lums, cached STA IP %s; keep retrying",
+            (unsigned long)offline_ms, g_last_ip);
+    } else {
+      LOG_W("TAPI", "Cloud silent for %lums; skip active STA probe, keep retrying",
+            (unsigned long)offline_ms);
+    }
   }
-  g_last_station_probe_ms = now;
 
-  if (Net_HasStationIP()) {
-    g_station_probe_fail_count = 0;
-    LOG_W("TAPI", "Cloud silent for %lums, but STA IP is alive; keep retrying",
-          (unsigned long)offline_ms);
-    g_last_ip_refresh_ms = 0;
-    maybe_refresh_ip(HAL_GetTick());
-    return;
-  }
-
-  if (g_station_probe_fail_count < 255U) g_station_probe_fail_count++;
-  LOG_W("TAPI", "Cloud silent for %lums, STA IP probe fail #%u; non-fatal retry",
-        (unsigned long)offline_ms, (unsigned)g_station_probe_fail_count);
-
-  /* Best-effort client cleanup is intentionally light: do not reset USB/UI and
-   * do not reinitialize the ESP here.  The next heartbeat retry will rebuild a
-   * fresh TCP session through the normal async path. */
   ESP8266_ClearRecoveryFailureCount();
-  g_last_ip_refresh_ms = 0;
   schedule_heartbeat(TOS_NET_SOFT_STUCK_RETRY_MS);
 }
 
@@ -765,12 +871,7 @@ void TosApi_Tick(void) {
       start_ack_or_schedule();
     } else {
       g_phase = TOS_PHASE_IDLE;
-      uint32_t retry = TOS_RETRY_MS;
-      if (g_transport_fail_count > 0U) {
-        retry += (uint32_t)g_transport_fail_count * 2000U;
-        if (retry > 15000U) retry = 15000U;
-      }
-      schedule_heartbeat(retry);
+      schedule_heartbeat(transport_retry_delay());
     }
     return;
   }
@@ -785,6 +886,9 @@ void TosApi_Tick(void) {
         g_cloud_was_online = true;
         g_transport_fail_count = 0;
         g_station_probe_fail_count = 0;
+        g_last_station_probe_ms = 0;
+        g_last_transport_maintenance_ms = 0;
+        g_last_wifi_rejoin_ms = 0;
         ESP8266_ClearRecoveryFailureCount();
       }
       LOG_I("TAPI", "Ack %s", ack_ok ? "OK" : "API fail");
@@ -797,7 +901,7 @@ void TosApi_Tick(void) {
 
     if (ack_ok) {
       g_ack_body[0] = '\0';
-      schedule_heartbeat(TOS_HEARTBEAT_MS);
+      schedule_heartbeat(HidManager_IsReportDirty() ? 0U : TOS_HEARTBEAT_MS);
 
       if (g_reboot_after_ack) {
         LOG_I("TAPI", "Reboot command acknowledged, resetting");
@@ -818,7 +922,16 @@ void TosApi_Tick(void) {
 
   if (g_phase != TOS_PHASE_IDLE) return;
   if (ns == NET_ASYNC_DONE || ns == NET_ASYNC_FAILED) Net_AsyncReset();
-  if (!time_due(now, g_next_heartbeat_ms)) {
+  bool hid_report_due = false;
+  if (HidManager_IsReportDirty() && g_transport_fail_count == 0U && !g_ack_body[0]) {
+    if (g_last_hid_report_try_ms == 0U ||
+        (uint32_t)(now - g_last_hid_report_try_ms) >= 500U) {
+      hid_report_due = true;
+      g_last_hid_report_try_ms = now;
+    }
+  }
+
+  if (!hid_report_due && !time_due(now, g_next_heartbeat_ms)) {
     uint32_t until_hb = g_next_heartbeat_ms - now;
     if (until_hb > TOS_RSSI_IDLE_BUDGET_MS) {
       maybe_refresh_ip(now);
