@@ -328,19 +328,27 @@ static FRESULT delete_dir_recursive(const char *path, bool fatal_on_storage_erro
   while (count > 0) {
     for (uint16_t i = 0; i < count; ++i) {
       char child[FMCORE_PATH_MAX];
+      SysWatchdog_Tick();
       if (!FMCore_JoinPath(path, entries[i].name, child, sizeof(child))) {
         return FR_INVALID_NAME;
       }
+#if _USE_CHMOD
+      (void)f_chmod(child, 0, AM_RDO);
+#endif
       if (entries[i].is_dir) res = delete_dir_recursive(child, fatal_on_storage_error);
       else res = f_unlink(child);
       if (res != FR_OK) {
         fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
         return res;
       }
+      SysWatchdog_Tick();
     }
     res = FMCore_ListDir(path, entries, 8, &count, fatal_on_storage_error);
     if (res != FR_OK) return res;
   }
+#if _USE_CHMOD
+  (void)f_chmod(path, 0, AM_RDO);
+#endif
   return f_unlink(path);
 }
 
@@ -351,6 +359,9 @@ FRESULT FMCore_Delete(const char *path, bool recursive, bool fatal_on_storage_er
     fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
     return res;
   }
+#if _USE_CHMOD
+  (void)f_chmod(path, 0, AM_RDO);
+#endif
   if ((info.fattrib & AM_DIR) && recursive) res = delete_dir_recursive(path, fatal_on_storage_error);
   else res = f_unlink(path);
   LOG_I("FMCR", "delete %s => %s(%d)", path, FMCore_FResultName(res), (int)res);

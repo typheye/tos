@@ -113,6 +113,7 @@ uint32_t SysWatchdog_GetBootCode(void) { return g_boot_code; }
 
 void SysWatchdog_FeedNow(void) {
   feed_iwdg();
+  LED_ServiceTick();
   g_last_feed_ms = HAL_GetTick();
 }
 

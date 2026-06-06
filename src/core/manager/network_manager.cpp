@@ -41,17 +41,11 @@ static volatile uint8_t g_net_raw_busy = 0;
 /* ── LED helpers ──────────────────────────────────────────────── */
 
 static void net_led_success(void) {
-  /* Do not spend 100ms here.  Synchronous GET/POST already costs enough time;
-   * a blocking LED blink was visible as UI and auto-brightness jitter. */
-  warnLed.off();
-  boardLed.on();
-  HAL_Delay(6);
-  boardLed.off();
-  SysWatchdog_Tick();
+  LED_EspCommSuccess();
 }
 
 static void net_led_failure(void) {
-  LED_WarnBlink300ms();
+  LED_EspCommFailure();
 }
 
 /* ── Low-level UART helpers ───────────────────────────────────── */
@@ -542,7 +536,7 @@ static void net_async_finish(bool ok, const char *reason) {
       memcpy(g_async.response, rx, copy_len);
     g_async.response[copy_len] = '\0';
 
-    warnLed.off();
+    LED_EspCommSuccess();
     g_async.state = NET_ASYNC_DONE;
     LOG_D("NET", "Async POST done, rx=%u/%u", copy_len, (unsigned)(sizeof(g_async.response) - 1));
   } else {
@@ -550,7 +544,7 @@ static void net_async_finish(bool ok, const char *reason) {
     net_log_response(reason ? reason : "Async fail");
     net_async_close_best_effort();
     esp8266.resetRxBuffer();
-    LED_WarnBlink300ms();
+    LED_EspCommFailure();
 
     if (cipstart_fail) {
       if (g_async_cipstart_fail_streak < 255U) g_async_cipstart_fail_streak++;

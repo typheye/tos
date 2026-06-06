@@ -25,16 +25,11 @@
 extern USART boardSerial;
 
 static void esp_led_success(void) {
-  warnLed.off();
-  boardLed.on();
-  HAL_Delay(6);
-  boardLed.off();
-  SysWatchdog_Tick();
+  LED_EspCommSuccess();
 }
 
 static void esp_led_failure(void) {
-  boardLed.off();
-  LED_WarnBlink300ms();
+  LED_EspCommFailure();
 }
 
 extern "C" {

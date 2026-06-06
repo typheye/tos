@@ -31,11 +31,15 @@ void LED_ErrorOff(void);
 void LED_BoardOn(void);
 void LED_BoardOff(void);
 void LED_BoardBlink100ms(void);
+void LED_BoardBlink50ms(void);
 void LED_WarnOn(void);
 void LED_WarnOff(void);
-/* Non-blocking 300 ms warning pulse. The actual off edge is serviced from
- * SysWatchdog_Tick(), so network/UI paths never block for LED feedback. */
+/* Compatibility wrapper: network/time failures now hold warnLed on until the
+ * next successful ESP communication.
+ */
 void LED_WarnBlink300ms(void);
+void LED_EspCommSuccess(void);
+void LED_EspCommFailure(void);
 void LED_ServiceTick(void);
 
 #ifdef __cplusplus

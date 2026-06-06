@@ -269,12 +269,15 @@ static bool update_cloud_expression(uint32_t now) {
   if (changed || target_finished) {
     cloud_expr_revision = rev;
     cloud_expr_anim = target;
+    mark_activity(now, "cloud-expr", true);
     pet_state = target;
     prev_pet_state = target;
     anim_start_tm = now;
     sensor_expr_start = now;
     sensor_recover_start = 0;
     blink_phase = 0;
+    next_blink_tm = now + 1400U + rnd(1800U);
+    mood_timer = now + 4200U + rnd(5000U);
     if (target == ANIM_PETTED) {
       pet_touch_mood_target = 0.0f;
       pet_touch_mood_since = now;

@@ -18,8 +18,8 @@
 #include "include/led.hpp"
 
 
-static uint8_t g_warn_pulse_active = 0;
-static uint32_t g_warn_pulse_until_ms = 0;
+static uint8_t g_board_pulse_active = 0;
+static uint32_t g_board_pulse_until_ms = 0;
 
 static bool tick_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -63,30 +63,43 @@ void LED::blink(uint32_t delay_ms) {
 
 void LED_ErrorOn(void) { errorLed.on(); }
 void LED_ErrorOff(void) { errorLed.off(); }
-void LED_BoardOn(void) { boardLed.on(); }
-void LED_BoardOff(void) { boardLed.off(); }
-void LED_BoardBlink100ms(void) {
-  boardLed.on();
-  HAL_Delay(100);
+void LED_BoardOn(void) {
+  LED_BoardBlink50ms();
+}
+void LED_BoardOff(void) {
+  g_board_pulse_active = 0;
   boardLed.off();
 }
+void LED_BoardBlink100ms(void) {
+  LED_BoardBlink50ms();
+}
+void LED_BoardBlink50ms(void) {
+  warnLed.off();
+  boardLed.on();
+  g_board_pulse_until_ms = HAL_GetTick() + 50U;
+  g_board_pulse_active = 1;
+}
 void LED_WarnOn(void) {
-  g_warn_pulse_active = 0;
+  g_board_pulse_active = 0;
+  boardLed.off();
   warnLed.on();
 }
 void LED_WarnOff(void) {
-  g_warn_pulse_active = 0;
   warnLed.off();
 }
 void LED_WarnBlink300ms(void) {
-  warnLed.on();
-  g_warn_pulse_until_ms = HAL_GetTick() + 300U;
-  g_warn_pulse_active = 1;
+  LED_WarnOn();
+}
+void LED_EspCommSuccess(void) {
+  LED_BoardBlink50ms();
+}
+void LED_EspCommFailure(void) {
+  LED_WarnOn();
 }
 void LED_ServiceTick(void) {
-  if (g_warn_pulse_active && tick_due(HAL_GetTick(), g_warn_pulse_until_ms)) {
-    g_warn_pulse_active = 0;
-    warnLed.off();
+  if (g_board_pulse_active && tick_due(HAL_GetTick(), g_board_pulse_until_ms)) {
+    g_board_pulse_active = 0;
+    boardLed.off();
   }
 }
 

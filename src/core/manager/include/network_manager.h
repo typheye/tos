@@ -69,7 +69,7 @@ bool Net_HasStationIP(void);
 
 /**
  * @brief  Apply LED feedback for a successful network operation.
- *         boardLed blink 100 ms, warnLed off.
+ *         warnLed off, boardLed one 50 ms pulse.
  *         For callers that do their own low-level AT communication
  *         (e.g. SNTP time sync) and want consistent LED rules.
  */
@@ -77,7 +77,7 @@ void Net_LedSuccess(void);
 
 /**
  * @brief  Apply LED feedback for a failed network operation.
- *         warnLed blinks for 300 ms.
+ *         boardLed off, warnLed on until the next successful ESP operation.
  */
 void Net_LedFailure(void);
 
@@ -88,8 +88,8 @@ void Net_LedFailure(void);
  *         request, collects the response, and closes the connection.
  *
  *         LED rules are applied automatically:
- *           success → boardLed blink (100 ms)
- *           failure → warnLed blink 300 ms
+ *           success -> warnLed off, boardLed one 50 ms pulse
+ *           failure -> boardLed off, warnLed held on
  *
  * @param  host        Target hostname (e.g. "www.baidu.com")
  * @param  port        TCP port (usually 80)

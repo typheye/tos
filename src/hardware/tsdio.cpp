@@ -547,3 +547,4 @@ bool TSDIO::simpleWriteTest(void) {
 
 bool TSDIO_IsHardDisabled(void) { return boardSDIO.isHardDisabled(); }
 bool TSDIO_IsInitialized(void) { return boardSDIO.isInitialized(); }
+void TSDIO_MarkHardDisabled(void) { boardSDIO.markHardDisabled(); }

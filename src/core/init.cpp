@@ -41,7 +41,142 @@ extern SN74HC00N boardHC00N;
 extern Potentiometer boardPot;
 extern THID boardHID;
 
-static void cleanup_system_volume_information(void) {
+static bool sd_root_name_eq(const char *a, const char *b) {
+  if (!a || !b) return false;
+  while (*a && *b) {
+    char ca = *a++;
+    char cb = *b++;
+    if (ca >= 'A' && ca <= 'Z') ca = (char)(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = (char)(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
+static bool sd_root_entry_allowed(const FMCore_Entry *entry) {
+  if (!entry || !entry->name[0]) return true;
+  if (strcmp(entry->name, ".") == 0 || strcmp(entry->name, "..") == 0) return true;
+#ifdef AM_VOL
+  if ((entry->attr & AM_VOL) != 0U) return true;
+#endif
+
+  if (sd_root_name_eq(entry->name, "init")) {
+    return entry->is_dir == 0U;
+  }
+
+  static const char *kAllowedDirs[] = {
+      "data", "oem", "dev", "storage", "system"};
+  for (unsigned i = 0; i < sizeof(kAllowedDirs) / sizeof(kAllowedDirs[0]); ++i) {
+    if (sd_root_name_eq(entry->name, kAllowedDirs[i])) {
+      return entry->is_dir != 0U;
+    }
+  }
+  return false;
+}
+
+static FRESULT sd_root_find_extra(char *path, size_t path_size,
+                                  bool *out_found) {
+  DIR dir;
+  FILINFO fno;
+  FMCore_Entry entry;
+  FRESULT res;
+
+  if (out_found) *out_found = false;
+  if (!path || path_size == 0U || !out_found) return FR_INVALID_PARAMETER;
+  path[0] = '\0';
+
+  res = f_opendir(&dir, "0:");
+  if (res != FR_OK) return res;
+
+  while (1) {
+    SysWatchdog_Tick();
+    res = f_readdir(&dir, &fno);
+    if (res != FR_OK) {
+      (void)f_closedir(&dir);
+      return res;
+    }
+    if (fno.fname[0] == '\0') break;
+
+    strncpy(entry.name, fno.fname, FMCORE_NAME_MAX - 1U);
+    entry.name[FMCORE_NAME_MAX - 1U] = '\0';
+    entry.is_dir = (fno.fattrib & AM_DIR) ? 1U : 0U;
+    entry.size = fno.fsize;
+    entry.attr = fno.fattrib;
+    if (sd_root_entry_allowed(&entry)) continue;
+
+    if (!FMCore_JoinPath("0:", entry.name, path, path_size)) {
+      (void)f_closedir(&dir);
+      return FR_INVALID_NAME;
+    }
+    *out_found = true;
+    break;
+  }
+
+  FRESULT close_res = f_closedir(&dir);
+  return close_res == FR_OK ? res : close_res;
+}
+
+static FRESULT sd_delete_recursive_quiet(const char *path) {
+  FILINFO info;
+  FRESULT res;
+
+  if (!path || !path[0]) return FR_INVALID_PARAMETER;
+  SysWatchdog_Tick();
+
+  res = f_stat(path, &info);
+  if (res != FR_OK) return res;
+
+#if _USE_CHMOD
+  (void)f_chmod(path, 0, AM_RDO);
+#endif
+  if ((info.fattrib & AM_DIR) == 0U) {
+    return f_unlink(path);
+  }
+
+  while (1) {
+    DIR dir;
+    FILINFO fno;
+    char child[FMCORE_PATH_MAX];
+    bool found = false;
+
+    res = f_opendir(&dir, path);
+    if (res != FR_OK) return res;
+    while (1) {
+      res = f_readdir(&dir, &fno);
+      if (res != FR_OK || fno.fname[0] == '\0') break;
+      if (strcmp(fno.fname, ".") == 0 || strcmp(fno.fname, "..") == 0) continue;
+      if (!FMCore_JoinPath(path, fno.fname, child, sizeof(child))) {
+        res = FR_INVALID_NAME;
+        break;
+      }
+      found = true;
+      break;
+    }
+    (void)f_closedir(&dir);
+
+    if (res != FR_OK) return res;
+    if (!found) break;
+
+    res = sd_delete_recursive_quiet(child);
+    if (res != FR_OK && res != FR_NO_FILE && res != FR_NO_PATH) return res;
+    SysWatchdog_Tick();
+  }
+
+#if _USE_CHMOD
+  (void)f_chmod(path, 0, AM_RDO);
+#endif
+  return f_unlink(path);
+}
+
+static void sd_cleanup_disable_for_boot(const char *reason, FRESULT res) {
+  SysLog_DisableFileOutput();
+  LOG_W("MAIN", "SD root cleanup disabled SD for this boot: %s => %s(%d)",
+        reason ? reason : "?", FMCore_FResultName(res), (int)res);
+  FMCore_Unmount();
+  TSDIO_MarkHardDisabled();
+}
+
+static void cleanup_sd_root_whitelist(void) {
   if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized() ||
       !FMCore_IsInitialized()) {
     return;
@@ -49,35 +184,32 @@ static void cleanup_system_volume_information(void) {
 
   FRESULT mount_res = FMCore_Mount(NULL, false);
   if (mount_res != FR_OK) {
-    LOG_W("MAIN", "SVI cleanup skipped: mount => %s(%d)",
-          FMCore_FResultName(mount_res), (int)mount_res);
+    sd_cleanup_disable_for_boot("mount root", mount_res);
     return;
   }
 
-  FILINFO info;
-  FRESULT stat_res = FMCore_Stat("0:/System Volume Information", &info, false);
-  if (stat_res == FR_NO_FILE || stat_res == FR_NO_PATH) {
-    return;
-  }
-  if (stat_res != FR_OK) {
-    LOG_W("MAIN", "SVI cleanup skipped: stat => %s(%d)",
-          FMCore_FResultName(stat_res), (int)stat_res);
-    return;
-  }
-  if ((info.fattrib & AM_DIR) == 0U) {
-    LOG_W("MAIN", "SVI cleanup skipped: not a directory");
-    return;
+  for (uint16_t pass = 0; pass < 128U; ++pass) {
+    char path[FMCORE_PATH_MAX];
+    bool found = false;
+    FRESULT list_res = sd_root_find_extra(path, sizeof(path), &found);
+    if (list_res != FR_OK) {
+      sd_cleanup_disable_for_boot("list root", list_res);
+      return;
+    }
+    if (!found) return;
+
+    SysWatchdog_FeedNow();
+    FRESULT del_res = sd_delete_recursive_quiet(path);
+    SysWatchdog_FeedNow();
+    if (del_res != FR_OK && del_res != FR_NO_FILE && del_res != FR_NO_PATH) {
+      sd_cleanup_disable_for_boot(path, del_res);
+      return;
+    }
+
+    LOG_I("MAIN", "Removed SD root extra: %s", path);
   }
 
-  SysWatchdog_FeedNow();
-  FRESULT del_res = FMCore_Delete("0:/System Volume Information", true, false);
-  if (del_res == FR_OK) {
-    LOG_I("MAIN", "Removed SD System Volume Information");
-  } else {
-    LOG_W("MAIN", "SVI cleanup failed: %s(%d)",
-          FMCore_FResultName(del_res), (int)del_res);
-  }
-  SysWatchdog_FeedNow();
+  LOG_W("MAIN", "SD root cleanup pass limit reached");
 }
 
 void TOS::init() {
@@ -105,7 +237,7 @@ void TOS::init() {
   if (TSDIO_IsHardDisabled()) {
     LOG_W("MAIN", "SD card is hard-disabled - SD features unavailable");
   } else {
-    cleanup_system_volume_information();
+    cleanup_sd_root_whitelist();
   }
 
   keyManager.init();

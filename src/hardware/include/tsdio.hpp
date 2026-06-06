@@ -35,6 +35,7 @@ extern "C" {
 
 bool TSDIO_IsHardDisabled(void);
 bool TSDIO_IsInitialized(void);
+void TSDIO_MarkHardDisabled(void);
 
 #ifdef __cplusplus
 }
@@ -92,6 +93,7 @@ public:
   
   bool isHardDisabled(void) { return _hard_disabled; }
   bool isInitialized(void) const { return initialized && !_hard_disabled; }
+  void markHardDisabled(void) { initialized = false; _hard_disabled = true; }
 
   
   bool isInserted(void);
