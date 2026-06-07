@@ -21,7 +21,7 @@
 extern Buzzer buzzer1;
 
 #define TOS_HEARTBEAT_PATH "/v1/device/heartbeat"
-#define TOS_HEARTBEAT_MS   6000U
+#define TOS_HEARTBEAT_MS   4000U
 #define TOS_RETRY_MS       4000U
 #define TOS_RETRY_MAX_MS   20000U
 #define TOS_PREONLINE_RETRY_MS     15000U

@@ -33,6 +33,7 @@ extern uint8_t  esp8266_data_ready;
 static const size_t NET_RX_SIZE = 2048;
 static const size_t NET_ASYNC_RESPONSE_SIZE = 3072;
 static const uint32_t NET_ASYNC_SETUP_BUDGET_MS = 18000U;
+static const uint32_t NET_ASYNC_KEEPALIVE_MS = 30000U;
 
 /* The ESP8266 AT interface is strictly serial.  Synchronous raw AT helpers
  * call SysWatchdog_Tick() while waiting for replies; the watchdog may in turn
@@ -544,6 +545,10 @@ static uint8_t g_async_fail_streak = 0;
 static uint8_t g_async_cipstart_fail_streak = 0;
 static uint8_t g_async_no_rx_fail_streak = 0;
 static uint32_t g_async_tcp_cooldown_until_ms = 0;
+static bool g_async_tcp_reuse_ready = false;
+static char g_async_tcp_reuse_host[64];
+static uint16_t g_async_tcp_reuse_port = 0;
+static uint32_t g_async_tcp_reuse_ms = 0;
 
 static bool net_status_has_active_tcp(const char *resp) {
   if (!resp) return false;
@@ -558,8 +563,48 @@ static bool net_async_time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
 }
 
+static void net_async_mark_tcp_closed(void) {
+  g_async_tcp_reuse_ready = false;
+  g_async_tcp_reuse_host[0] = '\0';
+  g_async_tcp_reuse_port = 0;
+  g_async_tcp_reuse_ms = 0;
+}
+
+static bool net_http_peer_closed(const char *text) {
+  if (!text) return true;
+  return strstr(text, "CLOSED") != nullptr ||
+         strstr(text, "Connection: close") != nullptr ||
+         strstr(text, "connection: close") != nullptr;
+}
+
+static bool net_async_can_reuse_tcp(const char *connect_host, uint16_t port) {
+  if (!g_async_tcp_reuse_ready || !connect_host || !connect_host[0]) {
+    return false;
+  }
+  if (g_async_tcp_reuse_port != port) return false;
+  if (strcmp(g_async_tcp_reuse_host, connect_host) != 0) return false;
+
+  uint32_t now = HAL_GetTick();
+  return (uint32_t)(now - g_async_tcp_reuse_ms) < NET_ASYNC_KEEPALIVE_MS;
+}
+
+static void net_async_mark_tcp_reusable(void) {
+  if (!g_async.connect_host[0]) {
+    net_async_mark_tcp_closed();
+    return;
+  }
+
+  strncpy(g_async_tcp_reuse_host, g_async.connect_host,
+          sizeof(g_async_tcp_reuse_host) - 1U);
+  g_async_tcp_reuse_host[sizeof(g_async_tcp_reuse_host) - 1U] = '\0';
+  g_async_tcp_reuse_port = g_async.port;
+  g_async_tcp_reuse_ms = HAL_GetTick();
+  g_async_tcp_reuse_ready = true;
+}
+
 static void net_async_tcp_stack_cleanup(void) {
   LOG_W("NET", "Async TCP close cleanup");
+  net_async_mark_tcp_closed();
 
   bool closed = net_raw_at_best_effort("AT+CIPCLOSE", "OK", 1800, 80,
                                        "CLOSED", "ERROR");
@@ -654,9 +699,19 @@ static void net_async_finish(bool ok, const char *reason) {
     g_async_cipstart_fail_streak = 0;
     g_async_no_rx_fail_streak = 0;
     const char *rx = esp8266.getRxBuffer();
+    bool peer_closed = net_http_peer_closed(rx);
     bool frames_complete = true;
     uint16_t copy_len = (uint16_t)net_ipd_payload_copy(
         rx, g_async.response, sizeof(g_async.response), &frames_complete);
+    if (!peer_closed) peer_closed = net_http_peer_closed(g_async.response);
+
+    if (!peer_closed) {
+      net_async_mark_tcp_reusable();
+      LOG_D("NET", "Async TCP keep-alive ready: %s:%u",
+            g_async_tcp_reuse_host, (unsigned)g_async_tcp_reuse_port);
+    } else {
+      net_async_mark_tcp_closed();
+    }
 
     LED_EspCommSuccess();
     g_async.state = NET_ASYNC_DONE;
@@ -664,6 +719,7 @@ static void net_async_finish(bool ok, const char *reason) {
           (unsigned)(sizeof(g_async.response) - 1),
           frames_complete ? 1U : 0U);
   } else {
+    net_async_mark_tcp_closed();
     bool cipstart_fail = reason && strstr(reason, "CIPSTART");
     bool tcp_cleanup_needed =
         reason && (strstr(reason, "CIPSTART") ||
@@ -735,10 +791,10 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
   strncpy(g_async.connect_host, connect_host, sizeof(g_async.connect_host) - 1);
 
   int req_len = snprintf(g_async.request, sizeof(g_async.request),
-                         "POST %s HTTP/1.0\r\n"
+                         "POST %s HTTP/1.1\r\n"
                          "Host: %s\r\n"
                          "Content-Length: %u\r\n"
-                         "Connection: close\r\n"
+                         "Connection: keep-alive\r\n"
                          "\r\n",
                          path, host, (unsigned)body_len);
   if (req_len <= 0 || req_len >= (int)sizeof(g_async.request)) {
@@ -760,13 +816,29 @@ bool Net_AsyncHttpPostStart(const char *host, uint16_t port, const char *path,
   g_async.request[req_len] = '\0';
   g_async.req_len = (uint16_t)req_len;
 
-  LOG_I("NET", "Async POST %s:%u%s via %s (%uB)",
+  bool reuse_tcp = net_async_can_reuse_tcp(g_async.connect_host, g_async.port);
+
+  LOG_I("NET", "Async POST %s:%u%s via %s%s (%uB)",
         host, (unsigned)port, path, g_async.connect_host,
+        reuse_tcp ? " reuse" : "",
         (unsigned)g_async.req_len);
   g_async.state = NET_ASYNC_BUSY;
   g_async.request_start_ms = HAL_GetTick();
   g_async.uart_rx_start = uart2_rx_count;
-  net_async_send_line(NET_ASYNC_STEP_CLOSE, "AT+CIPCLOSE");
+
+  if (reuse_tcp) {
+    char cmd[32];
+    int n = snprintf(cmd, sizeof(cmd), "AT+CIPSEND=%u",
+                     (unsigned)g_async.req_len);
+    if (n <= 0 || n >= (int)sizeof(cmd)) {
+      g_async.state = NET_ASYNC_IDLE;
+      net_async_mark_tcp_closed();
+      return false;
+    }
+    net_async_send_line(NET_ASYNC_STEP_SEND_LEN, cmd);
+  } else {
+    net_async_send_line(NET_ASYNC_STEP_CLOSE, "AT+CIPCLOSE");
+  }
   return true;
 }
 
@@ -926,6 +998,7 @@ void Net_ResetTransportDiagnostics(void) {
   g_async_cipstart_fail_streak = 0;
   g_async_no_rx_fail_streak = 0;
   g_async_tcp_cooldown_until_ms = 0;
+  net_async_mark_tcp_closed();
 }
 
 bool Net_IsHardDisabled(void) {
@@ -957,6 +1030,7 @@ void Net_ConfigureStationCompatibility(void) {
  * legitimately return ERROR when no server / connection exists — this is
  * normal and must NOT be treated as a failure.  Only CIPMUX=0 is essential. */
 void Net_PrepareClient(void) {
+  net_async_mark_tcp_closed();
   (void)net_raw_at_best_effort("AT+CIPSERVER=0", "OK", 1200, 50,
                                "ERROR");
   (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 1800, 80,
@@ -971,6 +1045,7 @@ void Net_PrepareClient(void) {
 void Net_LightCleanup(void) {
   if (Net_IsHardDisabled() || net_async_busy() || g_net_raw_busy) return;
 
+  net_async_mark_tcp_closed();
   (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 900, 30,
                                "CLOSED", "ERROR");
   (void)net_raw_at_best_effort("AT+CIPMODE=0", "OK", 900, 30,

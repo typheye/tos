@@ -173,6 +173,9 @@ private:
   bool _rx_overflow;
 
   void clearRxBuffer(void);
+  void waitWithService(uint32_t delay_ms);
+  void driveControlPins(bool en_high, bool rst_high);
+  void hardwareReset(bool cycle_en, uint32_t boot_wait_ms);
   bool waitForResponse(const char *expected, uint32_t timeout_ms);
   void parseResponse(const char *response);
 };

@@ -39,6 +39,11 @@ extern uint8_t esp8266_data_ready;
 extern volatile uint32_t uart2_rx_count;
 }
 
+#define ESP8266_EN_PORT  GPIOF
+#define ESP8266_EN_PIN   GPIO_PIN_0
+#define ESP8266_RST_PORT GPIOF
+#define ESP8266_RST_PIN  GPIO_PIN_1
+
 // Global instance
 CCMRAM ESP8266 esp8266(&huart2);
 
@@ -128,6 +133,47 @@ void ESP8266::processPendingData(void) {
 
 void ESP8266::resetRxBuffer(void) { clearRxBuffer(); }
 
+void ESP8266::waitWithService(uint32_t delay_ms) {
+  uint32_t start = HAL_GetTick();
+  while ((uint32_t)(HAL_GetTick() - start) < delay_ms) {
+    serviceUartRx();
+    processPendingData();
+    HAL_Delay(20U);
+    SysWatchdog_Tick();
+  }
+}
+
+void ESP8266::driveControlPins(bool en_high, bool rst_high) {
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  HAL_GPIO_WritePin(ESP8266_EN_PORT, ESP8266_EN_PIN,
+                    en_high ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(ESP8266_RST_PORT, ESP8266_RST_PIN,
+                    rst_high ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+void ESP8266::hardwareReset(bool cycle_en, uint32_t boot_wait_ms) {
+  LOG_W("ESP", "Hardware reset via EN/RST%s",
+        cycle_en ? " (power-cycle)" : "");
+
+  _state = 0;
+  clearRxBuffer();
+
+  if (cycle_en) {
+    driveControlPins(false, false);
+    waitWithService(250U);
+    driveControlPins(true, false);
+    waitWithService(120U);
+  } else {
+    driveControlPins(true, false);
+    waitWithService(120U);
+  }
+
+  driveControlPins(true, true);
+  waitWithService(boot_wait_ms);
+  serviceUartRx();
+  clearRxBuffer();
+}
+
 bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
   if (_hard_disabled) return false;
 
@@ -216,24 +262,7 @@ bool ESP8266::tryRecover(bool force) {
     return true;
   }
 
-  /* There is no dedicated ESP EN/RST GPIO in this board configuration.
-   * AT+RST is therefore the only module-local reset available. Send it once
-   * even when the response path is silent, then probe again after boot. */
-  static const char reset_cmd[] = "AT+RST\r\n";
-  serviceUartRx();
-  clearRxBuffer();
-  (void)HAL_UART_Transmit(_huart, (uint8_t *)reset_cmd,
-                          (uint16_t)(sizeof(reset_cmd) - 1U), 300U);
-
-  uint32_t wait_start = HAL_GetTick();
-  while ((uint32_t)(HAL_GetTick() - wait_start) < 2500U) {
-    processPendingData();
-    HAL_Delay(20U);
-    SysWatchdog_Tick();
-  }
-
-  serviceUartRx();
-  clearRxBuffer();
+  hardwareReset(true, 3200U);
   if (sendCommand("AT", "OK", 2000U)) {
     (void)sendCommand("ATE0", "OK", 1000U);
     (void)sendCommand("AT+CIPMODE=0", "OK", 1000U);
@@ -241,7 +270,7 @@ bool ESP8266::tryRecover(bool force) {
     _hard_disabled = false;
     _state = 0;
     _recover_failures = 0;
-    LOG_I("ESP", "ESP8266 recovered after AT+RST");
+    LOG_I("ESP", "ESP8266 recovered after EN/RST reset");
     return true;
   }
 
@@ -260,14 +289,7 @@ void ESP8266::init(void) {
   _hard_disabled = false;
   _state = 0;
 
-  /* Flush any stale boot data from ESP8266 */
-  clearRxBuffer();
-  HAL_Delay(500);
-  SysWatchdog_FeedNow();
-  processPendingData();
-  clearRxBuffer();
-  HAL_Delay(200);
-  SysWatchdog_FeedNow();
+  hardwareReset(true, 2800U);
 
   LOG_D("ESP", "Sending AT test...");
   if (sendCommand("AT", "OK", 3000)) {
@@ -279,9 +301,33 @@ void ESP8266::init(void) {
     LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
     LOG_W("ESP", "Initial AT failed; trying one module-local reset");
     if (!tryRecover(true)) {
-      _hard_disabled = true;
-      _state = 4;
-      LOG_E("ESP", "ESP8266 unavailable for this boot");
+      _hard_disabled = false;
+      bool late_ok = false;
+      for (uint8_t i = 0; i < 2U && !late_ok; ++i) {
+        LOG_W("ESP", "Late boot AT probe %u/2", (unsigned)(i + 1U));
+        uint32_t wait_start = HAL_GetTick();
+        while ((uint32_t)(HAL_GetTick() - wait_start) < 3000U) {
+          serviceUartRx();
+          HAL_Delay(20U);
+          SysWatchdog_Tick();
+        }
+        serviceUartRx();
+        clearRxBuffer();
+        late_ok = sendCommand("AT", "OK", 2000U);
+      }
+
+      if (late_ok) {
+        LOG_I("ESP", "AT OK after late boot probe");
+        (void)sendCommand("ATE0", "OK", 1000U);
+        (void)sendCommand("AT+CIPMODE=0", "OK", 1000U);
+        (void)sendCommand("AT+CIPMUX=0", "OK", 1000U);
+        _hard_disabled = false;
+        _state = 0;
+      } else {
+        _hard_disabled = true;
+        _state = 4;
+        LOG_E("ESP", "ESP8266 unavailable for this boot");
+      }
     }
   }
 }
