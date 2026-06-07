@@ -51,6 +51,13 @@ bool Net_IsHardDisabled(void);
 void Net_PrepareClient(void);
 
 /**
+ * @brief  Apply station settings for infrastructure AP compatibility.
+ *         Disables modem sleep and selects active, compact +IPD delivery.
+ *         Unsupported commands are ignored.
+ */
+void Net_ConfigureStationCompatibility(void);
+
+/**
  * @brief  Lightweight cleanup for transient ESP8266 TCP stalls.
  *         Closes stale TCP state and restores single-connection mode without
  *         resetting or re-initializing the ESP8266.

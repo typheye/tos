@@ -223,6 +223,100 @@ static void net_log_response(const char *label) {
   net_log_response_text(label, esp8266.getRxBuffer());
 }
 
+static size_t net_ipd_payload_copy(const char *rx, char *out, size_t out_sz,
+                                   bool *frames_complete) {
+  if (frames_complete) *frames_complete = true;
+  if (!out || out_sz == 0U) return 0U;
+  out[0] = '\0';
+  if (!rx || !*rx) return 0U;
+
+  const char *p = rx;
+  size_t written = 0U;
+  bool saw_ipd = false;
+
+  while (1) {
+    const char *ipd = strstr(p, "+IPD,");
+    if (!ipd) break;
+    saw_ipd = true;
+
+    const char *fields = ipd + 5;
+    const char *colon = fields;
+    bool quoted = false;
+    uint8_t commas = 0U;
+    while (*colon) {
+      if (*colon == '"') quoted = !quoted;
+      if (!quoted && *colon == ',') commas++;
+      if (!quoted && *colon == ':') break;
+      ++colon;
+    }
+    if (*colon != ':') {
+      if (frames_complete) *frames_complete = false;
+      break;
+    }
+
+    /* Header forms:
+     *   +IPD,<len>:
+     *   +IPD,<link>,<len>:
+     *   +IPD,<len>,<remote>,<port>:
+     *   +IPD,<link>,<len>,<remote>,<port>:
+     */
+    const char *len_field = fields;
+    if (commas == 1U || commas >= 3U) {
+      len_field = strchr(fields, ',');
+      if (len_field) ++len_field;
+    }
+    uint32_t payload_len = 0U;
+    bool len_ok = false;
+    while (len_field && *len_field >= '0' && *len_field <= '9') {
+      len_ok = true;
+      payload_len = payload_len * 10U +
+                    (uint32_t)(*len_field++ - '0');
+    }
+    if (!len_ok) {
+      if (frames_complete) *frames_complete = false;
+      break;
+    }
+
+    const char *payload = colon + 1;
+    size_t available = strlen(payload);
+    size_t take = payload_len;
+    if (take > available) {
+      take = available;
+      if (frames_complete) *frames_complete = false;
+    }
+    if (take > out_sz - 1U - written) {
+      take = out_sz - 1U - written;
+      if (frames_complete) *frames_complete = false;
+    }
+    if (take > 0U) {
+      memcpy(out + written, payload, take);
+      written += take;
+      out[written] = '\0';
+    }
+
+    if (available < payload_len || written >= out_sz - 1U) break;
+    p = payload + payload_len;
+  }
+
+  if (!saw_ipd) {
+    const char *start = strstr(rx, "HTTP/");
+    if (!start) start = strchr(rx, '{');
+    if (!start) return 0U;
+    size_t n = strlen(start);
+    const char *closed = strstr(start, "\r\nCLOSED");
+    if (closed) n = (size_t)(closed - start);
+    if (n >= out_sz) {
+      n = out_sz - 1U;
+      if (frames_complete) *frames_complete = false;
+    }
+    memcpy(out, start, n);
+    out[n] = '\0';
+    written = n;
+  }
+
+  return written;
+}
+
 static const char *net_http_header_start(const char *rx) {
   if (!rx) return nullptr;
   return strstr(rx, "HTTP/");
@@ -298,6 +392,12 @@ static bool net_http_body_complete(const char *rx) {
 
   if (n == 0) return false;
   return body[n - 1] == '}' || body[n - 1] == ']';
+}
+
+static bool net_http_snapshot(const char *raw, char *out, size_t out_sz,
+                              bool *frames_complete) {
+  size_t n = net_ipd_payload_copy(raw, out, out_sz, frames_complete);
+  return n > 0U && (strstr(out, "HTTP/") || strchr(out, '{'));
 }
 
 /* ── DNS cache for TCP connect target ──────────────────────────── */
@@ -532,16 +632,15 @@ static void net_async_finish(bool ok, const char *reason) {
     g_async_fail_streak = 0;
     g_async_cipstart_fail_streak = 0;
     const char *rx = esp8266.getRxBuffer();
-    uint16_t copy_len = rx ? (uint16_t)strlen(rx) : 0;
-    if (copy_len >= sizeof(g_async.response))
-      copy_len = sizeof(g_async.response) - 1;
-    if (rx && copy_len > 0)
-      memcpy(g_async.response, rx, copy_len);
-    g_async.response[copy_len] = '\0';
+    bool frames_complete = true;
+    uint16_t copy_len = (uint16_t)net_ipd_payload_copy(
+        rx, g_async.response, sizeof(g_async.response), &frames_complete);
 
     LED_EspCommSuccess();
     g_async.state = NET_ASYNC_DONE;
-    LOG_D("NET", "Async POST done, rx=%u/%u", copy_len, (unsigned)(sizeof(g_async.response) - 1));
+    LOG_D("NET", "Async POST done, http=%u/%u frames=%u", copy_len,
+          (unsigned)(sizeof(g_async.response) - 1),
+          frames_complete ? 1U : 0U);
   } else {
     bool cipstart_fail = reason && strstr(reason, "CIPSTART");
     net_log_response(reason ? reason : "Async fail");
@@ -665,8 +764,12 @@ void Net_AsyncTick(void) {
   if (g_async.request_start_ms != 0U &&
       (uint32_t)(now - g_async.request_start_ms) > total_timeout_ms) {
     const char *rx = esp8266.getRxBuffer();
-    bool has_resp = rx && (strstr(rx, "HTTP/") || strstr(rx, "{"));
-    bool complete = has_resp && net_http_body_complete(rx);
+    bool frames_complete = true;
+    bool has_resp = net_http_snapshot(rx, g_async.response,
+                                      sizeof(g_async.response),
+                                      &frames_complete);
+    bool complete = has_resp && frames_complete &&
+                    net_http_body_complete(g_async.response);
     if (complete) {
       net_async_finish(true, "HTTP complete at timeout edge");
     } else {
@@ -737,16 +840,20 @@ void Net_AsyncTick(void) {
   case NET_ASYNC_STEP_WAIT_RESP:
     {
       const char *rx = esp8266.getRxBuffer();
-      bool has_resp = rx && (strstr(rx, "HTTP/") || strstr(rx, "{"));
+      bool frames_complete = true;
+      bool has_resp = net_http_snapshot(rx, g_async.response,
+                                        sizeof(g_async.response),
+                                        &frames_complete);
       bool closed = rx && strstr(rx, "CLOSED");
-      bool complete = has_resp && net_http_body_complete(rx);
+      bool complete = has_resp && frames_complete &&
+                      net_http_body_complete(g_async.response);
       bool settled_complete = complete && (now - g_async.last_rx_ms > 250U);
 
       /* Prefer Content-Length / JSON completion over idle time.  Finishing on
        * "rx idle for 900 ms" alone caused truncated heartbeat bodies, so the
        * command array sometimes looked like "cmds":[ without a closing ]. */
-      if (has_resp && (closed || settled_complete)) {
-        net_async_finish(true, complete ? "HTTP complete" : "HTTP closed");
+      if (has_resp && complete && (closed || settled_complete)) {
+        net_async_finish(true, "HTTP complete");
       } else if (now - g_async.step_start_ms > g_async.timeout_ms) {
         net_async_finish(false, has_resp ? "HTTP incomplete" : "HTTP timeout");
       }
@@ -779,6 +886,24 @@ bool Net_IsHardDisabled(void) {
 
 void Net_LedSuccess(void) { net_led_success(); }
 void Net_LedFailure(void) { net_led_failure(); }
+
+void Net_ConfigureStationCompatibility(void) {
+  char resp[96];
+  bool sleep_off = net_raw_at_capture("AT+SLEEP=0", "OK", 1800, 60,
+                                      resp, sizeof(resp));
+  if (sleep_off) {
+    LOG_I("NET", "ESP modem sleep disabled");
+  } else {
+    net_log_response_text("SLEEP=0 unsupported", resp);
+  }
+
+  /* Firmware-dependent settings: use active receive and compact +IPD framing
+   * when supported. ERROR is harmless on older AT firmware. */
+  (void)net_raw_at_best_effort("AT+CIPRECVMODE=0", "OK", 1200, 40,
+                               "ERROR");
+  (void)net_raw_at_best_effort("AT+CIPDINFO=0", "OK", 1200, 40,
+                               "ERROR");
+}
 
 /* Best-effort client mode preparation.  AT+CIPSERVER=0 and AT+CIPCLOSE
  * legitimately return ERROR when no server / connection exists — this is
@@ -917,21 +1042,17 @@ bool Net_HttpGet(const char *host, uint16_t port, const char *path,
   SysWatchdog_Tick();
   bool closed = net_raw_collect("CLOSED", nullptr, nullptr, timeout_ms, 150, true, false);
   const char *rx = esp8266.getRxBuffer();
-  bool has_response = (rx && (strstr(rx, "HTTP/") || strstr(rx, "{")));
+  bool frames_complete = true;
+  bool has_response = net_http_snapshot(rx, resp_buf, resp_sz,
+                                        &frames_complete);
+  bool response_complete = has_response && frames_complete &&
+                           net_http_body_complete(resp_buf);
 
-  if (!closed && !has_response) {
+  if (!response_complete) {
     net_log_response("HTTP fail");
     net_raw_end();
     net_led_failure();
     return false;
-  }
-
-  /* Copy response to caller's buffer */
-  if (rx && resp_buf && resp_sz > 0) {
-    uint16_t copy_len = (uint16_t)strlen(rx);
-    if (copy_len >= resp_sz) copy_len = resp_sz - 1;
-    memcpy(resp_buf, rx, copy_len);
-    resp_buf[copy_len] = '\0';
   }
 
   net_log_response(closed ? "HTTP" : "HTTP partial");
@@ -1026,21 +1147,17 @@ bool Net_HttpPost(const char *host, uint16_t port, const char *path,
   SysWatchdog_Tick();
   bool closed = net_raw_collect("CLOSED", nullptr, nullptr, timeout_ms, 150, true, false);
   const char *rx = esp8266.getRxBuffer();
-  bool has_response = (rx && (strstr(rx, "HTTP/") || strstr(rx, "{")));
+  bool frames_complete = true;
+  bool has_response = net_http_snapshot(rx, resp_buf, resp_sz,
+                                        &frames_complete);
+  bool response_complete = has_response && frames_complete &&
+                           net_http_body_complete(resp_buf);
 
-  if (!closed && !has_response) {
+  if (!response_complete) {
     net_log_response("HTTP fail");
     net_raw_end();
     net_led_failure();
     return false;
-  }
-
-  /* Copy response */
-  if (rx && resp_buf && resp_sz > 0) {
-    uint16_t copy_len = (uint16_t)strlen(rx);
-    if (copy_len >= resp_sz) copy_len = resp_sz - 1;
-    memcpy(resp_buf, rx, copy_len);
-    resp_buf[copy_len] = '\0';
   }
 
   net_log_response(closed ? "HTTP" : "HTTP partial");

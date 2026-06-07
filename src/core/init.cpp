@@ -264,6 +264,10 @@ void TOS::init() {
   SysWatchdog_FeedNow();
   ESP8266_Init();
   SysWatchdog_FeedNow();
+  if (!ESP8266_IsHardDisabled()) {
+    Net_ConfigureStationCompatibility();
+    SysWatchdog_FeedNow();
+  }
 
   /* ── WLAN Auto-Connect ──
    * Skip entirely if ESP8266 is hard-disabled (module not responding). */
