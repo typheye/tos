@@ -665,6 +665,7 @@ bool ESP8266_IsHardDisabled(void) { return esp8266.isHardDisabled(); }
 
 bool ESP8266_TryRecover(bool force) { return esp8266.tryRecover(force); }
 void ESP8266_ServiceUartRx(void) { esp8266.serviceUartRx(); }
+uint32_t ESP8266_GetUartRxCount(void) { return uart2_rx_count; }
 uint16_t ESP8266_GetRecoveryFailureCount(void) { return esp8266.recoveryFailureCount(); }
 void ESP8266_ClearRecoveryFailureCount(void) { esp8266.clearRecoveryFailureCount(); }
 

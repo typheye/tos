@@ -40,6 +40,10 @@ extern Buzzer buzzer1;
 #define TOS_STATION_PROBE_MIN_MS 30000U
 #define TOS_TRANSPORT_MAINTAIN_MS 30000U
 #define TOS_WIFI_REJOIN_MIN_MS 60000U
+#define TOS_ESP_RECOVER_REJOIN_SILENT_MS 60000U
+#define TOS_ESP_RECOVER_REJOIN_FAILS        2U
+#define TOS_ESP_RECOVER_STA_LOSS_MS      90000U
+#define TOS_ESP_RECOVER_COOLDOWN_MS     120000U
 #define TOS_FALLBACK_EMPTY_CYCLES 180U
 #define TOS_IP_REFRESH_MS      300000U
 #define TOS_IP_RETRY_MS        10000U
@@ -96,6 +100,7 @@ static bool g_auto_time_sync_pending = false;
 static uint32_t g_auto_time_sync_due_ms = 0;
 static uint8_t g_auto_time_sync_attempts = 0;
 static bool g_terminal_esp_recovery_attempted = false;
+static uint32_t g_last_esp_recovery_ms = 0;
 static uint32_t g_transport_retry_override_ms = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
@@ -322,6 +327,67 @@ static void update_cached_ip_from_esp(void) {
   }
 }
 
+static bool recover_esp_transport(const char *reason, uint32_t offline_ms) {
+  uint32_t now = HAL_GetTick();
+
+  if (g_terminal_esp_recovery_attempted) return false;
+  if (g_last_esp_recovery_ms != 0U &&
+      (uint32_t)(now - g_last_esp_recovery_ms) < TOS_ESP_RECOVER_COOLDOWN_MS) {
+    LOG_W("TAPI", "ESP recovery skipped (%s), cooldown active",
+          reason ? reason : "transport");
+    return false;
+  }
+
+  g_terminal_esp_recovery_attempted = true;
+  g_last_esp_recovery_ms = now;
+  LOG_E("TAPI",
+        "ESP recovery: %s offline=%lums fail=%u probe=%u rejoin=%u no-rx=%u",
+        reason ? reason : "transport", (unsigned long)offline_ms,
+        (unsigned)g_transport_fail_count,
+        (unsigned)g_station_probe_fail_count,
+        (unsigned)g_wifi_rejoin_fail_count,
+        (unsigned)Net_AsyncNoRxFailStreak());
+
+  Net_AsyncReset();
+  if (ESP8266_TryRecover(true)) {
+    Net_ResetTransportDiagnostics();
+    g_transport_fail_count = 0;
+    g_station_probe_fail_count = 0;
+    g_wifi_rejoin_fail_count = 0;
+    g_last_transport_maintenance_ms = 0;
+    g_last_station_probe_ms = 0;
+    g_last_wifi_rejoin_ms = 0;
+
+    const char *ssid = SM_Wlan_SSID();
+    const char *pwd = SM_Wlan_PWD();
+    if (ssid && ssid[0]) {
+      LOG_W("TAPI", "Rejoining WLAN after ESP recovery: %s", ssid);
+      uint32_t rx_before = ESP8266_GetUartRxCount();
+      if (ESP8266_ConnectWiFi(ssid, pwd ? pwd : "")) {
+        Net_ConfigureStationCompatibility();
+        g_station_ip_confirmed = true;
+        g_last_ip_refresh_ms = 0;
+        update_cached_ip_from_esp();
+      } else {
+        uint32_t rx_delta = ESP8266_GetUartRxCount() - rx_before;
+        g_station_ip_confirmed = false;
+        if (g_wifi_rejoin_fail_count < 255U) g_wifi_rejoin_fail_count++;
+        LOG_W("TAPI", "WLAN rejoin after ESP recovery failed #%u rx=%lu",
+              (unsigned)g_wifi_rejoin_fail_count, (unsigned long)rx_delta);
+      }
+    }
+
+    g_terminal_esp_recovery_attempted = false;
+    g_transport_retry_override_ms = 1500U;
+    LOG_I("TAPI", "ESP recovery completed; cloud retry scheduled");
+    return true;
+  }
+
+  LOG_E("TAPI", "ESP UART remains silent after bounded recovery");
+  SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
+  return false;
+}
+
 static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) {
   if (offline_ms < TOS_NET_STUCK_MS) return;
   if (g_last_transport_maintenance_ms != 0U &&
@@ -369,6 +435,7 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
   g_last_wifi_rejoin_ms = now;
   LOG_W("TAPI", "STA IP lost; rejoining current AP: %s", ssid);
   Net_LightCleanup();
+  uint32_t rx_before = ESP8266_GetUartRxCount();
   if (ESP8266_ConnectWiFi(ssid, pwd ? pwd : "")) {
     g_station_ip_confirmed = true;
     g_station_probe_fail_count = 0;
@@ -377,9 +444,21 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
     update_cached_ip_from_esp();
     g_transport_retry_override_ms = 1500U;
   } else {
+    uint32_t rx_delta = ESP8266_GetUartRxCount() - rx_before;
     if (g_wifi_rejoin_fail_count < 255U) g_wifi_rejoin_fail_count++;
-    LOG_W("TAPI", "STA rejoin failed #%u",
-          (unsigned)g_wifi_rejoin_fail_count);
+    LOG_W("TAPI", "STA rejoin failed #%u rx=%lu",
+          (unsigned)g_wifi_rejoin_fail_count, (unsigned long)rx_delta);
+
+    if (rx_delta == 0U &&
+        offline_ms >= TOS_ESP_RECOVER_REJOIN_SILENT_MS) {
+      (void)recover_esp_transport("station-rejoin-silent", offline_ms);
+      return;
+    }
+
+    if (g_wifi_rejoin_fail_count >= TOS_ESP_RECOVER_REJOIN_FAILS &&
+        offline_ms >= TOS_ESP_RECOVER_STA_LOSS_MS) {
+      (void)recover_esp_transport("station-rejoin-fail", offline_ms);
+    }
   }
 }
 
@@ -961,6 +1040,7 @@ void TosApi_Init(void) {
                              g_station_ip_confirmed;
   g_auto_time_sync_attempts = 0;
   g_terminal_esp_recovery_attempted = false;
+  g_last_esp_recovery_ms = 0;
   g_auto_time_sync_due_ms = HAL_GetTick() + TOS_AUTO_TIME_SYNC_DELAY_MS;
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
@@ -1002,47 +1082,11 @@ static void note_transport_failure(const char *where) {
   /* Zero UART bytes across several complete requests is not weak WLAN or a
    * slow HTTP server: even those conditions make the AT firmware answer with
    * ERROR/FAIL. It means the USART receive path or the ESP AT task is stuck.
-   * Re-arm USART2 and perform one bounded AT/AT+RST recovery, then escalate
-   * promptly if the module remains silent. */
+   * Perform one bounded EN/RST recovery, then escalate promptly if the module
+   * remains silent. */
   if (offline_ms >= TOS_UART_SILENT_STUCK_MS &&
       Net_AsyncNoRxFailStreak() >= TOS_UART_SILENT_FAILS) {
-    if (!g_terminal_esp_recovery_attempted) {
-      g_terminal_esp_recovery_attempted = true;
-      LOG_E("TAPI", "ESP UART silent: offline=%lums no-rx=%u; recovering once",
-            (unsigned long)offline_ms,
-            (unsigned)Net_AsyncNoRxFailStreak());
-
-      Net_AsyncReset();
-      if (ESP8266_TryRecover(true)) {
-        Net_ResetTransportDiagnostics();
-        g_transport_fail_count = 0;
-        g_station_probe_fail_count = 0;
-        g_wifi_rejoin_fail_count = 0;
-        g_last_transport_maintenance_ms = 0;
-
-        if (!ESP8266_IsConnected()) {
-          const char *ssid = SM_Wlan_SSID();
-          const char *pwd = SM_Wlan_PWD();
-          if (ssid && ssid[0]) {
-            LOG_W("TAPI", "Rejoining WLAN after ESP recovery: %s", ssid);
-            if (ESP8266_ConnectWiFi(ssid, pwd ? pwd : "")) {
-              Net_ConfigureStationCompatibility();
-              g_station_ip_confirmed = true;
-              g_last_ip_refresh_ms = 0;
-              update_cached_ip_from_esp();
-            }
-          }
-        }
-
-        g_terminal_esp_recovery_attempted = false;
-        g_transport_retry_override_ms = 1500U;
-        LOG_I("TAPI", "ESP recovery completed; cloud retry scheduled");
-        return;
-      }
-    }
-
-    LOG_E("TAPI", "ESP UART remains silent after bounded recovery");
-    SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
+    if (recover_esp_transport("uart-silent", offline_ms)) return;
   }
 
   maintain_transport_after_silence(now, offline_ms);

@@ -111,6 +111,7 @@ bool ESP8266_IsHardDisabled(void);
  */
 bool ESP8266_TryRecover(bool force);
 void ESP8266_ServiceUartRx(void);
+uint32_t ESP8266_GetUartRxCount(void);
 uint16_t ESP8266_GetRecoveryFailureCount(void);
 void ESP8266_ClearRecoveryFailureCount(void);
 
