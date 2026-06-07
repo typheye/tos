@@ -663,7 +663,9 @@ static void net_async_finish(bool ok, const char *reason) {
             "Async fail streak=%u step=%u uart_rx=%lu; TCP cleanup only",
             g_async_fail_streak, (unsigned)g_async.step,
             (unsigned long)(uart2_rx_count - g_async.uart_rx_start));
-      net_dns_cache_clear();
+      if (cipstart_fail || (reason && strstr(reason, "DNS"))) {
+        net_dns_cache_clear();
+      }
       g_async_fail_streak = 0;
     }
     g_async.state = NET_ASYNC_FAILED;

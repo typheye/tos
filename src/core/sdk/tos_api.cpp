@@ -21,21 +21,21 @@
 extern Buzzer buzzer1;
 
 #define TOS_HEARTBEAT_PATH "/v1/device/heartbeat"
-#define TOS_HEARTBEAT_MS   5000U
+#define TOS_HEARTBEAT_MS   8000U
 #define TOS_RETRY_MS       5000U
 #define TOS_RETRY_MAX_MS   20000U
 #define TOS_START_DELAY_MS 2500U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
-#define TOS_HEARTBEAT_TIMEOUT_MS 11000U
-#define TOS_ACK_TIMEOUT_MS       8000U
+#define TOS_HEARTBEAT_TIMEOUT_MS 8000U
+#define TOS_ACK_TIMEOUT_MS       6000U
 #define TOS_NET_STUCK_MS       30000U
 #define TOS_NET_FATAL_STUCK_MS 300000U
 #define TOS_NET_FATAL_FAILS         8U
 #define TOS_NET_FATAL_PROBE_FAILS   2U
-#define TOS_NET_SOFT_STUCK_RETRY_MS 15000U
-#define TOS_STATION_PROBE_MIN_MS 90000U
-#define TOS_TRANSPORT_MAINTAIN_MS 60000U
-#define TOS_WIFI_REJOIN_MIN_MS 120000U
+#define TOS_NET_SOFT_STUCK_RETRY_MS 5000U
+#define TOS_STATION_PROBE_MIN_MS 30000U
+#define TOS_TRANSPORT_MAINTAIN_MS 30000U
+#define TOS_WIFI_REJOIN_MIN_MS 60000U
 #define TOS_FALLBACK_EMPTY_CYCLES 180U
 #define TOS_IP_REFRESH_MS      300000U
 #define TOS_IP_RETRY_MS        10000U
@@ -147,11 +147,11 @@ static bool online_intended_config(void) {
 static bool network_ready(void) {
   if (!wlan_enabled()) return false;
   if (Net_IsHardDisabled()) return false;
-  if (g_transport_fail_count >= 2U) return g_station_ip_confirmed;
   int state = ESP8266_GetState();
   /* Some ESP8266 AT firmwares stay in STATUS:2 while TCP requests still work.
    * Once cloud has been reached in this boot, keep treating WLAN as usable
-   * until transport failures prove otherwise. */
+   * and continue trying HTTP even during transient no-+IPD windows. Active
+   * station probes below decide whether the AP link is actually gone. */
   return state == 3 || ESP8266_IsConnected() || g_cloud_was_online;
 }
 
@@ -314,7 +314,6 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
         (unsigned long)offline_ms, (unsigned)g_transport_fail_count);
 
   Net_LightCleanup();
-  Net_ResetDnsCache();
 
   if (g_last_station_probe_ms != 0U &&
       (uint32_t)(now - g_last_station_probe_ms) < TOS_STATION_PROBE_MIN_MS) {
@@ -914,7 +913,6 @@ static void note_transport_failure(const char *where) {
   if (!g_cloud_was_online || g_last_cloud_ok_ms == 0) return;
 
   if (g_transport_fail_count == 0U) return;
-  if (g_transport_fail_count >= 2U) g_station_ip_confirmed = false;
   if (offline_ms < TOS_NET_STUCK_MS) return;
 
   if (Net_IsHardDisabled()) {
