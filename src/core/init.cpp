@@ -285,38 +285,56 @@ void TOS::init() {
       HAL_Delay(300);
       SysWatchdog_FeedNow();
 
-      bool ok = false;
-      for (int round = 0; round < 2 && !ok; round++) {
+      const char *preferred_ssid = SM_Wlan_SSID();
+      int preferred_idx = -1;
+      if (preferred_ssid && preferred_ssid[0]) {
         for (int i = 0; i < saved; i++) {
           const SM_SavedNet_t *net = SM_Saved_Get(i);
-          if (!net || !net->ssid[0]) continue;
-          LOG_I("MAIN", "Auto-connect: trying %s (round %d/2)...",
-                net->ssid, round + 1);
-          if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
-            HAL_Delay(500);
-            SysWatchdog_FeedNow();
-            if (ESP8266_IsConnected()) {
-              SM_Wlan_SetSSID(net->ssid);
-              SM_Wlan_SetPWD(net->pwd);
-              LOG_I("MAIN", "Auto-connect: connected to %s!", net->ssid);
-              ok = true;
-              break;
-            }
+          if (net && strcmp(net->ssid, preferred_ssid) == 0) {
+            preferred_idx = i;
+            break;
           }
+        }
+      }
 
+      bool ok = false;
+      auto try_saved = [&](int idx, int round) -> bool {
+        const SM_SavedNet_t *net = SM_Saved_Get(idx);
+        if (!net || !net->ssid[0]) return false;
+        LOG_I("MAIN", "Auto-connect: trying %s (round %d/2)...",
+              net->ssid, round + 1);
+        if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
+          HAL_Delay(500);
           SysWatchdog_FeedNow();
-          if (round == 0) {
-            LOG_W("MAIN", "Auto-connect: %s failed, light cleanup before retry",
-                  net->ssid);
-            esp8266.resetRxBuffer();
-            ESP8266_SendCommand("AT+CIPCLOSE", "OK", 800);
-            ESP8266_SendCommand("AT+CWQAP", "OK", 1200);
-            esp8266.resetRxBuffer();
-            HAL_Delay(400);
-          } else {
-            HAL_Delay(300);
+          if (ESP8266_IsConnected()) {
+            SM_Wlan_SetSSID(net->ssid);
+            SM_Wlan_SetPWD(net->pwd);
+            LOG_I("MAIN", "Auto-connect: connected to %s!", net->ssid);
+            return true;
           }
-          SysWatchdog_FeedNow();
+        }
+
+        SysWatchdog_FeedNow();
+        if (round == 0) {
+          LOG_W("MAIN", "Auto-connect: %s failed, light cleanup before retry",
+                net->ssid);
+          esp8266.resetRxBuffer();
+          ESP8266_SendCommand("AT+CIPCLOSE", "OK", 800);
+          ESP8266_SendCommand("AT+CWQAP", "OK", 1200);
+          esp8266.resetRxBuffer();
+          HAL_Delay(400);
+        } else {
+          HAL_Delay(300);
+        }
+        SysWatchdog_FeedNow();
+        return false;
+      };
+
+      for (int round = 0; round < 2 && !ok; round++) {
+        if (preferred_idx >= 0) ok = try_saved(preferred_idx, round);
+        for (int i = 0; i < saved && !ok; i++) {
+          if (i == preferred_idx) continue;
+          ok = try_saved(i, round);
         }
       }
 
@@ -328,10 +346,8 @@ void TOS::init() {
     }
   }
 
-  /* Do not run blocking time sync during boot.  SNTP/HTTP fallback can take
-   * tens of seconds when the AP or upstream server is unstable, which made the
-   * product look like it had entered a reboot state.  Time can still be synced
-   * from Settings or the cloud sync_time command after the UI is responsive. */
+  /* Do not run blocking time sync during boot.  TosApi_Tick schedules a
+   * deferred auto sync after UI startup and a proven cloud connection. */
   if (!ESP8266_IsHardDisabled() && SM_Wlan_On() &&
       ESP8266_IsConnected() && SM_Time_AutoSync()) {
     LOG_I("MAIN", "Auto time sync deferred until after UI startup");

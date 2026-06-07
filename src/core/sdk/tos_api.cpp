@@ -21,10 +21,10 @@
 extern Buzzer buzzer1;
 
 #define TOS_HEARTBEAT_PATH "/v1/device/heartbeat"
-#define TOS_HEARTBEAT_MS   8000U
-#define TOS_RETRY_MS       5000U
+#define TOS_HEARTBEAT_MS   6000U
+#define TOS_RETRY_MS       4000U
 #define TOS_RETRY_MAX_MS   20000U
-#define TOS_START_DELAY_MS 2500U
+#define TOS_START_DELAY_MS 8000U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
 #define TOS_HEARTBEAT_TIMEOUT_MS 8000U
 #define TOS_ACK_TIMEOUT_MS       6000U
@@ -47,6 +47,9 @@ extern Buzzer buzzer1;
 #define TOS_ACK_RETRY_BASE_MS 10000U
 #define TOS_ACK_RETRY_MAX_MS  60000U
 #define TOS_MAX_CMD_OBJ     448U
+#define TOS_AUTO_TIME_SYNC_DELAY_MS 45000U
+#define TOS_AUTO_TIME_SYNC_RETRY_MS 60000U
+#define TOS_AUTO_TIME_SYNC_MAX_TRIES 3U
 
 enum TosApiPhase {
   TOS_PHASE_IDLE = 0,
@@ -85,6 +88,9 @@ static uint32_t g_hid_seq_in_flight = 0;
 static uint8_t g_ack_retry_count = 0;
 static uint32_t g_next_ack_retry_ms = 0;
 static bool g_station_ip_confirmed = false;
+static bool g_auto_time_sync_pending = false;
+static uint32_t g_auto_time_sync_due_ms = 0;
+static uint8_t g_auto_time_sync_attempts = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -361,6 +367,46 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
     LOG_W("TAPI", "STA rejoin failed #%u",
           (unsigned)g_wifi_rejoin_fail_count);
   }
+}
+
+static bool maybe_run_auto_time_sync(uint32_t now) {
+  if (!g_auto_time_sync_pending) return false;
+  if (!SM_Time_AutoSync()) {
+    g_auto_time_sync_pending = false;
+    return false;
+  }
+  if (!time_due(now, g_auto_time_sync_due_ms)) return false;
+  if (g_ack_body[0] || HidManager_IsReportDirty()) return false;
+  if (g_offline_for_this_boot || !g_esp_init_ok_this_boot ||
+      !g_cloud_was_online || g_transport_fail_count > 0U ||
+      !network_ready()) {
+    g_auto_time_sync_due_ms = now + 10000U;
+    return false;
+  }
+
+  g_auto_time_sync_attempts++;
+  LOG_I("TAPI", "Deferred auto time sync attempt %u/%u",
+        (unsigned)g_auto_time_sync_attempts,
+        (unsigned)TOS_AUTO_TIME_SYNC_MAX_TRIES);
+
+  SysWatchdog_FeedNow();
+  bool ok = SysTime_Sync();
+  SysWatchdog_FeedNow();
+
+  if (ok) {
+    g_auto_time_sync_pending = false;
+    LOG_I("TAPI", "Deferred auto time sync OK");
+  } else if (g_auto_time_sync_attempts >= TOS_AUTO_TIME_SYNC_MAX_TRIES) {
+    g_auto_time_sync_pending = false;
+    LOG_W("TAPI", "Deferred auto time sync gave up");
+  } else {
+    g_auto_time_sync_due_ms = HAL_GetTick() + TOS_AUTO_TIME_SYNC_RETRY_MS;
+    LOG_W("TAPI", "Deferred auto time sync failed, retry in %lums",
+          (unsigned long)TOS_AUTO_TIME_SYNC_RETRY_MS);
+  }
+
+  schedule_heartbeat(1000U);
+  return true;
 }
 
 static bool build_heartbeat_body(char *out, size_t out_sz) {
@@ -888,11 +934,24 @@ void TosApi_Init(void) {
   g_ack_retry_count = 0;
   g_next_ack_retry_ms = 0;
   g_station_ip_confirmed = network_ready();
+  if (g_station_ip_confirmed) {
+    update_cached_ip_from_esp();
+  }
+  g_auto_time_sync_pending = SM_Time_AutoSync() && online_intended_config() &&
+                             !g_offline_for_this_boot &&
+                             g_esp_init_ok_this_boot &&
+                             g_station_ip_confirmed;
+  g_auto_time_sync_attempts = 0;
+  g_auto_time_sync_due_ms = HAL_GetTick() + TOS_AUTO_TIME_SYNC_DELAY_MS;
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
         g_device_id, (unsigned long)TOS_HEARTBEAT_MS,
         online_intended_config() ? "online-intended" : "offline",
         g_offline_for_this_boot ? "/offline-this-boot" : "");
+  if (g_auto_time_sync_pending) {
+    LOG_I("TAPI", "Deferred auto time sync scheduled in %lums",
+          (unsigned long)TOS_AUTO_TIME_SYNC_DELAY_MS);
+  }
 }
 
 static void note_transport_failure(const char *where) {
@@ -993,7 +1052,7 @@ void TosApi_Tick(void) {
     if (ack_ok) {
       bool reboot_after_ack = g_reboot_after_ack;
       clear_pending_ack();
-      schedule_heartbeat(HidManager_IsReportDirty() ? 0U : TOS_HEARTBEAT_MS);
+      schedule_heartbeat(HidManager_IsReportDirty() ? 0U : 1000U);
 
       if (reboot_after_ack) {
         LOG_I("TAPI", "Reboot command acknowledged, resetting");
@@ -1016,6 +1075,8 @@ void TosApi_Tick(void) {
       g_last_hid_report_try_ms = now;
     }
   }
+
+  if (!hid_report_due && maybe_run_auto_time_sync(now)) return;
 
   if (!hid_report_due && !time_due(now, g_next_heartbeat_ms)) {
     uint32_t until_hb = g_next_heartbeat_ms - now;
