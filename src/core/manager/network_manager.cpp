@@ -542,7 +542,13 @@ struct NetAsyncCtx {
 static NetAsyncCtx g_async = {NET_ASYNC_IDLE};
 static uint8_t g_async_fail_streak = 0;
 static uint8_t g_async_cipstart_fail_streak = 0;
+static uint8_t g_async_no_rx_fail_streak = 0;
 static uint32_t g_async_tcp_cooldown_until_ms = 0;
+
+static bool net_status_has_active_tcp(const char *resp) {
+  if (!resp) return false;
+  return strstr(resp, "\"TCP\"") != nullptr || strstr(resp, "STATUS:3") != nullptr;
+}
 
 static bool net_async_busy(void) {
   return g_async.state == NET_ASYNC_BUSY;
@@ -553,15 +559,27 @@ static bool net_async_time_due(uint32_t now, uint32_t target) {
 }
 
 static void net_async_tcp_stack_cleanup(void) {
-  LOG_W("NET", "Async TCP close cleanup after CIPSTART failure");
+  LOG_W("NET", "Async TCP close cleanup");
 
-  /* Keep recovery short.  Each new request already sends AT+CIPMUX=0 before
-   * CIPSTART, so doing another blocking CIPMUX here only creates slow frames
-   * and increases the chance of overlapping stale +IPD/CLOSED bytes. */
-  (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 450, 10,
-                               "CLOSED", "ERROR");
+  bool closed = net_raw_at_best_effort("AT+CIPCLOSE", "OK", 1800, 80,
+                                       "CLOSED", "ERROR");
+  char status[160];
+  bool status_ok = net_raw_at_capture("AT+CIPSTATUS", "OK", 1600, 60,
+                                      status, sizeof(status));
+  bool active_tcp = status_ok && net_status_has_active_tcp(status);
+  if (active_tcp) {
+    net_log_response_text("TCP still active after close", status);
+  }
 
-  g_async_tcp_cooldown_until_ms = HAL_GetTick() + 800U;
+  if (!closed || active_tcp) {
+    (void)net_raw_at_best_effort("AT+CIPCLOSE", "OK", 2600, 100,
+                                 "CLOSED", "ERROR");
+    (void)net_raw_at_best_effort("AT+CIPMUX=0", "OK", 1500, 60,
+                                 "ERROR");
+  }
+
+  esp8266.resetRxBuffer();
+  g_async_tcp_cooldown_until_ms = HAL_GetTick() + (active_tcp ? 3000U : 1500U);
 }
 
 static void net_async_rx_reset(void) {
@@ -589,6 +607,7 @@ static void net_async_send_line(NetAsyncStep step, const char *cmd) {
 }
 
 static void net_async_pump_rx(void) {
+  ESP8266_ServiceUartRx();
   if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_ORE) != RESET) {
     __HAL_UART_CLEAR_OREFLAG(&huart2);
   }
@@ -628,9 +647,12 @@ static void net_async_close_best_effort(void) {
 }
 
 static void net_async_finish(bool ok, const char *reason) {
+  uint32_t uart_rx_delta = uart2_rx_count - g_async.uart_rx_start;
+
   if (ok) {
     g_async_fail_streak = 0;
     g_async_cipstart_fail_streak = 0;
+    g_async_no_rx_fail_streak = 0;
     const char *rx = esp8266.getRxBuffer();
     bool frames_complete = true;
     uint16_t copy_len = (uint16_t)net_ipd_payload_copy(
@@ -643,26 +665,39 @@ static void net_async_finish(bool ok, const char *reason) {
           frames_complete ? 1U : 0U);
   } else {
     bool cipstart_fail = reason && strstr(reason, "CIPSTART");
+    bool tcp_cleanup_needed =
+        reason && (strstr(reason, "CIPSTART") ||
+                   strstr(reason, "CIPSEND") ||
+                   strstr(reason, "HTTP") ||
+                   strstr(reason, "Async response") ||
+                   strstr(reason, "Async total") ||
+                   strstr(reason, "RX overflow"));
+    if (uart_rx_delta == 0U) {
+      if (g_async_no_rx_fail_streak < 255U) g_async_no_rx_fail_streak++;
+    } else {
+      g_async_no_rx_fail_streak = 0;
+    }
     net_log_response(reason ? reason : "Async fail");
-    net_async_close_best_effort();
+    if (tcp_cleanup_needed) {
+      net_async_tcp_stack_cleanup();
+    } else {
+      net_async_close_best_effort();
+    }
     esp8266.resetRxBuffer();
     LED_EspCommFailure();
 
     if (cipstart_fail) {
       if (g_async_cipstart_fail_streak < 255U) g_async_cipstart_fail_streak++;
-      if (g_async_cipstart_fail_streak >= 1U) {
-        net_async_tcp_stack_cleanup();
-        g_async_cipstart_fail_streak = 0;
-      }
     } else if (reason && strstr(reason, "done")) {
       g_async_cipstart_fail_streak = 0;
     }
 
     if (++g_async_fail_streak >= 3U) {
       LOG_W("NET",
-            "Async fail streak=%u step=%u uart_rx=%lu; TCP cleanup only",
+            "Async fail streak=%u step=%u uart_rx=%lu no_rx=%u",
             g_async_fail_streak, (unsigned)g_async.step,
-            (unsigned long)(uart2_rx_count - g_async.uart_rx_start));
+            (unsigned long)uart_rx_delta,
+            (unsigned)g_async_no_rx_fail_streak);
       if (cipstart_fail || (reason && strstr(reason, "DNS"))) {
         net_dns_cache_clear();
       }
@@ -783,8 +818,8 @@ void Net_AsyncTick(void) {
   switch (g_async.step) {
   case NET_ASYNC_STEP_CLOSE:
     if ((net_async_has("OK", "CLOSED", "ERROR") &&
-         now - g_async.last_rx_ms > 150U) ||
-        now - g_async.step_start_ms > 2200U) {
+         now - g_async.last_rx_ms > 180U) ||
+        now - g_async.step_start_ms > 3500U) {
       net_async_send_line(NET_ASYNC_STEP_MUX, "AT+CIPMUX=0");
     }
     break;
@@ -880,6 +915,17 @@ void Net_AsyncReset(void) {
   esp8266.resetRxBuffer();
   memset(&g_async, 0, sizeof(g_async));
   g_async.state = NET_ASYNC_IDLE;
+}
+
+uint8_t Net_AsyncNoRxFailStreak(void) {
+  return g_async_no_rx_fail_streak;
+}
+
+void Net_ResetTransportDiagnostics(void) {
+  g_async_fail_streak = 0;
+  g_async_cipstart_fail_streak = 0;
+  g_async_no_rx_fail_streak = 0;
+  g_async_tcp_cooldown_until_ms = 0;
 }
 
 bool Net_IsHardDisabled(void) {

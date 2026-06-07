@@ -105,11 +105,12 @@ bool ESP8266_GetRSSI(int *rssi);
 bool ESP8266_IsHardDisabled(void);
 
 /**
- * @brief Runtime ESP recovery is disabled by policy; this returns false.
- * @param force ignored.
- * @return false.
+ * @brief Perform one bounded ESP/UART recovery attempt.
+ * @param force bypass the recovery rate limit.
+ * @return true if the AT interface responds after recovery.
  */
 bool ESP8266_TryRecover(bool force);
+void ESP8266_ServiceUartRx(void);
 uint16_t ESP8266_GetRecoveryFailureCount(void);
 void ESP8266_ClearRecoveryFailureCount(void);
 
@@ -138,6 +139,7 @@ public:
   int getState(void) { return _state; }
   bool isHardDisabled(void) { return _hard_disabled; }
   bool tryRecover(bool force = false);
+  void serviceUartRx(void);
   uint16_t recoveryFailureCount(void) const { return _recover_failures; }
   void clearRecoveryFailureCount(void) { _recover_failures = 0; }
 
@@ -165,6 +167,7 @@ private:
   uint32_t _last_recover_ms;
   uint8_t _recover_attempts;
   uint16_t _recover_failures;
+  uint16_t _uart_rearms;
   uint8_t _rx_buffer[RX_BUFFER_SIZE];
   uint16_t _rx_index;
   bool _rx_overflow;

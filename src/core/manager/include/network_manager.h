@@ -166,6 +166,16 @@ const char *Net_AsyncResponse(void);
  */
 void Net_AsyncReset(void);
 
+/**
+ * @brief Consecutive failed async requests that received no UART bytes.
+ */
+uint8_t Net_AsyncNoRxFailStreak(void);
+
+/**
+ * @brief Clear async transport diagnostics after a successful ESP recovery.
+ */
+void Net_ResetTransportDiagnostics(void);
+
 #ifdef __cplusplus
 }
 #endif

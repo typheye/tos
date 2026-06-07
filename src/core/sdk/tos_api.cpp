@@ -24,14 +24,18 @@ extern Buzzer buzzer1;
 #define TOS_HEARTBEAT_MS   6000U
 #define TOS_RETRY_MS       4000U
 #define TOS_RETRY_MAX_MS   20000U
-#define TOS_START_DELAY_MS 8000U
+#define TOS_PREONLINE_RETRY_MS     15000U
+#define TOS_PREONLINE_RETRY_MAX_MS 60000U
+#define TOS_START_DELAY_MS 20000U
 #define TOS_CMD_GET_TIMEOUT_MS 3000U
-#define TOS_HEARTBEAT_TIMEOUT_MS 8000U
+#define TOS_HEARTBEAT_TIMEOUT_MS 12000U
 #define TOS_ACK_TIMEOUT_MS       6000U
 #define TOS_NET_STUCK_MS       30000U
 #define TOS_NET_FATAL_STUCK_MS 300000U
 #define TOS_NET_FATAL_FAILS         8U
 #define TOS_NET_FATAL_PROBE_FAILS   2U
+#define TOS_UART_SILENT_STUCK_MS  60000U
+#define TOS_UART_SILENT_FAILS         3U
 #define TOS_NET_SOFT_STUCK_RETRY_MS 5000U
 #define TOS_STATION_PROBE_MIN_MS 30000U
 #define TOS_TRANSPORT_MAINTAIN_MS 30000U
@@ -91,6 +95,8 @@ static bool g_station_ip_confirmed = false;
 static bool g_auto_time_sync_pending = false;
 static uint32_t g_auto_time_sync_due_ms = 0;
 static uint8_t g_auto_time_sync_attempts = 0;
+static bool g_terminal_esp_recovery_attempted = false;
+static uint32_t g_transport_retry_override_ms = 0;
 
 static bool time_due(uint32_t now, uint32_t target) {
   return (int32_t)(now - target) >= 0;
@@ -102,6 +108,12 @@ static void schedule_heartbeat(uint32_t delay_ms) {
 
 static uint32_t transport_retry_delay(void) {
   if (g_transport_fail_count == 0U) return TOS_RETRY_MS;
+  if (!g_cloud_was_online) {
+    uint32_t retry = TOS_PREONLINE_RETRY_MS +
+                     ((uint32_t)g_transport_fail_count - 1U) * 10000U;
+    if (retry > TOS_PREONLINE_RETRY_MAX_MS) retry = TOS_PREONLINE_RETRY_MAX_MS;
+    return retry;
+  }
   uint32_t retry = TOS_RETRY_MS + ((uint32_t)g_transport_fail_count - 1U) * 3000U;
   if (retry > TOS_RETRY_MAX_MS) retry = TOS_RETRY_MAX_MS;
   return retry;
@@ -198,6 +210,8 @@ static void mark_cloud_transport_ok(void) {
   g_last_transport_maintenance_ms = 0;
   g_last_wifi_rejoin_ms = 0;
   ESP8266_ClearRecoveryFailureCount();
+  g_terminal_esp_recovery_attempted = false;
+  g_transport_retry_override_ms = 0;
 }
 
 static void clear_pending_ack(void) {
@@ -333,7 +347,7 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
     g_wifi_rejoin_fail_count = 0;
     update_cached_ip_from_esp();
     LOG_W("TAPI", "STA IP alive during cloud silence; transport retry enabled");
-    schedule_heartbeat(1000U);
+    g_transport_retry_override_ms = 1500U;
     return;
   }
 
@@ -361,7 +375,7 @@ static void maintain_transport_after_silence(uint32_t now, uint32_t offline_ms) 
     g_wifi_rejoin_fail_count = 0;
     g_last_ip_refresh_ms = 0;
     update_cached_ip_from_esp();
-    schedule_heartbeat(1000U);
+    g_transport_retry_override_ms = 1500U;
   } else {
     if (g_wifi_rejoin_fail_count < 255U) g_wifi_rejoin_fail_count++;
     LOG_W("TAPI", "STA rejoin failed #%u",
@@ -857,7 +871,11 @@ static void start_heartbeat(void) {
     LOG_D("TAPI", "Heartbeat queued, body=%uB expr=%s", (unsigned)strlen(body), EmotionManager_GetReportExpression());
   } else {
     note_transport_failure("heartbeat-start");
-    schedule_heartbeat(transport_retry_delay());
+    uint32_t retry = g_transport_retry_override_ms ?
+                     g_transport_retry_override_ms :
+                     transport_retry_delay();
+    g_transport_retry_override_ms = 0;
+    schedule_heartbeat(retry);
   }
 }
 
@@ -942,6 +960,7 @@ void TosApi_Init(void) {
                              g_esp_init_ok_this_boot &&
                              g_station_ip_confirmed;
   g_auto_time_sync_attempts = 0;
+  g_terminal_esp_recovery_attempted = false;
   g_auto_time_sync_due_ms = HAL_GetTick() + TOS_AUTO_TIME_SYNC_DELAY_MS;
   schedule_heartbeat(TOS_START_DELAY_MS);
   LOG_I("TAPI", "Cloud client init, di=%s hb=%lums mode=%s%s",
@@ -955,6 +974,7 @@ void TosApi_Init(void) {
 }
 
 static void note_transport_failure(const char *where) {
+  g_transport_retry_override_ms = 0;
   uint32_t now = HAL_GetTick();
   if (g_transport_fail_count < 255U) g_transport_fail_count++;
   uint32_t offline_ms = g_last_cloud_ok_ms ? (now - g_last_cloud_ok_ms) : 0;
@@ -979,6 +999,52 @@ static void note_transport_failure(const char *where) {
     SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
   }
 
+  /* Zero UART bytes across several complete requests is not weak WLAN or a
+   * slow HTTP server: even those conditions make the AT firmware answer with
+   * ERROR/FAIL. It means the USART receive path or the ESP AT task is stuck.
+   * Re-arm USART2 and perform one bounded AT/AT+RST recovery, then escalate
+   * promptly if the module remains silent. */
+  if (offline_ms >= TOS_UART_SILENT_STUCK_MS &&
+      Net_AsyncNoRxFailStreak() >= TOS_UART_SILENT_FAILS) {
+    if (!g_terminal_esp_recovery_attempted) {
+      g_terminal_esp_recovery_attempted = true;
+      LOG_E("TAPI", "ESP UART silent: offline=%lums no-rx=%u; recovering once",
+            (unsigned long)offline_ms,
+            (unsigned)Net_AsyncNoRxFailStreak());
+
+      Net_AsyncReset();
+      if (ESP8266_TryRecover(true)) {
+        Net_ResetTransportDiagnostics();
+        g_transport_fail_count = 0;
+        g_station_probe_fail_count = 0;
+        g_wifi_rejoin_fail_count = 0;
+        g_last_transport_maintenance_ms = 0;
+
+        if (!ESP8266_IsConnected()) {
+          const char *ssid = SM_Wlan_SSID();
+          const char *pwd = SM_Wlan_PWD();
+          if (ssid && ssid[0]) {
+            LOG_W("TAPI", "Rejoining WLAN after ESP recovery: %s", ssid);
+            if (ESP8266_ConnectWiFi(ssid, pwd ? pwd : "")) {
+              Net_ConfigureStationCompatibility();
+              g_station_ip_confirmed = true;
+              g_last_ip_refresh_ms = 0;
+              update_cached_ip_from_esp();
+            }
+          }
+        }
+
+        g_terminal_esp_recovery_attempted = false;
+        g_transport_retry_override_ms = 1500U;
+        LOG_I("TAPI", "ESP recovery completed; cloud retry scheduled");
+        return;
+      }
+    }
+
+    LOG_E("TAPI", "ESP UART remains silent after bounded recovery");
+    SysHandle_Exception(SYS_ERR_NET_TRANSPORT_STUCK);
+  }
+
   maintain_transport_after_silence(now, offline_ms);
 
   /* A live STA with a dead cloud endpoint is not a device fault.  Escalate only
@@ -998,7 +1064,9 @@ static void note_transport_failure(const char *where) {
 
   LOG_W("TAPI", "Cloud silent for %lums; retrying with backoff",
         (unsigned long)offline_ms);
-  schedule_heartbeat(TOS_NET_SOFT_STUCK_RETRY_MS);
+  if (g_transport_retry_override_ms == 0U) {
+    g_transport_retry_override_ms = TOS_NET_SOFT_STUCK_RETRY_MS;
+  }
 }
 
 void TosApi_Tick(void) {
@@ -1024,7 +1092,11 @@ void TosApi_Tick(void) {
       start_ack_or_schedule();
     } else {
       g_phase = TOS_PHASE_IDLE;
-      schedule_heartbeat(transport_retry_delay());
+      uint32_t retry = g_transport_retry_override_ms ?
+                       g_transport_retry_override_ms :
+                       transport_retry_delay();
+      g_transport_retry_override_ms = 0;
+      schedule_heartbeat(retry);
     }
     return;
   }

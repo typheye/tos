@@ -51,9 +51,44 @@ ESP8266::ESP8266(UART_HandleTypeDef *huart) {
   _last_recover_ms = 0;
   _recover_attempts = 0;
   _recover_failures = 0;
+  _uart_rearms = 0;
   _rx_index = 0;
   _rx_overflow = false;
   memset(_rx_buffer, 0, sizeof(_rx_buffer));
+}
+
+void ESP8266::serviceUartRx(void) {
+  if (!_huart || !_huart->Instance) return;
+
+  USART_TypeDef *uart = _huart->Instance;
+  uint32_t sr = uart->SR;
+  bool error = (sr & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE)) != 0U;
+  bool rx_irq_off = (uart->CR1 & USART_CR1_RXNEIE) == 0U;
+  bool err_irq_off = (uart->CR3 & USART_CR3_EIE) == 0U;
+
+  if (!error && !rx_irq_off && !err_irq_off) return;
+
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+
+  if (error) {
+    /* STM32F4 clears ORE/NE/FE/PE by reading SR followed by DR. */
+    volatile uint32_t clear_sr = uart->SR;
+    volatile uint32_t clear_dr = uart->DR;
+    (void)clear_sr;
+    (void)clear_dr;
+    _huart->ErrorCode = HAL_UART_ERROR_NONE;
+  }
+
+  __HAL_UART_ENABLE_IT(_huart, UART_IT_RXNE);
+  __HAL_UART_ENABLE_IT(_huart, UART_IT_ERR);
+
+  if (primask == 0U) __enable_irq();
+
+  if (_uart_rearms < 0xFFFFU) _uart_rearms++;
+  LOG_W("ESP", "UART2 RX rearmed #%u sr=0x%08lX cr1=0x%08lX cr3=0x%08lX",
+        (unsigned)_uart_rearms, (unsigned long)sr,
+        (unsigned long)uart->CR1, (unsigned long)uart->CR3);
 }
 
 void ESP8266::clearRxBuffer(void) {
@@ -69,6 +104,8 @@ void ESP8266::clearRxBuffer(void) {
 }
 
 void ESP8266::processPendingData(void) {
+  serviceUartRx();
+
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
 
@@ -157,12 +194,62 @@ void ESP8266::processRxData(uint8_t *data, uint16_t len) {
 }
 
 bool ESP8266::tryRecover(bool force) {
-  (void)force;
+  uint32_t now = HAL_GetTick();
+  if (!force && _last_recover_ms != 0U &&
+      (uint32_t)(now - _last_recover_ms) < 60000U) {
+    return false;
+  }
+
+  _last_recover_ms = now;
+  if (_recover_attempts < 0xFFU) _recover_attempts++;
+  LOG_W("ESP", "Bounded recovery attempt #%u, uart_rx=%lu",
+        (unsigned)_recover_attempts, (unsigned long)uart2_rx_count);
+
+  _hard_disabled = false;
+  serviceUartRx();
+  clearRxBuffer();
+
+  /* First distinguish a dead TCP/WLAN state from a dead AT/UART path. */
+  if (sendCommand("AT", "OK", 1200U)) {
+    LOG_I("ESP", "AT interface alive after UART rearm");
+    _recover_failures = 0;
+    return true;
+  }
+
+  /* There is no dedicated ESP EN/RST GPIO in this board configuration.
+   * AT+RST is therefore the only module-local reset available. Send it once
+   * even when the response path is silent, then probe again after boot. */
+  static const char reset_cmd[] = "AT+RST\r\n";
+  serviceUartRx();
+  clearRxBuffer();
+  (void)HAL_UART_Transmit(_huart, (uint8_t *)reset_cmd,
+                          (uint16_t)(sizeof(reset_cmd) - 1U), 300U);
+
+  uint32_t wait_start = HAL_GetTick();
+  while ((uint32_t)(HAL_GetTick() - wait_start) < 2500U) {
+    processPendingData();
+    HAL_Delay(20U);
+    SysWatchdog_Tick();
+  }
+
+  serviceUartRx();
+  clearRxBuffer();
+  if (sendCommand("AT", "OK", 2000U)) {
+    (void)sendCommand("ATE0", "OK", 1000U);
+    (void)sendCommand("AT+CIPMODE=0", "OK", 1000U);
+    (void)sendCommand("AT+CIPMUX=0", "OK", 1000U);
+    _hard_disabled = false;
+    _state = 0;
+    _recover_failures = 0;
+    LOG_I("ESP", "ESP8266 recovered after AT+RST");
+    return true;
+  }
+
   if (_recover_failures < 0xFFFFU) _recover_failures++;
-  LOG_W("ESP", "Runtime ESP recovery disabled by policy");
-  /* Do not send AT+RST, do not re-init, and do not change hard-disabled here.
-   * The cloud policy layer either keeps this boot offline or reboots the whole
-   * device through syshandle after a proven online session becomes stuck. */
+  _hard_disabled = true;
+  _state = 4;
+  LOG_E("ESP", "ESP8266 recovery failed, uart_rx=%lu",
+        (unsigned long)uart2_rx_count);
   return false;
 }
 
@@ -190,9 +277,12 @@ void ESP8266::init(void) {
     sendCommand("AT+CIPMUX=0", "OK", 1000);
   } else {
     LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
-    _hard_disabled = true;
-    _state = 4;
-    LOG_E("ESP", "ESP8266 unavailable for this boot");
+    LOG_W("ESP", "Initial AT failed; trying one module-local reset");
+    if (!tryRecover(true)) {
+      _hard_disabled = true;
+      _state = 4;
+      LOG_E("ESP", "ESP8266 unavailable for this boot");
+    }
   }
 }
 
@@ -205,6 +295,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
 
   char buffer[128];
 
+  serviceUartRx();
   clearRxBuffer();
 
   sprintf(buffer, "%s\r\n", cmd);
@@ -527,6 +618,7 @@ void ESP8266_Init(void) { esp8266.init(); }
 bool ESP8266_IsHardDisabled(void) { return esp8266.isHardDisabled(); }
 
 bool ESP8266_TryRecover(bool force) { return esp8266.tryRecover(force); }
+void ESP8266_ServiceUartRx(void) { esp8266.serviceUartRx(); }
 uint16_t ESP8266_GetRecoveryFailureCount(void) { return esp8266.recoveryFailureCount(); }
 void ESP8266_ClearRecoveryFailureCount(void) { esp8266.clearRecoveryFailureCount(); }
 
