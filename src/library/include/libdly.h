@@ -30,6 +30,7 @@ void JPDelayUs(uint32_t us);
 void JPDelayUsBlocking(uint32_t us);
 uint32_t JPGetTick(void);
 void JPDelay_Init(void);
+uint32_t JPDelay_ConsumeIdleMs(void);
 
 #ifdef __cplusplus
 }

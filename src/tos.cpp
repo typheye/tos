@@ -16,6 +16,7 @@
  */
 
 #include "core/include/tos.hpp"
+#include "library/include/libdly.h"
 
 
 TOS::TOS() : initialized_(false), tick_count_(0) {}
@@ -33,7 +34,7 @@ void TOS::start() {
     SysUI::updateCpuUsage(elapsed);
     TosApi_Tick();
     SysWatchdog_Tick();
-    HAL_Delay(10);
+    JPDelay(10);
   }
 }
 

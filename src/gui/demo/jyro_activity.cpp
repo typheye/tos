@@ -16,6 +16,8 @@
  */
 
 #include "include/jyro_activity.hpp"
+#include "library/include/libdly.h"
+#include "core/sys/include/sysdram.h"
 
 
 #ifndef CCMRAM
@@ -28,13 +30,25 @@ extern KeyManager keyManager;
 
 /* ── Shared chart state ── */
 #define CHART_HISTORY 240
-static CCMRAM float chart_data[3][CHART_HISTORY];
+static float (*chart_data)[CHART_HISTORY] = nullptr;
 static CCMRAM int chart_index = 0;
 static CCMRAM float chart_max_value = 10.0f;
 static CCMRAM int chart_param_group = 0;
 
 static const char *group_names[3] = {"Acceleration", "Angular Velocity",
                                      "Euler Angles"};
+
+static bool chart_alloc(void) {
+  if (chart_data)
+    return true;
+  chart_data = (float (*)[CHART_HISTORY])SysDram_AllocFast(sizeof(float) * 3U * CHART_HISTORY);
+  return chart_data != nullptr;
+}
+
+static void chart_free(void) {
+  SysDram_Free(chart_data);
+  chart_data = nullptr;
+}
 
 /* ── Standard template functions ── */
 static void draw_frame_title(const char *title) {
@@ -76,6 +90,8 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 
 /* ── Chart helper functions ── */
 static void reset_chart(void) {
+  if (!chart_data)
+    return;
   for (int i = 0; i < CHART_HISTORY; i++) {
     chart_data[0][i] = 0;
     chart_data[1][i] = 0;
@@ -86,6 +102,8 @@ static void reset_chart(void) {
 }
 
 static void update_chart_data(float v0, float v1, float v2) {
+  if (!chart_data)
+    return;
   chart_data[0][chart_index] = v0;
   chart_data[1][chart_index] = v1;
   chart_data[2][chart_index] = v2;
@@ -173,7 +191,7 @@ static void jyro_cube_subpage(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(16, 33, "Initializing gyro...");
   });
-  HAL_Delay(500);
+  JPDelay(500);
 
   gyro_cube_init(120, 120, 80);
 
@@ -286,11 +304,11 @@ static void jyro_text_subpage(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % TEXT_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + TEXT_N) % TEXT_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -374,13 +392,24 @@ static void jyro_text_subpage(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
 /* ── 03 Chart sub-page ── */
 static void jyro_chart_subpage(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
+  if (!chart_alloc()) {
+    LCD_FLUSH({
+      PD_Init();
+      PD_FillScreen(TOS_BG);
+      PD_SetFont(FONT_ASCII_16);
+      PD_SetColor(TOS_RED);
+      PD_DrawString(24, 94, "Chart memory failed");
+    });
+    JPDelay(900);
+    return;
+  }
   reset_chart();
   chart_param_group = 0;
 
@@ -394,8 +423,10 @@ static void jyro_chart_subpage(void) {
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
 
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+      chart_free();
       return;
+    }
 
     uint8_t ca8 = (keyManager.collision_A8.getState() == KEY_PRESSED);
     if (ca8 && !le_a8) {
@@ -454,7 +485,7 @@ static void jyro_chart_subpage(void) {
       LCD_FLUSH({
         draw_frame_title("DEMO");
 
-        /* Group name — left-aligned at x=16 with TOS_TEXT */
+        /* Group name �?left-aligned at x=16 with TOS_TEXT */
         PD_SetFont(FONT_ASCII_12);
         PD_SetColor(TOS_TEXT);
         char title[32];
@@ -462,12 +493,12 @@ static void jyro_chart_subpage(void) {
                  group_names[chart_param_group]);
         PD_DrawString(16, 33, title);
 
-        /* Chart — shifted down: chart_y = 50 */
+        /* Chart �?shifted down: chart_y = 50 */
         int chart_x = 10, chart_y = 50, chart_w = 220, chart_h = 90;
         draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
         draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
 
-        /* Color legend — small filled rectangles with abbreviated labels */
+        /* Color legend �?small filled rectangles with abbreviated labels */
         const char *lnames[3];
         switch (chart_param_group) {
         case 0:
@@ -498,7 +529,7 @@ static void jyro_chart_subpage(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -521,11 +552,11 @@ void jyro_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % JYRO_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + JYRO_N) % JYRO_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -572,6 +603,6 @@ void jyro_activity(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

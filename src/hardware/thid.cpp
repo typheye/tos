@@ -16,6 +16,7 @@
  */
 
 #include "include/thid.hpp"
+#include "library/include/libdly.h"
 
 
 extern "C" USBD_HandleTypeDef hUsbDeviceFS;
@@ -47,13 +48,13 @@ THID::Status THID::waitReady(uint32_t timeout_ms) const {
   uint32_t start = HAL_GetTick();
   while ((HAL_GetTick() - start) <= timeout_ms) {
     if (!isConfigured()) {
-      HAL_Delay(1);
+      JPDelay(1);
       continue;
     }
     if (isTxIdle()) {
       return OK;
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
   return isConfigured() ? TIMEOUT : NOT_CONFIGURED;
 }
@@ -92,9 +93,9 @@ THID::Status THID::tapKey(uint8_t modifier, uint8_t key, uint16_t hold_ms) {
   if (st != OK) {
     return st;
   }
-  HAL_Delay(hold_ms);
+  JPDelay(hold_ms);
   st = releaseKeyboard();
-  HAL_Delay(8);
+  JPDelay(8);
   return st;
 }
 
@@ -119,9 +120,9 @@ THID::Status THID::clickMouse(uint8_t buttons, uint16_t hold_ms) {
   if (st != OK) {
     return st;
   }
-  HAL_Delay(hold_ms);
+  JPDelay(hold_ms);
   st = releaseMouse();
-  HAL_Delay(8);
+  JPDelay(8);
   return st;
 }
 
@@ -262,7 +263,7 @@ THID::Status THID::typeAscii(const char *text, uint16_t per_key_delay_ms) {
     if (st != OK) {
       return st;
     }
-    HAL_Delay(per_key_delay_ms);
+    JPDelay(per_key_delay_ms);
   }
   return OK;
 }

@@ -16,6 +16,7 @@
  */
 
 #include "include/jy901s.hpp"
+#include "library/include/libdly.h"
 
 
 
@@ -36,7 +37,7 @@ void JY901S::init(void) {
   if (_initialized)
     return;
 
-  HAL_Delay(200);
+  JPDelay(200);
 
   if (checkConnection()) {
     _initialized = true;

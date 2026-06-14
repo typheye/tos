@@ -17,6 +17,7 @@
 
 
 #include "include/lib3dox.h"
+#include "core/sys/include/sysdram.h"
 
 
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -37,8 +38,9 @@ typedef struct {
 
 static CCMRAM mat4_t T;
 static CCMRAM mat4_t view;
-static CCMRAM triangle_t triangles[32];
+static triangle_t *triangles = NULL;
 static int triangles_ok = 0;
+static int render_ready = 0;
 
 static CCMRAM vec3_t bbmin, bbmax;
 static CCMRAM vec3_t eye, center, up;
@@ -47,7 +49,7 @@ static CCMRAM vec3_t lightColor;
 
 static int current_x = 0, current_y = 0, frame_count = 0;
 
-static CCMRAM uint16_t pixel_history[RENDER_WIDTH * RENDER_HEIGHT];
+static uint16_t *pixel_history = NULL;
 
 static CCMRAM vec3_t t0, t1, temp;
 static float tt;
@@ -409,6 +411,8 @@ static const float raw_triangles[] = {
     0.570000f,  -0.600000f, 0.170000f,  0.285805f,  0.000000f,  -0.958288f};
 
 static void init_scene(void) {
+  if (!triangles)
+    return;
   if (triangles_ok)
     return;
   const float *p = raw_triangles;
@@ -662,6 +666,25 @@ static vec3_t sampleRay(void) {
 
 
 void render_init(void) {
+  if (!triangles) {
+    triangles = (triangle_t *)SysDram_AllocFast(sizeof(triangle_t) * 32U);
+    triangles_ok = 0;
+  }
+  if (!pixel_history) {
+    pixel_history =
+        (uint16_t *)SysDram_AllocFast(sizeof(uint16_t) * RENDER_WIDTH * RENDER_HEIGHT);
+  }
+  render_ready = (triangles && pixel_history) ? 1 : 0;
+  if (!render_ready) {
+    SysDram_Free(triangles);
+    SysDram_Free(pixel_history);
+    triangles = NULL;
+    pixel_history = NULL;
+    triangles_ok = 0;
+    current_x = current_y = frame_count = 0;
+    render_progress = 0;
+    return;
+  }
   init_scene();
   V3_ASSIGN_S3(eye, 0, 1, 3.5f);
   V3_ASSIGN_S3(center, 0, 1, 0);
@@ -674,12 +697,26 @@ void render_init(void) {
   V3_ASSIGN_S3(view_y, view.m[1][0], view.m[1][1], view.m[1][2]);
   V3_ASSIGN_S3(view_z, view.m[2][0], view.m[2][1], view.m[2][2]);
   current_x = current_y = frame_count = 0;
-  memset(pixel_history, 0, sizeof(pixel_history));
+  memset(pixel_history, 0, sizeof(uint16_t) * RENDER_WIDTH * RENDER_HEIGHT);
   srand(12345);
 }
 
+void render_deinit(void) {
+  SysDram_Free(pixel_history);
+  SysDram_Free(triangles);
+  pixel_history = NULL;
+  triangles = NULL;
+  triangles_ok = 0;
+  render_ready = 0;
+  current_x = current_y = frame_count = 0;
+  render_progress = 0;
+}
 
 int render_step(pixel_callback_t pixel_cb) {
+  if (!render_ready) {
+    return 1;
+  }
+
   int x = current_x, y = current_y;
   int w = RENDER_WIDTH, h = RENDER_HEIGHT;
   float alpha_rad = radians(45);
@@ -720,8 +757,12 @@ int render_step(pixel_callback_t pixel_cb) {
 
 int get_render_progress(void) { return render_progress; }
 
+int render_is_ready(void) { return render_ready; }
+
 uint16_t render_get_pixel565(int x, int y) {
   if (x < 0 || x >= RENDER_WIDTH || y < 0 || y >= RENDER_HEIGHT)
+    return 0;
+  if (!pixel_history)
     return 0;
   return pixel_history[y * RENDER_WIDTH + x];
 }

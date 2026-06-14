@@ -16,6 +16,7 @@
  */
 
 #include "include/bmp180.hpp"
+#include "library/include/libdly.h"
 
 
 
@@ -40,7 +41,7 @@ void BMP180::init(void) {
   if (_initialized)
     return;
 
-  HAL_Delay(200);
+  JPDelay(200);
 
   if (checkConnection()) {
     
@@ -107,7 +108,7 @@ int16_t BMP180::readRawTemp(void) {
   }
 
   
-  HAL_Delay(5);
+  JPDelay(5);
 
   
   uint8_t buffer[2];
@@ -130,7 +131,7 @@ uint32_t BMP180::readRawPressure(BMP180_Mode_t mode) {
   }
 
   
-  HAL_Delay(getMeasurementDelay(mode));
+  JPDelay(getMeasurementDelay(mode));
 
   
   uint8_t buffer[3];
@@ -243,7 +244,7 @@ float BMP180::calcAltitude(float pressure, float seaLevelPressure) {
 
 void BMP180::softReset(void) {
   writeReg(BMP180_SOFT_RESET, 0xB6);
-  HAL_Delay(50);
+  JPDelay(50);
 }
 
 

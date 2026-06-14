@@ -16,6 +16,7 @@
  */
 
 #include "include/confirm.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -36,11 +37,11 @@ bool confirm_show(const char *title, const char *msg) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 2;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 2) % 2;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -92,6 +93,6 @@ bool confirm_show(const char *title, const char *msg) {
       });
     }
     SysWatchdog_Tick();
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

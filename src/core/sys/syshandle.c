@@ -16,6 +16,7 @@
  */
 
 #include "include/syshandle.h"
+#include "library/include/libdly.h"
 
 
 
@@ -183,7 +184,7 @@ void SysHandle_Exception(uint32_t code) {
     SysWatchdog_FeedNow();
     for (uint32_t i = 0; i < 1000U; i += 20U) {
       SysWatchdog_FeedNow();
-      HAL_Delay(20);
+      JPDelay(20);
     }
   }
 

@@ -31,6 +31,7 @@
 #include "demo/include/sd_activity.hpp"
 #include "include/lcd.h"
 #include "core/sys/include/syslog.h"
+#include "core/sys/include/sysdram.h"
 #include "include/lib3dox.h"
 #include "main.h"
 #include <stdio.h>

@@ -16,6 +16,7 @@
  */
 
 #include "include/buzzer.hpp"
+#include "library/include/libdly.h"
 
 
 Buzzer::Buzzer(GPIO_TypeDef *port, uint16_t pin)
@@ -62,7 +63,7 @@ void Buzzer::beep(uint32_t duration_ms) {
   }
 
   HAL_GPIO_WritePin(_port, _pin, GPIO_PIN_SET);   
-  HAL_Delay(duration_ms);                         
+  JPDelay(duration_ms);                         
   HAL_GPIO_WritePin(_port, _pin, GPIO_PIN_RESET); 
 }
 
@@ -75,7 +76,7 @@ void Buzzer::forceBeep(uint32_t duration_ms) {
   }
 
   HAL_GPIO_WritePin(_port, _pin, GPIO_PIN_SET);
-  HAL_Delay(duration_ms);
+  JPDelay(duration_ms);
   HAL_GPIO_WritePin(_port, _pin, GPIO_PIN_RESET);
 }
 

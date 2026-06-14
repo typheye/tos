@@ -36,6 +36,8 @@ extern "C" {
 #endif
 
 void render_init(void);
+void render_deinit(void);
+int render_is_ready(void);
 int render_step(pixel_callback_t pixel_cb);
 int get_render_progress(void);
 uint16_t render_get_pixel565(int x, int y);

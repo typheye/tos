@@ -16,6 +16,7 @@
  */
 
 #include "include/tcs3472.hpp"
+#include "library/include/libdly.h"
 
 
 
@@ -80,7 +81,7 @@ void TCS3472::init(void) {
   if (_initialized)
     return;
 
-  HAL_Delay(100);
+  JPDelay(100);
 
   
   uint8_t id = readID();
@@ -99,7 +100,7 @@ void TCS3472::init(void) {
 
   
   writeReg(TCS3472_ENABLE, TCS3472_ENABLE_PON);
-  HAL_Delay(3);
+  JPDelay(3);
   writeReg(TCS3472_ENABLE, TCS3472_ENABLE_PON | TCS3472_ENABLE_AEN);
 
   
@@ -119,7 +120,7 @@ bool TCS3472::waitForData(uint32_t timeout_ms) {
     if (status & TCS3472_STATUS_AVALID) {
       return true;
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
   return false;
 }
@@ -236,9 +237,9 @@ uint8_t TCS3472::readID(void) { return readReg(TCS3472_ID); }
 
 void TCS3472::softReset(void) {
   writeReg(TCS3472_ENABLE, 0x00);
-  HAL_Delay(10);
+  JPDelay(10);
   writeReg(TCS3472_ENABLE, TCS3472_ENABLE_PON);
-  HAL_Delay(3);
+  JPDelay(3);
   writeReg(TCS3472_ENABLE, TCS3472_ENABLE_PON | TCS3472_ENABLE_AEN);
 }
 

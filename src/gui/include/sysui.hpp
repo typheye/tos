@@ -61,4 +61,16 @@ private:
   static void runCurrentTest(void);
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+void SysUI_DebugOverlayBeginFrame(void);
+void SysUI_DebugOverlayEndFrame(void);
+void SysUI_DebugOverlayDraw(void);
+void SysUI_DebugOverlaySetEnabled(uint8_t enabled);
+uint8_t SysUI_DebugOverlayIsEnabled(void);
+#ifdef __cplusplus
+}
+#endif
+
 #endif

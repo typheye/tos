@@ -49,14 +49,14 @@ public:
   void beepLong() { beep(200); }
   void beepError() {
     beep(100);
-    HAL_Delay(100);
+    JPDelay(100);
     beep(100);
   }
   void beepSuccess() {
     beep(50);
-    HAL_Delay(50);
+    JPDelay(50);
     beep(50);
-    HAL_Delay(50);
+    JPDelay(50);
     beep(50);
   }
 

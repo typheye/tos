@@ -16,7 +16,8 @@
  */
 
 #include "include/wlan_activity.hpp"
-
+#include "library/include/libdly.h"
+#include "core/sys/include/sysdram.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -84,19 +85,53 @@ static void wlan_load_state(void) {
  *  WiFi scan
  * ================================================================== */
 
-static CCMRAM char ap_ssid[MAX_APS][SSID_LEN];
-static CCMRAM int ap_rssi[MAX_APS];
-static CCMRAM int ap_enc[MAX_APS];
+static char (*ap_ssid)[SSID_LEN] = nullptr;
+static int *ap_rssi = nullptr;
+static int *ap_enc = nullptr;
 static int ap_count = 0;
+
+static bool wlan_alloc_scan_cache(void) {
+  if (ap_ssid && ap_rssi && ap_enc)
+    return true;
+  ap_ssid = (char (*)[SSID_LEN])SysDram_AllocFast(MAX_APS * SSID_LEN);
+  ap_rssi = (int *)SysDram_AllocFast(MAX_APS * sizeof(int));
+  ap_enc = (int *)SysDram_AllocFast(MAX_APS * sizeof(int));
+  if (ap_ssid && ap_rssi && ap_enc) {
+    memset(ap_ssid, 0, MAX_APS * SSID_LEN);
+    memset(ap_rssi, 0, MAX_APS * sizeof(int));
+    memset(ap_enc, 0, MAX_APS * sizeof(int));
+    ap_count = 0;
+    return true;
+  }
+  SysDram_Free(ap_ssid);
+  SysDram_Free(ap_rssi);
+  SysDram_Free(ap_enc);
+  ap_ssid = nullptr;
+  ap_rssi = nullptr;
+  ap_enc = nullptr;
+  ap_count = 0;
+  return false;
+}
+
+static void wlan_free_scan_cache(void) {
+  SysDram_Free(ap_enc);
+  SysDram_Free(ap_rssi);
+  SysDram_Free(ap_ssid);
+  ap_enc = nullptr;
+  ap_rssi = nullptr;
+  ap_ssid = nullptr;
+  ap_count = 0;
+}
 
 static bool wlan_wait_cloud_idle(uint32_t max_wait_ms) {
   uint32_t start = HAL_GetTick();
   while (TosApi_IsBusy() && HAL_GetTick() - start < max_wait_ms) {
     TosApi_Tick();
     SysWatchdog_Tick();
-    HAL_Delay(10);
+    JPDelay(10);
   }
-  if (!TosApi_IsBusy()) return true;
+  if (!TosApi_IsBusy())
+    return true;
   LOG_W("WLAN", "Scan skipped: cloud request still busy");
   return false;
 }
@@ -111,14 +146,14 @@ static bool do_scan(void) {
   LOG_I("WLAN", "Setting STA mode and scanning...");
   esp8266.resetRxBuffer();
   ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
-  HAL_Delay(200);
+  JPDelay(200);
   SysWatchdog_Tick();
   esp8266.resetRxBuffer();
   LOG_I("WLAN", "Scanning with AT+CWLAP...");
   if (!esp8266.scanNetworks()) {
     LOG_W("WLAN", "Scan failed, retrying once...");
     esp8266.resetRxBuffer();
-    HAL_Delay(300);
+    JPDelay(300);
     SysWatchdog_Tick();
     if (!esp8266.scanNetworks()) {
       bool at_ok = ESP8266_SendCommand("AT", "OK", 1000);
@@ -349,11 +384,11 @@ static void scaning_run(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -384,7 +419,7 @@ static void scaning_run(void) {
             PD_DrawString(26, 33, "Connecting...");
           });
           bool ok = ESP8266_ConnectWiFi(ap_ssid[ap_idx], pwd);
-          HAL_Delay(500);
+          JPDelay(500);
           if (ok && ESP8266_IsConnected()) {
             wlan_connected = true;
             wlan_copy(wlan_ssid, sizeof(wlan_ssid), ap_ssid[ap_idx]);
@@ -430,7 +465,7 @@ static void scaning_run(void) {
       lu = HAL_GetTick();
       draw_scaning(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -461,11 +496,11 @@ static void connected_page(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 3;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 3) % 3;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -479,7 +514,7 @@ static void connected_page(void) {
       case 2:
         ESP8266_Disconnect();
         wlan_clear_state();
-        alert_show("OK", "Disconnected");
+        alert_show("ALERT", "Disconnected");
         return;
       }
     }
@@ -497,7 +532,7 @@ static void connected_page(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -525,11 +560,11 @@ static void saved_net_action(int idx) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 4;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 4) % 4;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -559,7 +594,7 @@ static void saved_net_action(int idx) {
           PD_DrawString(26, 33, "Connecting...");
         });
         if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
-          HAL_Delay(500);
+          JPDelay(500);
           if (ESP8266_IsConnected()) {
             wlan_connected = true;
             wlan_copy(wlan_ssid, sizeof(wlan_ssid), net->ssid);
@@ -567,16 +602,16 @@ static void saved_net_action(int idx) {
             SM_Wlan_SetSSID(net->ssid);
             SM_Wlan_SetPWD(net->pwd);
             SM_Saved_Add(net->ssid, net->pwd);
-            alert_show("OK", "Connected!");
+            alert_show("ALERT", "Connected!");
             saved_did_action = true;
             return;
           }
         }
-        alert_show("FAIL", "Connection failed");
+        alert_show("ALERT", "Connection failed");
         break;
       case 3:
         SM_Saved_Del(idx);
-        alert_show("OK", "Forgotten");
+        alert_show("ALERT", "Forgotten");
         saved_did_action = true;
         return;
       }
@@ -590,7 +625,7 @@ static void saved_net_action(int idx) {
         PD_SetFont(FONT_ASCII_16);
         for (int i = 0; i < 4; i++) {
           if (i == 2 && is_current) {
-            /* Grey out "02 Connect" â€” currently connected to this network */
+            /* Grey out "02 Connect" â€?currently connected to this network */
             bool s = (i == sel);
             uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
             PD_DrawAngledCard(14, 33 + i * 25, 212, 20, 5, cc);
@@ -603,7 +638,7 @@ static void saved_net_action(int idx) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -620,11 +655,11 @@ static void saved_networks_page(void) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % total;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + total) % total;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
@@ -659,7 +694,7 @@ static void saved_networks_page(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -755,7 +790,7 @@ static int wlan_main_loop(void) {
       } else {
         sel = (sel + 1) % wlan_item_count();
       }
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (wlan_edit) {
@@ -774,7 +809,7 @@ static int wlan_main_loop(void) {
       } else {
         sel = (sel - 1 + wlan_item_count()) % wlan_item_count();
       }
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -807,7 +842,7 @@ static int wlan_main_loop(void) {
       wlan_load_state();
       draw_wlan_main(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -824,11 +859,17 @@ void wlan_activity_run(void) {
   }
 
   boardLCD.fillScreen(LCD_COLOR_BLACK);
+  if (!wlan_alloc_scan_cache()) {
+    alert_show("WLAN", "Memory failed");
+    return;
+  }
   wlan_load_state();
   while (1) {
     int act = wlan_main_loop();
-    if (act == 0)
+    if (act == 0) {
+      wlan_free_scan_cache();
       return;
+    }
     boardLCD.fillScreen(LCD_COLOR_BLACK);
   }
 }

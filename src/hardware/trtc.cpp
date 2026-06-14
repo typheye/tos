@@ -16,6 +16,7 @@
  */
 
 #include "include/trtc.hpp"
+#include "library/include/libdly.h"
 
 
 extern RTC_HandleTypeDef hrtc;
@@ -61,7 +62,7 @@ void TRTC::init() {
       LOG_I("RTC", "LSE ready after %lu ms", (unsigned long)(HAL_GetTick() - start));
       break;
     }
-    HAL_Delay(50);
+    JPDelay(50);
   }
 
   if (!lse_ready) {
@@ -86,7 +87,7 @@ void TRTC::init() {
 
     if (ret != HAL_OK) {
       LOG_E("RTC", "Init failed (ret=%d), retry %d...", ret, 6 - retry);
-      HAL_Delay(100);
+      JPDelay(100);
     }
     retry--;
   } while (ret != HAL_OK && retry > 0);

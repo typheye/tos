@@ -180,6 +180,16 @@ SECTIONS
     _eccmram = .;       /* create a global symbol at ccmram end */
   } >CCMRAM AT> FLASH :ccmload
 
+  .sysdram_ccm_heap (NOLOAD) :
+  {
+    . = ALIGN(8);
+    __sysdram_ccm_heap_start__ = .;
+    KEEP(*(.sysdram_ccm_heap))
+    KEEP(*(.sysdram_ccm_heap*))
+    . = ALIGN(8);
+    __sysdram_ccm_heap_end__ = .;
+  } >CCMRAM :NONE
+
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 
@@ -257,6 +267,28 @@ SECTIONS
 
   PROVIDE( __bss_start = __tbss_start );
   PROVIDE( __bss_size = __bss_end - __bss_start );
+
+  .sysdram_ram_fixed (NOLOAD) :
+  {
+    . = ALIGN(8);
+    __sysdram_ram_fixed_start__ = .;
+    KEEP(*(.sysdram_lcd_fixed))
+    KEEP(*(.sysdram_lcd_fixed*))
+    KEEP(*(.sysdram_core_fixed))
+    KEEP(*(.sysdram_core_fixed*))
+    . = ALIGN(8);
+    __sysdram_ram_fixed_end__ = .;
+  } >RAM :NONE
+
+  .sysdram_ram_heap (NOLOAD) :
+  {
+    . = ALIGN(8);
+    __sysdram_ram_heap_start__ = .;
+    KEEP(*(.sysdram_ram_heap))
+    KEEP(*(.sysdram_ram_heap*))
+    . = ALIGN(8);
+    __sysdram_ram_heap_end__ = .;
+  } >RAM :NONE
 
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack (NOLOAD) :

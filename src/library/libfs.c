@@ -16,6 +16,7 @@
  */
 
 #include "include/libfs.h"
+#include "core/sys/include/sysdram.h"
 
 /* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
 extern bool TSDIO_IsHardDisabled(void);
@@ -35,6 +36,9 @@ static CCMRAM FS_Status_t last_error = FS_OK;
 
 
 static CCMRAM bool is_mounted = false;
+
+static uint8_t fs_dma_scratch[512]
+    __attribute__((section(".sysdram_core_fixed"), aligned(4), used));
 
 
 static FS_Status_t fatfs_error_to_fs(FRESULT res) {
@@ -313,7 +317,29 @@ FS_Status_t FS_Read(FS_FileHandle file, void *buffer, uint32_t size,
     return FS_INVALID_PARAMETER;
   }
 
-  res = f_read(fil, buffer, size, &br);
+  if (!SysDram_IsCcmPtr(buffer)) {
+    res = f_read(fil, buffer, size, &br);
+  } else {
+    uint8_t *dst = (uint8_t *)buffer;
+    uint32_t done = 0;
+    res = FR_OK;
+    while (done < size) {
+      UINT got = 0;
+      uint32_t chunk = size - done;
+      if (chunk > sizeof(fs_dma_scratch)) {
+        chunk = sizeof(fs_dma_scratch);
+      }
+      res = f_read(fil, fs_dma_scratch, (UINT)chunk, &got);
+      if (got > 0U) {
+        memcpy(dst + done, fs_dma_scratch, got);
+        done += got;
+      }
+      if (res != FR_OK || got < chunk) {
+        break;
+      }
+    }
+    br = (UINT)done;
+  }
 
   if (bytes_read) {
     *bytes_read = br;
@@ -337,7 +363,27 @@ FS_Status_t FS_Write(FS_FileHandle file, const void *buffer, uint32_t size,
     return FS_INVALID_PARAMETER;
   }
 
-  res = f_write(fil, buffer, size, &bw);
+  if (!SysDram_IsCcmPtr(buffer)) {
+    res = f_write(fil, buffer, size, &bw);
+  } else {
+    const uint8_t *src = (const uint8_t *)buffer;
+    uint32_t done = 0;
+    res = FR_OK;
+    while (done < size) {
+      UINT wrote = 0;
+      uint32_t chunk = size - done;
+      if (chunk > sizeof(fs_dma_scratch)) {
+        chunk = sizeof(fs_dma_scratch);
+      }
+      memcpy(fs_dma_scratch, src + done, chunk);
+      res = f_write(fil, fs_dma_scratch, (UINT)chunk, &wrote);
+      done += wrote;
+      if (res != FR_OK || wrote < chunk) {
+        break;
+      }
+    }
+    bw = (UINT)done;
+  }
 
   if (bytes_written) {
     *bytes_written = bw;

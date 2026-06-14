@@ -16,6 +16,7 @@
  */
 
 #include "include/display_activity.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -23,7 +24,7 @@ extern LCD boardLCD;
 
 static bool disp_auto = false;
 static int disp_bright = 10; // 1-10
-static int disp_dir = 0;     // 0,1 â†’ 0,90
+static int disp_dir = 0;     // 0,1 â†?0,90
 static bool disp_edit = false;
 static int edit_field = 0;
 static bool disp_inited = false; // only apply defaults first time       //
@@ -187,7 +188,7 @@ void display_activity_run(void) {
       } else {
         sel = (sel + 1) % item_count();
       }
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (disp_edit) {
@@ -205,7 +206,7 @@ void display_activity_run(void) {
       } else {
         sel = (sel - 1 + item_count()) % item_count();
       }
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -249,6 +250,6 @@ void display_activity_run(void) {
       lu = HAL_GetTick();
       draw_disp(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

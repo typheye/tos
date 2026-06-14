@@ -16,7 +16,8 @@
  */
 
 #include "include/bmp_activity.hpp"
-
+#include "library/include/libdly.h"
+#include "core/sys/include/sysdram.h"
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -40,14 +41,35 @@ static const char *bmp_menus[BM_N] = {
 static float reference_pressure = 1013.25f;
 static float altitude_offset = 0.0f;
 
-static CCMRAM float chart_temp[CHART_HISTORY];
-static CCMRAM float chart_press[CHART_HISTORY];
+static float *chart_temp = nullptr;
+static float *chart_press = nullptr;
 static CCMRAM int chart_idx = 0;
 static CCMRAM float temp_max = 50.0f;
 static CCMRAM float temp_min = -20.0f;
 static CCMRAM float press_max = 1100.0f;
 static CCMRAM float press_min = 900.0f;
 static CCMRAM int chart_mode = 0;
+
+static bool chart_alloc(void) {
+  if (chart_temp && chart_press)
+    return true;
+  chart_temp = (float *)SysDram_AllocFast(sizeof(float) * CHART_HISTORY);
+  chart_press = (float *)SysDram_AllocFast(sizeof(float) * CHART_HISTORY);
+  if (chart_temp && chart_press)
+    return true;
+  SysDram_Free(chart_temp);
+  SysDram_Free(chart_press);
+  chart_temp = nullptr;
+  chart_press = nullptr;
+  return false;
+}
+
+static void chart_free(void) {
+  SysDram_Free(chart_temp);
+  SysDram_Free(chart_press);
+  chart_temp = nullptr;
+  chart_press = nullptr;
+}
 
 /* ==================================================================
  *  Standard template functions
@@ -95,6 +117,8 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
  * ================================================================== */
 
 static void update_chart_data(float t, float p) {
+  if (!chart_temp || !chart_press)
+    return;
   chart_temp[chart_idx] = t;
   chart_press[chart_idx] = p;
   chart_idx++;
@@ -118,6 +142,8 @@ static void update_chart_data(float t, float p) {
 }
 
 static void reset_chart(void) {
+  if (!chart_temp || !chart_press)
+    return;
   for (int i = 0; i < CHART_HISTORY; i++) {
     chart_temp[i] = 25.0f;
     chart_press[i] = 1013.25f;
@@ -175,11 +201,11 @@ static void bmp180_realtime_activity(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "BMP180 Init...");
   });
-  HAL_Delay(100);
+  JPDelay(100);
 
   boardBMP180.init();
   if (!boardBMP180.isInitialized()) {
-    alert_show("BMP180", "Init Failed!");
+    alert_show("ALERT", "Init Failed!");
     return;
   }
 
@@ -198,11 +224,11 @@ static void bmp180_realtime_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % BMP_RT_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + BMP_RT_N) % BMP_RT_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -275,7 +301,7 @@ static void bmp180_realtime_activity(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -292,11 +318,15 @@ void bmp180_chart_activity(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "BMP180 Init...");
   });
-  HAL_Delay(100);
+  JPDelay(100);
 
   boardBMP180.init();
   if (!boardBMP180.isInitialized()) {
-    alert_show("BMP180", "Init Failed!");
+    alert_show("ALERT", "Init Failed!");
+    return;
+  }
+  if (!chart_alloc()) {
+    alert_show("ALERT", "Chart memory failed");
     return;
   }
 
@@ -311,8 +341,10 @@ void bmp180_chart_activity(void) {
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
 
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+      chart_free();
       return;
+    }
 
     uint8_t ca8 = (keyManager.collision_A8.getState() == KEY_PRESSED);
     if (ca8 && !le_a8) {
@@ -357,7 +389,7 @@ void bmp180_chart_activity(void) {
         draw_chart_line(cdata, chart_x, chart_y, chart_w, chart_h, mx, mn,
                         lcol);
 
-        /* Legend â€” colored fill rectangles with text labels */
+        /* Legend â€?colored fill rectangles with text labels */
         PD_SetFont(FONT_ASCII_12);
 
         PD_FillRect(10, 148, 10, 8, TOS_RED);
@@ -377,7 +409,7 @@ void bmp180_chart_activity(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(30);
+    JPDelay(30);
   }
 }
 
@@ -399,11 +431,11 @@ void bmp180_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % BM_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + BM_N) % BM_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -436,6 +468,6 @@ void bmp180_activity(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

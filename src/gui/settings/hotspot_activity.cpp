@@ -16,6 +16,7 @@
  */
 
 #include "include/hotspot_activity.hpp"
+#include "library/include/libdly.h"
 
 
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -450,7 +451,7 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 static void hs_start(void) {
   LOG_I("HOTS", "Starting hotspot: %s", hs_ssid);
   ESP8266_SendCommand("AT+CWMODE=2", "OK", 3000);
-  HAL_Delay(200);
+  JPDelay(200);
 
   char cmd[96];
   if (strlen(hs_pwd) < 8)
@@ -589,7 +590,7 @@ static int hs_main_loop(void) {
         }
       } else
         sel = (sel + 1) % hs_item_count();
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (hs_edit) {
@@ -601,7 +602,7 @@ static int hs_main_loop(void) {
         }
       } else
         sel = (sel - 1 + hs_item_count()) % hs_item_count();
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -662,7 +663,7 @@ static int hs_main_loop(void) {
       lu = HAL_GetTick();
       draw_hs_main(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -693,11 +694,11 @@ static void ssidpwd_run(void) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 3;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 3) % 3;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -727,7 +728,7 @@ static void ssidpwd_run(void) {
       lu = HAL_GetTick();
       draw_ssidpwd(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -755,11 +756,11 @@ static void connected_page(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -813,7 +814,7 @@ static void connected_page(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(10);
+    JPDelay(10);
   }
 }
 

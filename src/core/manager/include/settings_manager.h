@@ -64,7 +64,8 @@ typedef struct __attribute__((packed, aligned(4))) {
   /* --- WLAN settings --- */
   bool     wlan_on;          /* WiFi enabled */
   bool     wlan_auto_conn;   /* auto-connect on enable */
-  uint8_t  _pad1[3];         /* alignment */
+  uint8_t  debug_dashboard;  /* debug FPS/CPU/RAM overlay */
+  uint8_t  _pad1[2];         /* alignment */
 
   /* --- Saved networks --- */
   uint8_t  saved_count;                    /* 0 .. SM_SAVED_MAX */
@@ -105,6 +106,10 @@ bool SM_Wlan_On(void);
 void SM_Wlan_SetOn(bool v);
 bool SM_Wlan_AutoConn(void);
 void SM_Wlan_SetAutoConn(bool v);
+
+/* --- Debug --- */
+bool SM_Debug_Dashboard(void);
+void SM_Debug_SetDashboard(bool v);
 
 /* --- Saved networks --- */
 uint8_t SM_Saved_Count(void);

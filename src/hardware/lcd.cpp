@@ -16,6 +16,7 @@
  */
 
 #include "include/lcd.hpp"
+#include "library/include/libdly.h"
 
 
 extern TIM_HandleTypeDef htim4;
@@ -24,6 +25,12 @@ LCD boardLCD;
 extern SPI_HandleTypeDef hspi1;
 extern DMA_HandleTypeDef hdma_spi1_tx;
 
+static uint16_t lcd_tile_buffer[LCD_WIDTH * TILE_HEIGHT]
+    __attribute__((section(".sysdram_lcd_fixed"), aligned(4), used));
+
+extern "C" void SysUI_DebugOverlayBeginFrame(void);
+extern "C" void SysUI_DebugOverlayEndFrame(void);
+extern "C" void SysUI_DebugOverlayDraw(void);
 
 __attribute__((weak)) void lcd_dma_yield(void) {}
 
@@ -103,11 +110,11 @@ uint16_t LCD::rgb888_to_rgb565(uint32_t rgb888) {
 void LCD::hardware_reset(void) {
 #ifdef LCD_RST_PIN
   LCD_RST_H;
-  HAL_Delay(10);
+  JPDelay(10);
   LCD_RST_L;
-  HAL_Delay(10);
+  JPDelay(10);
   LCD_RST_H;
-  HAL_Delay(120);
+  JPDelay(120);
 #endif
 }
 
@@ -209,10 +216,10 @@ void LCD::init() {
   hardware_reset();
 
   write_cmd(0x01);
-  HAL_Delay(150);
+  JPDelay(150);
 
   write_cmd(0x11);
-  HAL_Delay(120);
+  JPDelay(120);
 
   write_cmd(0x3A);
   write_data(0x55);
@@ -286,7 +293,7 @@ void LCD::init() {
 
   write_cmd(0x21);
   write_cmd(0x29);
-  HAL_Delay(100);
+  JPDelay(100);
 
   
   
@@ -310,7 +317,7 @@ void LCD::init() {
   LCD_CS_H;
 
   
-  HAL_Delay(100);
+  JPDelay(100);
 
   
   LCD_BL_ON;
@@ -384,7 +391,7 @@ void LCD::setRotation(uint8_t rotation) {
 
 void LCD::sleep(void) {
   write_cmd(0x10);
-  HAL_Delay(120);
+  JPDelay(120);
   LCD_BL_OFF;
 }
 
@@ -392,7 +399,7 @@ void LCD::sleep(void) {
 void LCD::wakeup(void) {
   LCD_BL_ON;
   write_cmd(0x11);
-  HAL_Delay(120);
+  JPDelay(120);
 }
 
 
@@ -455,10 +462,13 @@ void LCD::updateAutoBrightness(void) {
 
 
 uint16_t *LCD::getFrameBuffer(void) {
-  return _tile_buffer;
+  return lcd_tile_buffer;
 }
 
 void LCD::beginTileRender(uint16_t y, uint16_t h) {
+  if (y == 0U) {
+    SysUI_DebugOverlayBeginFrame();
+  }
   if (y >= LCD_HEIGHT)
     y = LCD_HEIGHT - 1;
   if (h == 0)
@@ -472,7 +482,7 @@ void LCD::beginTileRender(uint16_t y, uint16_t h) {
   
   uint16_t bg = rgb888_to_rgb565(LCD_COLOR_BLACK);
   for (uint32_t i = 0; i < LCD_WIDTH * h; i++) {
-    _tile_buffer[i] = bg;
+    lcd_tile_buffer[i] = bg;
   }
 }
 
@@ -480,6 +490,8 @@ void LCD::endTileRender(void) {
   if (!initialized)
     return;
 
+  const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
+  SysUI_DebugOverlayDraw();
   set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
 
   LCD_DC_DATA;
@@ -498,7 +510,7 @@ void LCD::endTileRender(void) {
   hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
 
   uint16_t pixel_count = LCD_WIDTH * _tile_h;
-  HAL_SPI_Transmit_DMA(&hspi, (uint8_t *)_tile_buffer, pixel_count);
+  HAL_SPI_Transmit_DMA(&hspi, (uint8_t *)lcd_tile_buffer, pixel_count);
 
   
   uint32_t timeout = HAL_GetTick() + 100;
@@ -519,6 +531,9 @@ void LCD::endTileRender(void) {
   hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
 
   LCD_CS_H;
+  if (last_tile) {
+    SysUI_DebugOverlayEndFrame();
+  }
 }
 
 
@@ -544,15 +559,17 @@ void LCD::emergencyPrepare(void) {
 
   if (initialized) {
     write_cmd(0x11); /* sleep out */
-    HAL_Delay(20);
+    JPDelay(20);
     write_cmd(0x29); /* display on */
-    HAL_Delay(20);
+    JPDelay(20);
   }
 }
 
 void LCD::endTileRenderBlocking(void) {
   if (!initialized) return;
 
+  const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
+  SysUI_DebugOverlayDraw();
   set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
   LCD_DC_DATA;
   LCD_CS_L;
@@ -564,13 +581,16 @@ void LCD::endTileRenderBlocking(void) {
   SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
 
   uint16_t pixel_count = LCD_WIDTH * _tile_h;
-  (void)HAL_SPI_Transmit(&hspi, (uint8_t *)_tile_buffer, pixel_count, 500);
+  (void)HAL_SPI_Transmit(&hspi, (uint8_t *)lcd_tile_buffer, pixel_count, 500);
 
   CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
   CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
   hspi.Init.DataSize = SPI_DATASIZE_8BIT;
   SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
   LCD_CS_H;
+  if (last_tile) {
+    SysUI_DebugOverlayEndFrame();
+  }
 }
 
 void LCD::flushTiledBlocking(void (*render_cb)(void)) {

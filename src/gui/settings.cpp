@@ -16,6 +16,7 @@
  */
 
 #include "include/settings.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -88,11 +89,11 @@ static int menu_loop(const char *title, const char **items, int count,
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % count;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + count) % count;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
@@ -105,7 +106,7 @@ static int menu_loop(const char *title, const char **items, int count,
       draw_menu(title, items, count, sel);
     }
     TosApi_Tick();
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 

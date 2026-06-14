@@ -16,6 +16,7 @@
  */
 
 #include "include/tsdio.hpp"
+#include "library/include/libdly.h"
 
 
 
@@ -46,7 +47,7 @@ bool TSDIO::waitForReady(uint32_t timeout_ms) {
     if (card_state == HAL_SD_CARD_ERROR) {
       return false;
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
   return false;
 }
@@ -78,13 +79,13 @@ SDCard_Status_t TSDIO::init(void) {
   if (HAL_SD_Init(&hsd) != HAL_OK) {
     LOG_E("SDIO", "HAL_SD_Init FAILED");
     _hard_disabled = true;
-    LOG_F("SDIO", "SD card HARD DISABLED â€” init failed");
+    LOG_F("SDIO", "SD card HARD DISABLED â€?init failed");
     return SD_CARD_ERROR;
   }
   LOG_I("SDIO", "HAL_SD_Init OK");
 
   
-  HAL_Delay(200);
+  JPDelay(200);
 
   
   LOG_I("SDIO", "Checking card presence...");
@@ -102,7 +103,7 @@ SDCard_Status_t TSDIO::init(void) {
       }
     }
     LOG_W("SDIO", "Retrying get card info...");
-    HAL_Delay(100);
+    JPDelay(100);
   }
 
   if (hal_card_info.BlockNbr == 0) {
@@ -111,7 +112,7 @@ SDCard_Status_t TSDIO::init(void) {
             (unsigned long)hal_card_info.BlockNbr);
     LOG_E("SDIO", "Failed to get valid card info!");
     _hard_disabled = true;
-    LOG_F("SDIO", "SD card HARD DISABLED â€” invalid card info");
+    LOG_F("SDIO", "SD card HARD DISABLED â€?invalid card info");
     return SD_CARD_ERROR;
   }
 
@@ -148,7 +149,7 @@ SDCard_Status_t TSDIO::init(void) {
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Card ready timeout");
     _hard_disabled = true;
-    LOG_F("SDIO", "SD card HARD DISABLED â€” not ready");
+    LOG_F("SDIO", "SD card HARD DISABLED â€?not ready");
     return SD_CARD_NOT_READY;
   }
 
@@ -343,7 +344,7 @@ bool TSDIO::selfTest(void) {
     return false;
   }
 
-  HAL_Delay(10);
+  JPDelay(10);
 
   
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {
@@ -396,7 +397,7 @@ bool TSDIO::directWriteTest(void) {
     if (state == HAL_SD_CARD_READY || state == HAL_SD_CARD_TRANSFER) {
       break;
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
   LOG_I("SDIO", "Direct Test: Card state: %ld", (long)state);
 
@@ -458,7 +459,7 @@ bool TSDIO::directWriteTest(void) {
   }
 
   LOG_I("SDIO", "Direct Test: Reading back...");
-  HAL_Delay(50);
+  JPDelay(50);
 
   result = HAL_SD_ReadBlocks(&hsd, read_buf, test_sector, 1, HAL_MAX_DELAY);
   LOG_I("SDIO", "Direct Test: HAL_SD_ReadBlocks result: %d", result);
@@ -525,7 +526,7 @@ bool TSDIO::simpleWriteTest(void) {
     return false;
   }
 
-  HAL_Delay(10);
+  JPDelay(10);
 
   
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {

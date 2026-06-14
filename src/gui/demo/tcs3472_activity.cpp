@@ -16,7 +16,8 @@
  */
 
 #include "include/tcs3472_activity.hpp"
-
+#include "library/include/libdly.h"
+#include "core/sys/include/sysdram.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -28,11 +29,37 @@ extern TCS3472 boardTCS3472;
 
 /* ── Chart state ── */
 #define CHART_HISTORY 240
-static CCMRAM uint16_t chart_r[CHART_HISTORY] = {0};
-static CCMRAM uint16_t chart_g[CHART_HISTORY] = {0};
-static CCMRAM uint16_t chart_b[CHART_HISTORY] = {0};
+static uint16_t *chart_r = nullptr;
+static uint16_t *chart_g = nullptr;
+static uint16_t *chart_b = nullptr;
 static CCMRAM int chart_index = 0;
 static CCMRAM uint16_t chart_max_value = 65535;
+
+static bool chart_alloc(void) {
+  if (chart_r && chart_g && chart_b)
+    return true;
+  chart_r = (uint16_t *)SysDram_AllocFast(sizeof(uint16_t) * CHART_HISTORY);
+  chart_g = (uint16_t *)SysDram_AllocFast(sizeof(uint16_t) * CHART_HISTORY);
+  chart_b = (uint16_t *)SysDram_AllocFast(sizeof(uint16_t) * CHART_HISTORY);
+  if (chart_r && chart_g && chart_b)
+    return true;
+  SysDram_Free(chart_r);
+  SysDram_Free(chart_g);
+  SysDram_Free(chart_b);
+  chart_r = nullptr;
+  chart_g = nullptr;
+  chart_b = nullptr;
+  return false;
+}
+
+static void chart_free(void) {
+  SysDram_Free(chart_r);
+  SysDram_Free(chart_g);
+  SysDram_Free(chart_b);
+  chart_r = nullptr;
+  chart_g = nullptr;
+  chart_b = nullptr;
+}
 
 /* ── Standard template functions (exact copy from about-page) ── */
 static void draw_frame_title(const char *title) {
@@ -74,6 +101,8 @@ static void draw_card_r(int idx, int sel, int cy, const char *label,
 
 /* ── Chart helper functions ── */
 static void reset_chart(void) {
+  if (!chart_r || !chart_g || !chart_b)
+    return;
   for (int i = 0; i < CHART_HISTORY; i++) {
     chart_r[i] = 0;
     chart_g[i] = 0;
@@ -84,6 +113,8 @@ static void reset_chart(void) {
 }
 
 static void update_chart_data(uint16_t r, uint16_t g, uint16_t b) {
+  if (!chart_r || !chart_g || !chart_b)
+    return;
   chart_r[chart_index] = r;
   chart_g[chart_index] = g;
   chart_b[chart_index] = b;
@@ -154,11 +185,11 @@ static void tcs3472_read_subpage(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 7;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 7) % 7;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -220,7 +251,7 @@ static void tcs3472_read_subpage(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -244,7 +275,7 @@ static void tcs3472_color_subpage(void) {
       LCD_FLUSH({
         draw_frame_title("DEMO");
 
-        /* Left-aligned text values at (16, 33) — alert.cpp style */
+        /* Left-aligned text values at (16, 33) �?alert.cpp style */
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         char buf[64];
@@ -252,7 +283,7 @@ static void tcs3472_color_subpage(void) {
                  raw.green, raw.blue, raw.clear);
         PD_DrawString(16, 33, buf);
 
-        /* Color block inside a card — much smaller, about 80px tall */
+        /* Color block inside a card �?much smaller, about 80px tall */
         PD_DrawAngledCard(20, 80, 200, 80, 6, TOS_CARD_BG);
         uint32_t display_color =
             ((raw.red >> 8) << 16) | ((raw.green >> 8) << 8) | (raw.blue >> 8);
@@ -266,7 +297,7 @@ static void tcs3472_color_subpage(void) {
 
       LOG_D("TACT", "RGB: %u,%u,%u", raw.red, raw.green, raw.blue);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -294,7 +325,7 @@ static void tcs3472_cct_subpage(void) {
     b_sum += raw.blue;
     cct_sum += color.color_temp;
     lux_sum += color.lux;
-    HAL_Delay(50);
+    JPDelay(50);
   }
 
   r_sum /= samples;
@@ -361,13 +392,17 @@ static void tcs3472_cct_subpage(void) {
         PD_DrawFooterCenter("ENTER", NULL, NULL);
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
 /* ── 04 Chart sub-page ── */
 static void tcs3472_chart_subpage(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
+  if (!chart_alloc()) {
+    alert_show("ALERT", "Chart memory failed");
+    return;
+  }
   reset_chart();
   bool led_on = false;
   boardTCS3472.ledOff();
@@ -383,6 +418,7 @@ static void tcs3472_chart_subpage(void) {
 
     if (keyManager.btn_enter.getState() == KEY_PRESSED) {
       boardTCS3472.ledOff();
+      chart_free();
       return;
     }
 
@@ -414,7 +450,7 @@ static void tcs3472_chart_subpage(void) {
       LCD_FLUSH({
         draw_frame_title("DEMO");
 
-        /* Left-aligned chart title — jyro chart 03 style */
+        /* Left-aligned chart title �?jyro chart 03 style */
         PD_SetFont(FONT_ASCII_12);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(16, 33, "Chart: RGB");
@@ -430,7 +466,7 @@ static void tcs3472_chart_subpage(void) {
         PD_SetColor(TOS_TEXT);
         PD_DrawString(176, 149, "LED");
 
-        /* Legend — colored fill rectangles with R/G/B labels (jyro style) */
+        /* Legend �?colored fill rectangles with R/G/B labels (jyro style) */
         PD_FillRect(10, 148, 10, 8, 0xFF0000);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(23, 147, "R");
@@ -460,7 +496,7 @@ static void tcs3472_chart_subpage(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -472,7 +508,7 @@ void tcs3472_activity(void) {
   if (!boardTCS3472.isInitialized()) {
     boardTCS3472.init();
     if (!boardTCS3472.isInitialized()) {
-      alert_show("TCS3472", "Init Failed!\nCheck I2C.");
+      alert_show("ALERT", "Init Failed!\nCheck I2C.");
       return;
     }
   }
@@ -491,11 +527,11 @@ void tcs3472_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % TCS3472_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + TCS3472_N) % TCS3472_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -544,6 +580,6 @@ void tcs3472_activity(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

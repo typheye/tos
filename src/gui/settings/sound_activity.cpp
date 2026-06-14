@@ -16,6 +16,7 @@
  */
 
 #include "include/sound_activity.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -61,8 +62,8 @@ void sound_activity_run(void) {
 
   while (1) {
     keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % 2; HAL_Delay(150); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + 2) % 2; HAL_Delay(150); }
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % 2; JPDelay(150); }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + 2) % 2; JPDelay(150); }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le && sel == 0) return;
@@ -79,6 +80,6 @@ void sound_activity_run(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

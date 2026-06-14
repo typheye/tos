@@ -16,6 +16,7 @@
  */
 
 #include "include/init.hpp"
+#include "library/include/libdly.h"
 #include "core/manager/include/file_manager.h"
 
 
@@ -213,6 +214,7 @@ static void cleanup_sd_root_whitelist(void) {
 }
 
 void TOS::init() {
+  SysDram_Init();
   boardSerial.init();
 
   
@@ -224,7 +226,7 @@ void TOS::init() {
   boardLCD.init();
   SysWatchdog_Init();
   SysWatchdog_FeedNow();
-  HAL_Delay(50);
+  JPDelay(50);
 
   PD_ShowSplashFadeStart(300);
 
@@ -260,6 +262,7 @@ void TOS::init() {
   initialized_ = true;
 
   LOG_I("MAIN", "System initialized, CPU:168MHz");
+  SysDram_LogStats();
 
   SysWatchdog_FeedNow();
   ESP8266_Init();
@@ -282,7 +285,7 @@ void TOS::init() {
     if (has_saved) {
       LOG_I("MAIN", "Auto-connect: starting...");
       ESP8266_SendCommand("AT+CWMODE=1", "OK", 3000);
-      HAL_Delay(300);
+      JPDelay(300);
       SysWatchdog_FeedNow();
 
       const char *preferred_ssid = SM_Wlan_SSID();
@@ -304,7 +307,7 @@ void TOS::init() {
         LOG_I("MAIN", "Auto-connect: trying %s (round %d/2)...",
               net->ssid, round + 1);
         if (ESP8266_ConnectWiFi(net->ssid, net->pwd)) {
-          HAL_Delay(500);
+          JPDelay(500);
           SysWatchdog_FeedNow();
           if (ESP8266_IsConnected()) {
             SM_Wlan_SetSSID(net->ssid);
@@ -322,9 +325,9 @@ void TOS::init() {
           ESP8266_SendCommand("AT+CIPCLOSE", "OK", 800);
           ESP8266_SendCommand("AT+CWQAP", "OK", 1200);
           esp8266.resetRxBuffer();
-          HAL_Delay(400);
+          JPDelay(400);
         } else {
-          HAL_Delay(300);
+          JPDelay(300);
         }
         SysWatchdog_FeedNow();
         return false;
@@ -346,22 +349,31 @@ void TOS::init() {
     }
   }
 
-  /* Do not run blocking time sync during boot.  TosApi_Tick schedules a
-   * deferred auto sync after UI startup and a proven cloud connection. */
+  bool boot_time_synced = false;
   if (!ESP8266_IsHardDisabled() && SM_Wlan_On() &&
       ESP8266_IsConnected() && SM_Time_AutoSync()) {
-    LOG_I("MAIN", "Auto time sync deferred until after UI startup");
+    LOG_I("MAIN", "Auto time sync before UI startup");
+    if (SysTime_Sync()) {
+      boot_time_synced = true;
+      LOG_I("MAIN", "Boot auto time sync OK");
+    } else {
+      LOG_W("MAIN", "Boot auto time sync failed, deferred retry remains enabled");
+    }
   }
 
   EmotionManager_Init();
   HidManager_Init();
   TosApi_Init();
+  if (boot_time_synced) {
+    TosApi_MarkAutoTimeSynced();
+  }
 
   SysUI::init();
 
-  HAL_Delay(50);
+  JPDelay(50);
 
   PD_SplashFinish(100);
+  SysUI_DebugOverlaySetEnabled(SM_Debug_Dashboard() ? 1U : 0U);
 
   
   SysUI::setActivity(UI_PET);

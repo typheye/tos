@@ -16,6 +16,7 @@
  */
 
 #include "include/3dox_activity.hpp"
+#include "library/include/libdly.h"
 
 
 extern USART boardSerial;
@@ -77,6 +78,19 @@ void render_3dox_activity(void) {
   LOG_I("3DOX", "ENTER to stop");
 
   render_init();
+  if (!render_is_ready()) {
+    LOG_E("3DOX", "Not enough dynamic memory");
+    LCD_FLUSH({
+      PD_Init();
+      PD_FillScreen(TOS_BG);
+      PD_SetFont(FONT_ASCII_16);
+      PD_SetColor(TOS_RED);
+      PD_DrawString(24, 94, "3D memory failed");
+    });
+    JPDelay(900);
+    render_deinit();
+    return;
+  }
   flush_render_frame(0);
 
   while (1) {
@@ -87,6 +101,7 @@ void render_3dox_activity(void) {
       uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED) ? 1 : 0;
       if (ce && !last_enter) {
         LOG_I("3DOX", "Stopped at frame %d", render_get_frame_count());
+        render_deinit();
         return;
       }
       last_enter = ce;

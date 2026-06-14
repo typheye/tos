@@ -16,7 +16,7 @@
  */
 
 #include "include/storage_activity.hpp"
-
+#include "library/include/libdly.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -24,7 +24,7 @@ extern TSDIO boardSDIO;
 
 static bool sd_present = false;
 static uint32_t sd_cap_kb = 0;
-static int sd_used_pct = 0;   
+static int sd_used_pct = 0;
 static uint32_t builtin_cap_kb = 1024; // 1MB flash
 static int builtin_used_pct = 0;
 
@@ -96,22 +96,18 @@ static const char *fmt_size(uint32_t kb) {
 
 // ============ Get free % from FATFS ============
 
-
 static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   *used_pct = 0;
   *total_kb = 0;
 
-  
   const char *path = "0:";
   FATFS fs;
   bool need_unmount = false;
 
-  
   DWORD free_clusters;
   FATFS *fs_ptr;
   FRESULT res = f_getfree(path, &free_clusters, &fs_ptr);
 
-  
   if (res != FR_OK) {
     res = f_mount(&fs, path, 1);
     if (res != FR_OK) {
@@ -123,7 +119,8 @@ static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   }
 
   if (res != FR_OK) {
-    if (need_unmount) f_mount(NULL, path, 0);
+    if (need_unmount)
+      f_mount(NULL, path, 0);
     SysHandle_FatalFResult(res, SYS_ERR_UI_STORAGE_PROBE);
     return false;
   }
@@ -131,11 +128,13 @@ static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   DWORD total_clusters = fs_ptr->n_fatent - 2;
   DWORD sec_per_cluster = fs_ptr->csize;
   if (total_clusters == 0) {
-    if (need_unmount) f_mount(NULL, path, 0);
+    if (need_unmount)
+      f_mount(NULL, path, 0);
     return false;
   }
 
-  uint64_t total_kb64 = ((uint64_t)total_clusters * (uint64_t)sec_per_cluster) / 2U;
+  uint64_t total_kb64 =
+      ((uint64_t)total_clusters * (uint64_t)sec_per_cluster) / 2U;
   if (total_kb64 > 0xFFFFFFFFULL)
     total_kb64 = 0xFFFFFFFFULL;
   *total_kb = (uint32_t)total_kb64;
@@ -143,10 +142,13 @@ static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   DWORD used_clusters = total_clusters - free_clusters;
   *used_pct = (int)(((uint64_t)used_clusters * 100ULL + total_clusters / 2U) /
                     (uint64_t)total_clusters);
-  if (*used_pct > 100) *used_pct = 100;
-  if (*used_pct < 0)   *used_pct = 0;
+  if (*used_pct > 100)
+    *used_pct = 100;
+  if (*used_pct < 0)
+    *used_pct = 0;
 
-  if (need_unmount) f_mount(NULL, path, 0);
+  if (need_unmount)
+    f_mount(NULL, path, 0);
   return true;
 }
 
@@ -156,8 +158,7 @@ static void refresh(void) {
   builtin_used_pct = 31; // flash
   builtin_cap_kb = 1024; // 1MB
 
-  /* If SD card is hard-disabled, skip probing entirely â€”
-   * avoids triggering SysHandle_Exception. */
+  /* If SD card is hard-disabled, skip probing entirely â€?   * avoids triggering SysHandle_Exception. */
   if (TSDIO_IsHardDisabled()) {
     sd_present = false;
     sd_cap_kb = 0;
@@ -213,6 +214,7 @@ static void draw_storage(int sel) {
       y = 152;
       PD_SetColor(TOS_TEXT);
       PD_DrawString(26, y, "External Storage");
+      PD_SetColor(TOS_ACCENT);
       sz = fmt_size(sd_cap_kb);
       sw = PD_GetStringWidth(sz);
       PD_DrawString(220 - sw, y, sz);
@@ -239,7 +241,7 @@ void storage_activity_run(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "Refreshing...");
   });
-  HAL_Delay(500);
+  JPDelay(500);
 
   refresh();
 
@@ -253,11 +255,11 @@ void storage_activity_run(void) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 2;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 2) % 2;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -276,7 +278,7 @@ void storage_activity_run(void) {
           PD_SetColor(TOS_TEXT);
           PD_DrawString(26, 33, "Refreshing...");
         });
-        HAL_Delay(500);
+        JPDelay(500);
         refresh();
         lu = 0;
       }
@@ -286,6 +288,6 @@ void storage_activity_run(void) {
       lu = HAL_GetTick();
       draw_storage(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

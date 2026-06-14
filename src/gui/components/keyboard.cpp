@@ -16,6 +16,7 @@
  */
 
 #include "include/keyboard.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -117,7 +118,7 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
     PD_DrawRect(lmargin, 50, 240 - lmargin - rmargin, 2);
     PD_SetFill(false);
 
-    // Key grid â€” symmetric margins
+    // Key grid â€?symmetric margins
     int base_y = 56, row_h = 28, margin = 8;
     int flat_idx = 0;
     for (int r = 0; r < N_ROWS; r++) {
@@ -192,11 +193,11 @@ bool keyboard_open(const char *title, char *out, int max_len) {
     // UP/DOWN fine
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % total;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + total) % total;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -223,7 +224,7 @@ bool keyboard_open(const char *title, char *out, int max_len) {
           }
         }
       }
-      HAL_Delay(150);
+      JPDelay(150);
     }
     le = ce;
 
@@ -249,6 +250,6 @@ bool keyboard_open(const char *title, char *out, int max_len) {
       draw_kb(out, len, sel, shift);
     }
     SysWatchdog_Tick();
-    HAL_Delay(15);
+    JPDelay(15);
   }
 }

@@ -34,9 +34,7 @@ void LED_BoardBlink100ms(void);
 void LED_BoardBlink50ms(void);
 void LED_WarnOn(void);
 void LED_WarnOff(void);
-/* Compatibility wrapper: network/time failures now hold warnLed on until the
- * next successful ESP communication.
- */
+/* Non-blocking 300ms warning pulse for recoverable network/time failures. */
 void LED_WarnBlink300ms(void);
 void LED_EspCommSuccess(void);
 void LED_EspCommFailure(void);

@@ -16,7 +16,7 @@
  */
 
 #include "include/i2c_activity.hpp"
-
+#include "library/include/libdly.h"
 
 extern KeyManager keyManager;
 extern I2C_HandleTypeDef hi2c1;
@@ -133,7 +133,7 @@ static void do_i2c_scan(void) {
       scan_results[result_count].known_name = get_known_device_name(addr);
       result_count++;
     }
-    HAL_Delay(2);
+    JPDelay(2);
 
     /* Throttled progress update */
     if (HAL_GetTick() - last_lcd > 100 || addr == 0x77) {
@@ -181,10 +181,10 @@ static void draw_results_page(int sel) {
       } else {
         int dev_idx = idx - 1;
         char buf[36];
-        snprintf(buf, sizeof(buf), " - 0x%02X %s",
-                 scan_results[dev_idx].addr_7bit,
-                 scan_results[dev_idx].known_name ? scan_results[dev_idx].known_name
-                                                  : "Unknown");
+        snprintf(
+            buf, sizeof(buf), " - 0x%02X %s", scan_results[dev_idx].addr_7bit,
+            scan_results[dev_idx].known_name ? scan_results[dev_idx].known_name
+                                             : "Unknown");
         draw_card(idx, sel, cy, buf);
       }
     }
@@ -219,11 +219,11 @@ void i2c_scan_activity_gui(void) {
       PD_DrawString(26, 33, "No I2C devices found!");
       PD_DrawFooterCenter("ENTER", NULL, NULL);
     });
-    alert_show("I2C", "No devices found!\nCheck connections.");
+    alert_show("ALERT", "No devices found!\nCheck connections.");
     return;
   }
 
-  /* 4. Results page â€” scrollable device list */
+  /* 4. Results page â€?scrollable device list */
   int sel = 1;
   uint8_t le = 0;
 
@@ -239,12 +239,12 @@ void i2c_scan_activity_gui(void) {
     /* UP (collision_A8) */
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     /* DOWN (collision_D0) */
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     /* ENTER */
@@ -260,7 +260,7 @@ void i2c_scan_activity_gui(void) {
                      ? scan_results[dev_idx].known_name
                      : "Unknown",
                  scan_results[dev_idx].addr_7bit);
-        alert_show("I2C", msg);
+        alert_show("ALERT", msg);
       }
     }
     le = ce;
@@ -285,7 +285,7 @@ void i2c_scan_activity_gui(void) {
       lu = HAL_GetTick();
       draw_results_page(sel);
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 

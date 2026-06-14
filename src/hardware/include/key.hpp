@@ -44,7 +44,7 @@ private:
   bool _initialized;
 };
 
-#define KEY_DEBOUNCE_CNT 2  
+#define KEY_DEBOUNCE_CNT 5
 
 
 #define KEY_SCAN_INTERVAL_MS 1U

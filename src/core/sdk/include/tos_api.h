@@ -77,6 +77,9 @@ void TosApi_Init(void);
  *         Call frequently from UI/main loops. Never blocks on network I/O.
  */
 void TosApi_Tick(void);
+void TosApi_SetPaused(bool paused);
+bool TosApi_IsPaused(void);
+void TosApi_MarkAutoTimeSynced(void);
 
 /**
  * @brief  Whether the background cloud client owns the ESP8266 now.

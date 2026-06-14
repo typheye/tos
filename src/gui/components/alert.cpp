@@ -16,6 +16,7 @@
  */
 
 #include "include/alert.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -50,7 +51,7 @@ void alert_show(const char *title, const char *msg) {
         PD_SetColor(TOS_ACCENT);
         PD_DrawString(22, 5, title);
 
-        // Message â€” split on \n, draw each line
+        // Message â€?split on \n, draw each line
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         int msg_y = 33;
@@ -85,6 +86,6 @@ void alert_show(const char *title, const char *msg) {
       });
     }
     SysWatchdog_Tick();
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

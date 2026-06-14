@@ -16,6 +16,7 @@
  */
 
 #include "include/launcher.hpp"
+#include "library/include/libdly.h"
 
 
 #ifndef CCMRAM
@@ -47,6 +48,7 @@ static CCMRAM uint8_t last_group2_cfg = 0;
 static CCMRAM uint8_t last_group3_cfg = 0;
 static CCMRAM uint8_t last_mute_state = 0;
 static CCMRAM uint8_t last_sd_state = 0;
+static CCMRAM uint32_t last_activity_log_tm = 0;
 
 static uint32_t elapsed_since(uint32_t now, uint32_t since) {
   /* If a caller passes a timestamp from a previous launcher run or a value just
@@ -167,7 +169,8 @@ static const char *pet_anim_name(int s) {
 static void mark_activity(uint32_t now, const char *reason, bool log_it) {
   last_activity_tm = now;
   activity_pulse_until = now + ACTIVITY_PULSE_MS;
-  if (log_it) {
+  if (log_it && now - last_activity_log_tm >= 150U) {
+    last_activity_log_tm = now;
     LOG_D("PET", "activity: %s @ %lums", reason, (unsigned long)now);
   }
 }
@@ -218,7 +221,7 @@ static void reset_pose_soft(void) {
   pet_brow_y = lerp(pet_brow_y, 0.0f, 0.16f);
 }
 
-// ============ Sensor â†’ expression mapping ============
+// ============ Sensor â†?expression mapping ============
 
 static int expr_to_anim(EHW_Expr_t e) {
   switch (e) {
@@ -315,7 +318,7 @@ static void release_sensor_expression(uint32_t now) {
   int was_motion = is_motion_anim(pet_state);
   // Capture current face parameters for smooth recovery blend.
   // This prevents the jarring jump from dizzy/petted straight into
-  // the idle blink cycle â€” the face eases back to neutral instead.
+  // the idle blink cycle â€?the face eases back to neutral instead.
   recover_from_blink_l = pet_blink_l;
   recover_from_blink_r = pet_blink_r;
   recover_from_mouth   = pet_mouth;
@@ -899,6 +902,7 @@ void pet_launcher_run(void) {
   sensor_recover_start = 0;
   enter_idx = 0;
   last_enter_pressed = 0;
+  last_activity_log_tm = 0;
   enter_tm[0] = enter_tm[1] = enter_tm[2] = 0;
   last_collision_active = keyManager.isAnyCollision() ? 1U : 0U;
   last_group1_cfg = keyManager.getGroup1Config();
@@ -998,6 +1002,6 @@ void pet_launcher_run(void) {
     }
     TosApi_Tick();
     SysWatchdog_Tick();
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

@@ -16,6 +16,7 @@
  */
 
 #include "include/pot.hpp"
+#include "library/include/libdly.h"
 
 
 
@@ -74,7 +75,7 @@ uint16_t Potentiometer::readAverage(uint8_t samples) {
   uint32_t sum = 0;
   for (uint8_t i = 0; i < samples; i++) {
     sum += readRaw();
-    HAL_Delay(5);
+    JPDelay(5);
   }
   return (uint16_t)(sum / samples);
 }

@@ -16,6 +16,8 @@
  */
 
 #include "include/app.h"
+#include "library/include/libdly.h"
+#include "core/sys/include/sysdram.h"
 
 
 extern KeyManager keyManager;
@@ -30,16 +32,61 @@ extern LCD boardLCD;
 static FATFS fm_fs;
 static bool fm_mounted = false;
 
-static char fm_cur_path[FM_PATH_LEN] = "0:";
-static char fm_items[FM_MAX_ITEMS][FM_NAME_LEN];
-static int fm_is_dir[FM_MAX_ITEMS];
+static char *fm_cur_path = nullptr;
+static char (*fm_items)[FM_NAME_LEN] = nullptr;
+static int *fm_is_dir = nullptr;
 static int fm_count = 0;
 
 /* When entering a child directory, remember the selected child index in the
  * parent. When going back through "..", restore that selection instead of
  * jumping back to the top of the parent list. */
-static int fm_parent_sel_stack[FM_STACK_DEPTH];
+static int *fm_parent_sel_stack = nullptr;
 static int fm_stack_depth = 0;
+
+static bool fm_alloc_context(void) {
+  if (fm_cur_path && fm_items && fm_is_dir && fm_parent_sel_stack)
+    return true;
+
+  fm_cur_path = (char *)SysDram_Alloc(FM_PATH_LEN);
+  fm_items = (char (*)[FM_NAME_LEN])SysDram_Alloc(FM_MAX_ITEMS * FM_NAME_LEN);
+  fm_is_dir = (int *)SysDram_Alloc(FM_MAX_ITEMS * sizeof(int));
+  fm_parent_sel_stack = (int *)SysDram_Alloc(FM_STACK_DEPTH * sizeof(int));
+
+  if (fm_cur_path && fm_items && fm_is_dir && fm_parent_sel_stack) {
+    strcpy(fm_cur_path, "0:");
+    memset(fm_items, 0, FM_MAX_ITEMS * FM_NAME_LEN);
+    memset(fm_is_dir, 0, FM_MAX_ITEMS * sizeof(int));
+    memset(fm_parent_sel_stack, 0, FM_STACK_DEPTH * sizeof(int));
+    fm_count = 0;
+    fm_stack_depth = 0;
+    return true;
+  }
+
+  SysDram_Free(fm_cur_path);
+  SysDram_Free(fm_items);
+  SysDram_Free(fm_is_dir);
+  SysDram_Free(fm_parent_sel_stack);
+  fm_cur_path = nullptr;
+  fm_items = nullptr;
+  fm_is_dir = nullptr;
+  fm_parent_sel_stack = nullptr;
+  fm_count = 0;
+  fm_stack_depth = 0;
+  return false;
+}
+
+static void fm_free_context(void) {
+  SysDram_Free(fm_parent_sel_stack);
+  SysDram_Free(fm_is_dir);
+  SysDram_Free(fm_items);
+  SysDram_Free(fm_cur_path);
+  fm_parent_sel_stack = nullptr;
+  fm_is_dir = nullptr;
+  fm_items = nullptr;
+  fm_cur_path = nullptr;
+  fm_count = 0;
+  fm_stack_depth = 0;
+}
 
 static void draw_frame_title(const char *title) {
   PD_Init();
@@ -184,7 +231,7 @@ static void fm_format_progress(const char *step, FRESULT res, void *user) {
   fm_draw_formatting(line1, line2);
 
   /* Keep progress visible but do not slow the full format too much. */
-  HAL_Delay(120);
+  JPDelay(120);
 }
 
 static FRESULT fm_format_and_init_sd(void) {
@@ -201,13 +248,13 @@ static FRESULT fm_format_and_init_sd(void) {
     snprintf(line1, sizeof(line1), "Format failed");
     snprintf(line2, sizeof(line2), "%s (%d)", SFHD_FResultName(res), (int)res);
     fm_draw_formatting(line1, line2);
-    HAL_Delay(1200);
+    JPDelay(1200);
     return res;
   }
 
   fm_mounted = true;
   fm_draw_formatting("Format complete", "Opening file manager");
-  HAL_Delay(600);
+  JPDelay(600);
   return FR_OK;
 }
 
@@ -236,7 +283,7 @@ static void fm_wait_keys_released(uint32_t timeout_ms) {
         keyManager.btn_enter.getState() != KEY_PRESSED) {
       return;
     }
-    HAL_Delay(5);
+    JPDelay(5);
   }
 }
 
@@ -396,11 +443,11 @@ static void fm_load_dir(void) {
       if (swap) {
         char tn[FM_NAME_LEN];
         int td;
-        strcpy(tn, fm_items[i]);
+        memcpy(tn, fm_items[i], FM_NAME_LEN);
         td = fm_is_dir[i];
-        strcpy(fm_items[i], fm_items[j]);
+        memcpy(fm_items[i], fm_items[j], FM_NAME_LEN);
         fm_is_dir[i] = fm_is_dir[j];
-        strcpy(fm_items[j], tn);
+        memcpy(fm_items[j], tn, FM_NAME_LEN);
         fm_is_dir[j] = td;
       }
     }
@@ -448,8 +495,8 @@ static bool fm_enter(int idx, int *sel_io) {
   }
 
   fm_push_parent_selection(idx);
-  strncpy(fm_cur_path, next_path, sizeof(fm_cur_path) - 1);
-  fm_cur_path[sizeof(fm_cur_path) - 1] = '\0';
+  strncpy(fm_cur_path, next_path, FM_PATH_LEN - 1);
+  fm_cur_path[FM_PATH_LEN - 1] = '\0';
   fm_load_dir();
 
   if (sel_io != NULL) {
@@ -466,7 +513,13 @@ void file_manager_run(void) {
   }
 
   boardLCD.fillScreen(LCD_COLOR_BLACK);
+  if (!fm_alloc_context()) {
+    alert_show("FILE", "Memory failed");
+    return;
+  }
+
   if (!fm_prepare_storage()) {
+    fm_free_context();
     return;
   }
 
@@ -492,11 +545,11 @@ void file_manager_run(void) {
 
     if (n > 0 && keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (n > 0 && keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     if ((HAL_GetTick() - last_probe) > 1200U && fm_mounted) {
@@ -510,11 +563,14 @@ void file_manager_run(void) {
     if (keyManager.btn_enter.getState() == KEY_PRESSED) {
       if (n == 0) {
         fm_unmount();
+        fm_free_context();
         return;
       }
       bool exit_requested = fm_enter(sel, &sel);
-      if (exit_requested || !fm_mounted)
+      if (exit_requested || !fm_mounted) {
+        fm_free_context();
         return; /* exit via .. at root */
+      }
       n = fm_count;
       if (sel < 0) {
         sel = 0;
@@ -523,7 +579,7 @@ void file_manager_run(void) {
         sel = n > 0 ? n - 1 : 0;
       }
       lu = 0;
-      HAL_Delay(120);
+      JPDelay(120);
     }
 
     if (HAL_GetTick() - lu > 100) {
@@ -556,6 +612,6 @@ void file_manager_run(void) {
       });
     }
     TosApi_Tick();
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

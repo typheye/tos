@@ -103,7 +103,6 @@ private:
   bool _auto_brightness;
   uint16_t _tile_y;
   uint16_t _tile_h;
-  uint16_t _tile_buffer[LCD_WIDTH * TILE_HEIGHT];
 
   void write_cmd(uint8_t cmd);
   void write_data(uint8_t data);
@@ -121,6 +120,6 @@ extern "C" void SysWatchdog_Tick(void);
 
 
 
-#define LCD_FLUSH(...) do { SysWatchdog_Tick(); boardLCD.flushTiled([&]() { __VA_ARGS__ }); SysWatchdog_Tick(); } while (0)
+#define LCD_FLUSH(...) do { SysWatchdog_Tick(); boardLCD.flushTiled([&]() { __VA_ARGS__; }); SysWatchdog_Tick(); } while (0)
 
 #endif

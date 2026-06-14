@@ -24,7 +24,24 @@ static volatile uint32_t system_tick = 0;
 void SysTick_Handler(void) { system_tick++; }
 #endif
 
-void JPDelay(uint32_t ms) { HAL_Delay(ms); }
+static volatile uint32_t delay_idle_ms = 0;
+
+static void delay_add_idle_ms(uint32_t ms) {
+  if (ms == 0U) {
+    return;
+  }
+
+  __disable_irq();
+  delay_idle_ms += ms;
+  __enable_irq();
+}
+
+void JPDelay(uint32_t ms) {
+  uint32_t start = HAL_GetTick();
+  HAL_Delay(ms);
+  uint32_t elapsed = HAL_GetTick() - start;
+  delay_add_idle_ms(elapsed);
+}
 
 void JPDelayUs(uint32_t us) {
 #if defined(USE_HAL_DELAY_US)
@@ -50,6 +67,17 @@ uint32_t JPGetTick(void) {
 #else
   return HAL_GetTick();
 #endif
+}
+
+uint32_t JPDelay_ConsumeIdleMs(void) {
+  uint32_t idle;
+
+  __disable_irq();
+  idle = delay_idle_ms;
+  delay_idle_ms = 0U;
+  __enable_irq();
+
+  return idle;
 }
 
 void JPDelay_Init(void) {

@@ -16,6 +16,7 @@
  */
 
 #include "include/tos_api.h"
+#include "library/include/libdly.h"
 
 
 extern Buzzer buzzer1;
@@ -67,6 +68,7 @@ enum TosApiPhase {
 
 static TosApiPhase g_phase = TOS_PHASE_IDLE;
 static uint32_t g_next_heartbeat_ms = 0;
+static bool g_paused = false;
 static bool g_initialized = false;
 static bool g_reboot_after_ack = false;
 static char g_device_id[13];
@@ -1117,6 +1119,7 @@ void TosApi_Tick(void) {
   SysWatchdog_Tick();
   HidManager_Tick();
   if (!g_initialized) return;
+  if (g_paused) return;
 
   Net_AsyncTick();
   NetAsyncState_t ns = Net_AsyncState();
@@ -1172,7 +1175,7 @@ void TosApi_Tick(void) {
 
       if (reboot_after_ack) {
         LOG_I("TAPI", "Reboot command acknowledged, resetting");
-        HAL_Delay(30);
+        JPDelay(30);
         NVIC_SystemReset();
       }
     } else {
@@ -1241,7 +1244,29 @@ void TosApi_Tick(void) {
 }
 
 bool TosApi_IsBusy(void) {
+  if (g_paused) return false;
   return g_phase != TOS_PHASE_IDLE || Net_AsyncState() == NET_ASYNC_BUSY;
+}
+
+void TosApi_SetPaused(bool paused) {
+  if (g_paused == paused) return;
+  g_paused = paused;
+  if (paused) {
+    Net_AsyncReset();
+    g_phase = TOS_PHASE_IDLE;
+    LOG_I("TAPI", "Cloud client paused");
+  } else {
+    schedule_heartbeat(1000U);
+    LOG_I("TAPI", "Cloud client resumed");
+  }
+}
+
+bool TosApi_IsPaused(void) { return g_paused; }
+
+void TosApi_MarkAutoTimeSynced(void) {
+  g_auto_time_sync_pending = false;
+  g_auto_time_sync_attempts = 0;
+  g_auto_time_sync_due_ms = 0;
 }
 
 bool TosApi_CheckUpgrade(TosUpgradeInfo *info) {

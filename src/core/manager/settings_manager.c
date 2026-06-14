@@ -38,6 +38,7 @@ static void sanitize(void) {
   if (g_settings.saved_count > SM_SAVED_MAX) {
     g_settings.saved_count = SM_SAVED_MAX;
   }
+  g_settings.debug_dashboard = g_settings.debug_dashboard ? 1U : 0U;
   for (uint8_t i = 0; i < SM_SAVED_MAX; ++i) {
     g_settings.saved[i].ssid[sizeof(g_settings.saved[i].ssid) - 1] = '\0';
     g_settings.saved[i].pwd[sizeof(g_settings.saved[i].pwd) - 1] = '\0';
@@ -64,6 +65,7 @@ static void defaults(void) {
   copy_str(g_settings.hs_pwd, "12345678", sizeof(g_settings.hs_pwd));
   g_settings.wlan_on        = false;
   g_settings.wlan_auto_conn = false;
+  g_settings.debug_dashboard = false;
   g_settings.saved_count    = 0;
   g_settings.time_auto_sync     = true;
   g_settings.time_style_24h     = true;
@@ -130,6 +132,10 @@ bool SM_Wlan_On(void)               { return g_settings.wlan_on; }
 void SM_Wlan_SetOn(bool v)          { g_settings.wlan_on = v; SM_Save(); }
 bool SM_Wlan_AutoConn(void)         { return g_settings.wlan_auto_conn; }
 void SM_Wlan_SetAutoConn(bool v)    { g_settings.wlan_auto_conn = v; SM_Save(); }
+
+/* --- Debug --- */
+bool SM_Debug_Dashboard(void)       { return g_settings.debug_dashboard ? true : false; }
+void SM_Debug_SetDashboard(bool v)  { g_settings.debug_dashboard = v ? 1U : 0U; SM_Save(); }
 
 /* --- Saved networks --- */
 uint8_t SM_Saved_Count(void) { return g_settings.saved_count; }

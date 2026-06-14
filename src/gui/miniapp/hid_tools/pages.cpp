@@ -16,6 +16,7 @@
  */
 
 #include "include/pages.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -70,7 +71,7 @@ static void show_message(const char *title, const char *line1,
                          const char *line2 = nullptr,
                          const char *line3 = nullptr, uint32_t hold_ms = 1000) {
   draw_message(title, line1, line2, line3);
-  HAL_Delay(hold_ms);
+  JPDelay(hold_ms);
 }
 
 static int page_menu(const char *title, const char **items, int count,
@@ -88,11 +89,11 @@ static int page_menu(const char *title, const char **items, int count,
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % count;
-      HAL_Delay(150);
+      JPDelay(150);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + count) % count;
-      HAL_Delay(150);
+      JPDelay(150);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -121,7 +122,7 @@ static int page_menu(const char *title, const char **items, int count,
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }
 
@@ -231,11 +232,11 @@ static void mouse_wiggle(void) {
   THID::Status st = THID::OK;
   for (int i = 0; i < 8; i++) {
     st = boardHID.moveMouse(12, 0);
-    HAL_Delay(18);
+    JPDelay(18);
   }
   for (int i = 0; i < 8; i++) {
     st = boardHID.moveMouse(-12, 0);
-    HAL_Delay(18);
+    JPDelay(18);
   }
   show_message("HID", "Mouse test done", boardHID.statusText(st), nullptr,
                800);
@@ -375,6 +376,6 @@ void hid_tools_gyro_mouse_page(void) {
         draw_gyro_mouse_status(smooth_x, smooth_z, last_dx, last_dy, buttons);
       }
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

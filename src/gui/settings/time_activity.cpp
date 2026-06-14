@@ -16,6 +16,7 @@
  */
 
 #include "include/time_activity.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -80,7 +81,7 @@ static bool do_sync(void) {
     return false;
   }
 
-  /* Show "Syncing..." â€” alert-style (frame + left-aligned msg) */
+  /* Show "Syncing..." â€?alert-style (frame + left-aligned msg) */
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   LCD_FLUSH({
     PD_Init(); PD_FillScreen(TOS_BG);
@@ -98,7 +99,7 @@ static bool do_sync(void) {
 
   if (!ok && elapsed < 15000) {
     /* Retry once after short delay */
-    HAL_Delay(1000);
+    JPDelay(1000);
     ok = SysTime_Sync();
   }
 
@@ -141,13 +142,13 @@ void time_activity_run(void) {
           keyManager.collision_D0.getState() == KEY_PRESSED) {
         if (edit_sel == 1)  { auto_sync = !auto_sync; SM_Time_SetAutoSync(auto_sync); }
         if (edit_sel == 5)  { style_24h = !style_24h; SM_Time_SetStyle24h(style_24h); }
-        HAL_Delay(150);
+        JPDelay(150);
       }
     } else {
       if (keyManager.collision_A8.getState() == KEY_PRESSED)
-      { sel = (sel + 1) % 6; HAL_Delay(100); }
+      { sel = (sel + 1) % 6; JPDelay(100); }
       if (keyManager.collision_D0.getState() == KEY_PRESSED)
-      { sel = (sel - 1 + 6) % 6; HAL_Delay(100); }
+      { sel = (sel - 1 + 6) % 6; JPDelay(100); }
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -219,6 +220,6 @@ void time_activity_run(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(10);
+    JPDelay(10);
   }
 }

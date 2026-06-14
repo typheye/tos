@@ -16,12 +16,15 @@
  */
 
 #include "include/about_activity.hpp"
-
+#include "library/include/libdly.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
+extern "C" void SysUI_DebugOverlaySetEnabled(uint8_t enabled);
 
 #define AM_N 12
+#define BUILD_DEBUG_CLICKS 5U
+#define BUILD_DEBUG_WINDOW_MS 1400U
 
 static void draw_frame_title(const char *title) {
   PD_Init();
@@ -43,53 +46,155 @@ static void draw_frame_title(const char *title) {
   PD_DrawString(22, 5, title);
 }
 
-static void draw_card(int idx, int sel, int cy, const char *text) {
+static void draw_card_ex(int idx, int sel, int cy, const char *text,
+                         bool editing) {
   bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
+  uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+  if (editing && s && ((HAL_GetTick() / 300U) & 1U)) {
+    card_c = TOS_CARD_BG;
+  }
+  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
   PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
   PD_DrawString(26, cy + 2, text);
 }
 
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value) {
+static void draw_card(int idx, int sel, int cy, const char *text) {
+  draw_card_ex(idx, sel, cy, text, false);
+}
+
+static void draw_card_r_ex(int idx, int sel, int cy, const char *label,
+                           const char *value, bool editing) {
   bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
+  uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+  if (editing && s && ((HAL_GetTick() / 300U) & 1U)) {
+    card_c = TOS_CARD_BG;
+  }
+  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
   PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
   PD_DrawString(26, cy + 2, label);
   uint16_t vw = PD_GetStringWidth(value);
   PD_DrawString(220 - vw, cy + 2, value);
 }
 
-static void sysinfo_page(uint32_t boot_tick) {
+static void draw_card_r(int idx, int sel, int cy, const char *label,
+                        const char *value) {
+  draw_card_r_ex(idx, sel, cy, label, value, false);
+}
+
+static void format_uptime(char *buf, size_t len) {
+  uint32_t sec = HAL_GetTick() / 1000U;
+  snprintf(buf, len, "%lu:%02lu:%02lu", (unsigned long)(sec / 3600U),
+           (unsigned long)((sec / 60U) % 60U), (unsigned long)(sec % 60U));
+}
+
+static void debug_page(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  uint32_t lu = 0;
-  while (1) {
+  uint32_t wait_start = HAL_GetTick();
+  while ((uint32_t)(HAL_GetTick() - wait_start) < 600U) {
     keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
-      return;
-    if (HAL_GetTick() - lu > 200) {
+    if (keyManager.btn_enter.getState() != KEY_PRESSED) {
+      break;
+    }
+    JPDelay(5);
+  }
+
+  const char *items[2] = {"00 Return", "01 Dashboard"};
+  int sel = 0;
+  bool editing = false;
+  bool pending_dashboard = SM_Debug_Dashboard();
+  uint8_t le = 0;
+  uint32_t lu = 0;
+
+  while (1) {
+    keyManager.collision_A8.tick();
+    keyManager.collision_D0.tick();
+    keyManager.btn_enter.tick();
+
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+      if (editing && sel == 1) {
+        pending_dashboard = !pending_dashboard;
+      } else {
+        sel = (sel + 1) % 2;
+      }
+      JPDelay(120);
+    }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+      if (editing && sel == 1) {
+        pending_dashboard = !pending_dashboard;
+      } else {
+        sel = (sel - 1 + 2) % 2;
+      }
+      JPDelay(120);
+    }
+
+    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    if (ce && !le) {
+      if (sel == 0) {
+        boardLCD.fillScreen(LCD_COLOR_BLACK);
+        return;
+      }
+      if (!editing) {
+        pending_dashboard = SM_Debug_Dashboard();
+        editing = true;
+      } else {
+        SM_Debug_SetDashboard(pending_dashboard);
+        SysUI_DebugOverlaySetEnabled(pending_dashboard ? 1U : 0U);
+        editing = false;
+      }
+      lu = 0;
+    }
+    le = ce;
+
+    if (HAL_GetTick() - lu > 120U) {
       lu = HAL_GetTick();
-      uint32_t el = (HAL_GetTick() - boot_tick) / 1000;
       LCD_FLUSH({
-        draw_frame_title("SysInfo");
+        draw_frame_title("DEBUG");
         PD_SetFont(FONT_ASCII_16);
-        PD_SetColor(TOS_TEXT);
-        char buf[48];
-        snprintf(buf, sizeof(buf), "Elapsed Time:");
-        PD_DrawString(16, 33, buf);
-        snprintf(buf, sizeof(buf), "%lu:%02lu:%02lu", (unsigned long)(el / 3600),
-                 (unsigned long)((el / 60) % 60), (unsigned long)(el % 60));
-        PD_DrawString(16, 58, buf);
-        PD_DrawFooterCenter("ENTER", NULL, NULL);
+        for (int i = 0; i < 2; i++) {
+          int cy = 33 + i * 25;
+          if (i == 1) {
+            draw_card_r_ex(i, sel, cy, items[i],
+                           pending_dashboard ? "ON" : "OFF",
+                           editing && sel == i);
+          } else {
+            draw_card_ex(i, sel, cy, items[i], false);
+          }
+        }
+        PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
+}
+
+static bool handle_build_debug_click(uint32_t now, bool on_build) {
+  static uint8_t count = 0;
+  static uint32_t last_ms = 0;
+
+  if (!on_build) {
+    count = 0;
+    last_ms = 0;
+    return false;
+  }
+
+  if (last_ms == 0U || (uint32_t)(now - last_ms) > BUILD_DEBUG_WINDOW_MS) {
+    count = 0;
+  }
+  last_ms = now;
+  count++;
+  if (count >= BUILD_DEBUG_CLICKS) {
+    count = 0;
+    last_ms = 0;
+    return true;
+  }
+  return false;
 }
 
 void about_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  uint32_t boot_tick = HAL_GetTick();
+
+  char running_value[16];
+  format_uptime(running_value, sizeof(running_value));
 
   struct {
     const char *l, *v;
@@ -102,7 +207,7 @@ void about_activity_run(void) {
       {"02 TOS Version", CFG_TOS_VERSION},
       {"   Build", CFG_BUILD},
       {"   Patch", CFG_PATCH},
-      {"03 System Information", ""},
+      {"03 Running", running_value},
       {"   Update System", ""},
       {"   Reboot Device", ""},
       {"04 Restore to Default", ""},
@@ -119,11 +224,17 @@ void about_activity_run(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % AM_N;
-      HAL_Delay(100);
+      if (sel != 6) {
+        handle_build_debug_click(HAL_GetTick(), false);
+      }
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + AM_N) % AM_N;
-      HAL_Delay(100);
+      if (sel != 6) {
+        handle_build_debug_click(HAL_GetTick(), false);
+      }
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -131,9 +242,12 @@ void about_activity_run(void) {
       switch (sel) {
       case 0:
         return;
-      case 8: /* System Information */
-        sysinfo_page(boot_tick);
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
+      case 6: /* Build: hidden DEBUG page */
+        if (handle_build_debug_click(HAL_GetTick(), true)) {
+          debug_page();
+          boardLCD.fillScreen(LCD_COLOR_BLACK);
+          lu = 0;
+        }
         break;
       case 9: /* Update System */ {
         /* Loading screen */
@@ -148,7 +262,8 @@ void about_activity_run(void) {
         if (TosApi_CheckUpgrade(&info)) {
           if (info.has_update) {
             char msg[200];
-            const char *ver = info.latest_version[0] ? info.latest_version : "-";
+            const char *ver =
+                info.latest_version[0] ? info.latest_version : "-";
             const char *build = info.latest_build[0] ? info.latest_build : "-";
             const char *patch = info.latest_patch[0] ? info.latest_patch : "-";
             snprintf(msg, sizeof(msg),
@@ -181,7 +296,7 @@ void about_activity_run(void) {
             PD_SetColor(TOS_TEXT);
             PD_DrawString(26, 33, "Resetting...");
           });
-          HAL_Delay(2000);
+          JPDelay(2000);
           /* Erase flash sector and reboot */
           Flash_Erase_Sector();
           NVIC_SystemReset();
@@ -189,11 +304,15 @@ void about_activity_run(void) {
         boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       }
+      if (sel != 6) {
+        handle_build_debug_click(HAL_GetTick(), false);
+      }
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 200) {
       lu = HAL_GetTick();
+      format_uptime(running_value, sizeof(running_value));
       LCD_FLUSH({
         draw_frame_title("ABOUT");
         PD_SetFont(FONT_ASCII_16);
@@ -218,6 +337,6 @@ void about_activity_run(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

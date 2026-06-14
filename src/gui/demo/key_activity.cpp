@@ -16,6 +16,7 @@
  */
 
 #include "include/key_activity.hpp"
+#include "library/include/libdly.h"
 
 
 extern KeyManager keyManager;
@@ -82,11 +83,11 @@ void key_test_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % KEY_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + KEY_N) % KEY_N;
-      HAL_Delay(100);
+      JPDelay(100);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -112,7 +113,7 @@ void key_test_activity(void) {
       bool s12 = keyManager.sw12_B12.isOn();
       bool s13 = keyManager.sw13_B14.isOn();
 
-      /* Build value strings & colors â€“ ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
+      /* Build value strings & colors â€?ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
       char key_vals[KEY_N][8];
       key_vals[0][0] = '\0';
 
@@ -122,7 +123,7 @@ void key_test_activity(void) {
       snprintf(key_vals[3], 8, "%s", s3 ? "ON" : "OFF");
       snprintf(key_vals[4], 8, "%s", s4 ? "ON" : "OFF");
 
-      // Group 2: SW5-SW9 (inverted logic â€“ true=OFF, false=ON)
+      // Group 2: SW5-SW9 (inverted logic â€?true=OFF, false=ON)
       snprintf(key_vals[5], 8, "%s", s5 ? "ON" : "OFF");
       snprintf(key_vals[6], 8, "%s", s6 ? "ON" : "OFF");
       snprintf(key_vals[7], 8, "%s", s7 ? "ON" : "OFF");
@@ -160,6 +161,6 @@ void key_test_activity(void) {
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
-    HAL_Delay(1);
+    JPDelay(1);
   }
 }

@@ -16,6 +16,7 @@
  */
 
 #include "include/esp8266.hpp"
+#include "library/include/libdly.h"
 
 
 #ifndef CCMRAM
@@ -138,7 +139,7 @@ void ESP8266::waitWithService(uint32_t delay_ms) {
   while ((uint32_t)(HAL_GetTick() - start) < delay_ms) {
     serviceUartRx();
     processPendingData();
-    HAL_Delay(20U);
+    JPDelay(20U);
     SysWatchdog_Tick();
   }
 }
@@ -205,7 +206,7 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
         return false;
       }
     }
-    HAL_Delay(10);
+    JPDelay(10);
     SysWatchdog_Tick();
   }
   /* Timeout: communication failure */
@@ -308,7 +309,7 @@ void ESP8266::init(void) {
         uint32_t wait_start = HAL_GetTick();
         while ((uint32_t)(HAL_GetTick() - wait_start) < 3000U) {
           serviceUartRx();
-          HAL_Delay(20U);
+          JPDelay(20U);
           SysWatchdog_Tick();
         }
         serviceUartRx();
@@ -376,14 +377,14 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
           esp_led_success();
           return true;
         }
-        /* Buffer nearly full â€” search for partial match */
+        /* Buffer nearly full â€?search for partial match */
         if (!near_full_logged && _rx_index >= sizeof(_rx_buffer) - 64) {
           near_full_logged = true;
           LOG_W("ESP", "Rx buffer nearly full (%u/%u), searching for '%s'",
                 _rx_index, (unsigned)sizeof(_rx_buffer), expected_response);
         }
       } else {
-        /* No expected response specified â€” any data counts as success */
+        /* No expected response specified â€?any data counts as success */
         esp_led_success();
         return true;
       }
@@ -406,7 +407,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
               _rx_index, (unsigned)sizeof(_rx_buffer));
       }
     }
-    HAL_Delay(10);
+    JPDelay(10);
     SysWatchdog_Tick();
   }
 
@@ -429,7 +430,7 @@ bool ESP8266::connectWiFi(const char *ssid, const char *password) {
   bool result = sendCommand(cmd, "OK", 15000);
 
   if (result) {
-    HAL_Delay(2000);
+    JPDelay(2000);
     SysWatchdog_FeedNow();
     _state = 3;
   } else {
@@ -522,7 +523,7 @@ bool ESP8266::scanNetworks(void) {
       }
     }
 
-    HAL_Delay(10);
+    JPDelay(10);
     SysWatchdog_Tick();
   }
 
@@ -536,7 +537,7 @@ bool ESP8266::scanNetworks(void) {
   uint32_t settle = HAL_GetTick();
   while (HAL_GetTick() - settle < 300U) {
     processPendingData();
-    HAL_Delay(10);
+    JPDelay(10);
     SysWatchdog_Tick();
   }
   clearRxBuffer();
@@ -644,7 +645,7 @@ bool ESP8266::getRSSI(int *rssi) {
         break;
       }
       if (strstr(rx, "ERROR") || strstr(rx, "FAIL")) break;
-      HAL_Delay(10);
+      JPDelay(10);
       SysWatchdog_Tick();
     }
   }

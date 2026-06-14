@@ -16,6 +16,7 @@
  */
 
 #include "include/systime.h"
+#include "library/include/libdly.h"
 
 
 extern TRTC boardTRTC;
@@ -323,7 +324,7 @@ static SysDateTime align_and_apply_sample(const TimeSample &sample) {
         (unsigned long)elapsed, (unsigned long)TIME_SYNC_LATENCY_COMP_MS,
         (unsigned long)wait_ms, sample.precise_tick ? 1 : 0,
         (unsigned long)TIME_SYNC_FIXED_OFFSET_S);
-  while (tick_delta(apply_tick, HAL_GetTick()) > 3) HAL_Delay(1);
+  while (tick_delta(apply_tick, HAL_GetTick()) > 3) JPDelay(1);
   while (tick_delta(apply_tick, HAL_GetTick()) > 0) {}
   apply_datetime_to_rtc(target);
   return target;
@@ -383,7 +384,7 @@ static bool query_sntp(TimeSample *sample) {
       log_response_summary("SNTP raw", buf);
       LOG_D("SYTM", "Waiting for SNTP second edge (%d)", attempts);
     }
-    HAL_Delay(have_prev ? 80U : 250U);
+    JPDelay(have_prev ? 80U : 250U);
   }
 
   if (have_prev) { *sample = prev; LOG_W("SYTM", "SNTP edge not captured, using last sample"); return true; }
@@ -395,8 +396,9 @@ static bool query_sntp(TimeSample *sample) {
 
 static bool query_http_time(TimeSample *sample) {
   struct { const char *host; const char *path; } static const endpoints[] = {
-    {"quan.suning.com", "/getSysTime.do"},
-    {"www.baidu.com",   "/"},
+    {"www.baidu.com",  "/"},
+    {"www.qq.com",     "/"},
+    {"www.taobao.com", "/"},
   };
 
   char resp[1024];
@@ -417,7 +419,7 @@ static bool query_http_time(TimeSample *sample) {
       sample->dt           = dt;
       sample->tick_ms      = HAL_GetTick();
       sample->precise_tick = false;
-      LOG_I("SYTM", "HTTP response parsed — time from Date header");
+      LOG_I("SYTM", "HTTP response parsed �?time from Date header");
       return true;
     }
 
@@ -442,7 +444,7 @@ bool SysTime_Sync(void) {
 
   /* ── Pre-checks ─────────────────────────────────────── */
   if (ESP8266_IsHardDisabled()) {
-    LOG_W("SYTM", "ESP8266 is hard-disabled — cannot sync");
+    LOG_W("SYTM", "ESP8266 is hard-disabled �?cannot sync");
     Net_LedFailure();
     return false;
   }
@@ -470,7 +472,7 @@ bool SysTime_Sync(void) {
   }
 
   if (!ok) {
-    LOG_E("SYTM", "Time sync failed — SNTP and HTTP both unavailable");
+    LOG_E("SYTM", "Time sync failed �?SNTP and HTTP both unavailable");
     Net_LedFailure();
     return false;
   }
