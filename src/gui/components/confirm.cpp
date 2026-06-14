@@ -22,6 +22,78 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
+static void draw_wrapped_message(int16_t x, int16_t y, int16_t max_w,
+                                 int16_t max_y, const char *msg) {
+  if (!msg) {
+    return;
+  }
+
+  uint16_t step = PD_GetCharWidth() + 1U;
+  uint16_t line_h = PD_GetCharHeight() + 3U;
+  uint16_t max_chars = step > 0U ? (uint16_t)(max_w / step) : 1U;
+  if (max_chars < 1U) {
+    max_chars = 1U;
+  }
+  if (max_chars > 63U) {
+    max_chars = 63U;
+  }
+
+  const char *p = msg;
+  while (*p && y <= max_y) {
+    if (*p == '\r') {
+      p++;
+      continue;
+    }
+    if (*p == '\n') {
+      y += line_h;
+      p++;
+      continue;
+    }
+
+    while (*p == ' ' || *p == '\t') {
+      p++;
+    }
+
+    const char *eol = p;
+    while (*eol && *eol != '\n' && *eol != '\r') {
+      eol++;
+    }
+
+    while (p < eol && y <= max_y) {
+      uint16_t remain = (uint16_t)(eol - p);
+      uint16_t len = remain > max_chars ? max_chars : remain;
+
+      if (remain > max_chars) {
+        uint16_t brk = len;
+        while (brk > 0U && p[brk] != ' ' && p[brk] != '\t') {
+          brk--;
+        }
+        if (brk > 0U) {
+          len = brk;
+        }
+      }
+
+      while (len > 0U && (p[len - 1U] == ' ' || p[len - 1U] == '\t')) {
+        len--;
+      }
+      if (len == 0U) {
+        len = 1U;
+      }
+
+      char line[64];
+      memcpy(line, p, len);
+      line[len] = '\0';
+      PD_DrawString(x, y, line);
+      y += line_h;
+      p += len;
+
+      while (*p == ' ' || *p == '\t') {
+        p++;
+      }
+    }
+  }
+}
+
 bool confirm_show(const char *title, const char *msg) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
   int sel = 0; /* 0=Yes, 1=No */
@@ -73,7 +145,7 @@ bool confirm_show(const char *title, const char *msg) {
 
         /* Message */
         PD_SetColor(TOS_TEXT);
-        PD_DrawString(16, 33, msg);
+        draw_wrapped_message(16, 33, 208, 145, msg);
 
         /* Yes / No at positions 6 and 7 (closer to bottom) */
         int y0 = 33 + 5 * 25; /* position 5: y=158 */
