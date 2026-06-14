@@ -249,7 +249,9 @@ void about_activity_run(void) {
         return;
       case 6: /* Build: hidden DEBUG page */
         if (handle_build_debug_click(now, true)) {
-          debug_page();
+          if (confirm_show("DEBUG", "Whether to enter debugging settings?")) {
+            debug_page();
+          }
           boardLCD.fillScreen(LCD_COLOR_BLACK);
           dirty = true;
           last_draw = 0;
