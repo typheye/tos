@@ -207,17 +207,20 @@ void about_activity_run(void) {
       {"02 TOS Version", CFG_TOS_VERSION},
       {"   Build", CFG_BUILD},
       {"   Patch", CFG_PATCH},
-      {"03 Running", running_value},
-      {"   Update System", ""},
+      {"   Running", running_value},
+      {"03 Update System", ""},
       {"   Reboot Device", ""},
-      {"04 Restore to Default", ""},
+      {"   Restore to Default", ""},
   };
 
   int sel = 0;
   uint8_t le = 0;
-  uint32_t lu = 0;
+  uint32_t last_draw = 0;
+  uint32_t last_running_sec = 0xFFFFFFFFU;
+  bool dirty = true;
 
   while (1) {
+    uint32_t now = HAL_GetTick();
     keyManager.collision_A8.tick();
     keyManager.collision_D0.tick();
     keyManager.btn_enter.tick();
@@ -225,16 +228,18 @@ void about_activity_run(void) {
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % AM_N;
       if (sel != 6) {
-        handle_build_debug_click(HAL_GetTick(), false);
+        handle_build_debug_click(now, false);
       }
-      JPDelay(100);
+      dirty = true;
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + AM_N) % AM_N;
       if (sel != 6) {
-        handle_build_debug_click(HAL_GetTick(), false);
+        handle_build_debug_click(now, false);
       }
-      JPDelay(100);
+      dirty = true;
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -243,10 +248,11 @@ void about_activity_run(void) {
       case 0:
         return;
       case 6: /* Build: hidden DEBUG page */
-        if (handle_build_debug_click(HAL_GetTick(), true)) {
+        if (handle_build_debug_click(now, true)) {
           debug_page();
           boardLCD.fillScreen(LCD_COLOR_BLACK);
-          lu = 0;
+          dirty = true;
+          last_draw = 0;
         }
         break;
       case 9: /* Update System */ {
@@ -305,14 +311,22 @@ void about_activity_run(void) {
         break;
       }
       if (sel != 6) {
-        handle_build_debug_click(HAL_GetTick(), false);
+        handle_build_debug_click(now, false);
       }
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 200) {
-      lu = HAL_GetTick();
+    uint32_t running_sec = HAL_GetTick() / 1000U;
+    if (running_sec != last_running_sec) {
+      last_running_sec = running_sec;
       format_uptime(running_value, sizeof(running_value));
+      dirty = true;
+    }
+
+    now = HAL_GetTick();
+    if (dirty || (uint32_t)(now - last_draw) >= 1000U) {
+      last_draw = now;
+      dirty = false;
       LCD_FLUSH({
         draw_frame_title("ABOUT");
         PD_SetFont(FONT_ASCII_16);
