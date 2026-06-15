@@ -219,19 +219,60 @@ bool Flash_Check_Backup(void) {
 
 
 
+static bool rolling_record_valid(uint32_t addr, Flash_Record_Header_t **out_hdr) {
+  if (addr > FLASH_DATA_ADDR + FLASH_DATA_SIZE - FLASH_HDR_SIZE) {
+    return false;
+  }
+
+  Flash_Record_Header_t *hdr = (Flash_Record_Header_t *)addr;
+  if (hdr->magic != FLASH_RECORD_MAGIC) {
+    return false;
+  }
+  if (hdr->datasize == 0U || hdr->datasize > FLASH_RECORD_MAX) {
+    return false;
+  }
+
+  uint32_t total = FLASH_HDR_SIZE + hdr->datasize;
+  if (addr + total > FLASH_DATA_ADDR + FLASH_DATA_SIZE) {
+    return false;
+  }
+
+  const uint32_t *src = (const uint32_t *)(addr + FLASH_HDR_SIZE);
+  if (Flash_CRC32(src, hdr->datasize) != hdr->crc) {
+    return false;
+  }
+
+  if (out_hdr) {
+    *out_hdr = hdr;
+  }
+  return true;
+}
+
+static bool flash_range_erased(uint32_t addr, uint32_t len) {
+  const uint8_t *p = (const uint8_t *)addr;
+  for (uint32_t i = 0; i < len; ++i) {
+    if (p[i] != 0xFFU) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static uint32_t rolling_find_last(void) {
   uint32_t last = FLASH_DATA_ADDR;
   uint32_t addr = FLASH_DATA_ADDR;
+  bool found = false;
 
   while (addr < FLASH_DATA_ADDR + FLASH_DATA_SIZE - FLASH_HDR_SIZE) {
-    Flash_Record_Header_t *hdr = (Flash_Record_Header_t *)addr;
-    if (hdr->magic != FLASH_RECORD_MAGIC) break;
+    Flash_Record_Header_t *hdr = NULL;
+    if (!rolling_record_valid(addr, &hdr)) break;
     last = addr;
+    found = true;
     uint32_t step = ALIGN4(FLASH_HDR_SIZE + hdr->datasize);
-    if (step < FLASH_HDR_SIZE + 4) break; /* safety */
+    if (step < FLASH_HDR_SIZE + 4U) break; /* safety */
     addr += step;
   }
-  return last;
+  return found ? last : FLASH_DATA_ADDR;
 }
 
 Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
@@ -242,20 +283,21 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
   uint32_t slot_size = ALIGN4(total);
   if (slot_size > FLASH_RECORD_MAX + sizeof(Flash_Record_Header_t)) return FLASH_ERR_SIZE;
 
-  uint32_t buf[FLASH_RECORD_MAX / 4 + 2];
   Flash_Record_Header_t hdr;
   hdr.magic    = FLASH_RECORD_MAGIC;
   hdr.crc      = Flash_CRC32(pData, dataSize);
   hdr.datasize = dataSize;
-  memcpy(&buf[0], &hdr, sizeof(hdr));
-  memcpy((uint8_t *)&buf[0] + sizeof(hdr), pData, dataSize);
-  uint32_t words = (total + 3) / 4;
 
-  
   uint32_t last = rolling_find_last();
-  uint32_t next = last + slot_size;
-  if (last == FLASH_DATA_ADDR && ((Flash_Record_Header_t *)FLASH_DATA_ADDR)->magic != FLASH_RECORD_MAGIC)
-    next = FLASH_DATA_ADDR; 
+  uint32_t next = FLASH_DATA_ADDR;
+  Flash_Record_Header_t *last_hdr = NULL;
+  if (rolling_record_valid(last, &last_hdr)) {
+    uint32_t last_slot = ALIGN4(FLASH_HDR_SIZE + last_hdr->datasize);
+    if (last_slot < FLASH_HDR_SIZE + 4U) {
+      return FLASH_ERR_CRC;
+    }
+    next = last + last_slot;
+  }
 
   
   if (next + slot_size > FLASH_DATA_ADDR + FLASH_DATA_SIZE) {
@@ -265,7 +307,18 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
     next = FLASH_DATA_ADDR;
   }
 
-  st = program_words(next, buf, words);
+  if (!flash_range_erased(next, slot_size)) {
+    LOG_W("FLASH", "Rolling slot dirty, erasing sector...");
+    st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+    if (st != FLASH_OK) return st;
+    next = FLASH_DATA_ADDR;
+  }
+
+  st = program_words(next, (const uint32_t *)&hdr,
+                     sizeof(hdr) / sizeof(uint32_t));
+  if (st == FLASH_OK) {
+    st = program_words(next + sizeof(hdr), pData, dataSize / sizeof(uint32_t));
+  }
   LOG_I("FLASH", "Rolling write @0x%08lX %lu bytes: %s",
         next, (unsigned long)dataSize, st == FLASH_OK ? "OK" : "FAIL");
   return st;
@@ -283,6 +336,14 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
   }
 
   
+  Flash_Record_Header_t *valid_hdr = NULL;
+  if (!rolling_record_valid(last, &valid_hdr)) {
+    LOG_D("FLASH", "No valid rolling data found");
+    if (outSize) *outSize = 0;
+    return FLASH_ERR_CRC;
+  }
+  hdr = valid_hdr;
+
   uint32_t storedSize = hdr->datasize;
   if (storedSize > FLASH_RECORD_MAX) {
     LOG_E("FLASH", "Corrupt record: datasize=%lu exceeds max", (unsigned long)storedSize);
@@ -290,14 +351,11 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
   }
   uint32_t copySize = maxSize < storedSize ? maxSize : storedSize;
   const uint8_t *src = (const uint8_t *)(last + sizeof(Flash_Record_Header_t));
-  memcpy(pData, src, copySize);
-
-  uint32_t crc = Flash_CRC32(pData, storedSize);
-  if (crc != hdr->crc) {
-    LOG_E("FLASH", "Rolling CRC mismatch: stored=0x%08lX calc=0x%08lX",
-          hdr->crc, crc);
-    return FLASH_ERR_CRC;
+  if (copySize < storedSize) {
+    LOG_W("FLASH", "Rolling read truncated: stored=%lu max=%lu",
+          (unsigned long)storedSize, (unsigned long)maxSize);
   }
+  memcpy(pData, src, copySize);
   if (outSize) *outSize = copySize;
   LOG_I("FLASH", "Rolling read @0x%08lX %lu bytes OK", last, (unsigned long)copySize);
   return FLASH_OK;

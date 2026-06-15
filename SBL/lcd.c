@@ -27,8 +27,8 @@ static SBL_CODE void sbl_lcd_data(uint8_t data) {
 }
 
 static SBL_CODE void sbl_lcd_data16(uint16_t data) {
-  uint8_t bytes[2] = {(uint8_t)(data >> 8), (uint8_t)data};
-  sbl_lcd_data_bytes(bytes, sizeof(bytes));
+  sbl_lcd_data((uint8_t)(data >> 8));
+  sbl_lcd_data((uint8_t)data);
 }
 
 static SBL_CODE void sbl_lcd_addr(uint16_t x0, uint16_t y0,
@@ -90,8 +90,17 @@ SBL_CODE void SBL_LcdInit(void) {
   sbl_lcd_cmd(0x36U);
   sbl_lcd_data(0x10U);
 
+  static const uint8_t seq_b2[] SBL_CONST = {0x0C, 0x0C, 0x00, 0x33, 0x33};
+  static const uint8_t seq_d0[] SBL_CONST = {0xA4, 0xA1};
+  static const uint8_t seq_e0[] SBL_CONST = {
+      0xD0, 0x04, 0x0D, 0x11, 0x13, 0x2B, 0x3F,
+      0x54, 0x4C, 0x18, 0x0D, 0x0B, 0x1F, 0x23};
+  static const uint8_t seq_e1[] SBL_CONST = {
+      0xD0, 0x04, 0x0C, 0x11, 0x13, 0x2C, 0x3F,
+      0x44, 0x51, 0x2F, 0x1F, 0x1F, 0x20, 0x23};
+
   sbl_lcd_cmd(0xB2U);
-  { uint8_t d[] = {0x0C, 0x0C, 0x00, 0x33, 0x33}; sbl_lcd_data_bytes(d, sizeof(d)); }
+  sbl_lcd_data_bytes(seq_b2, sizeof(seq_b2));
   sbl_lcd_cmd(0xB7U);
   sbl_lcd_data(0x35U);
   sbl_lcd_cmd(0xBBU);
@@ -107,19 +116,11 @@ SBL_CODE void SBL_LcdInit(void) {
   sbl_lcd_cmd(0xC6U);
   sbl_lcd_data(0x0FU);
   sbl_lcd_cmd(0xD0U);
-  { uint8_t d[] = {0xA4, 0xA1}; sbl_lcd_data_bytes(d, sizeof(d)); }
+  sbl_lcd_data_bytes(seq_d0, sizeof(seq_d0));
   sbl_lcd_cmd(0xE0U);
-  {
-    uint8_t d[] = {0xD0, 0x04, 0x0D, 0x11, 0x13, 0x2B, 0x3F,
-                   0x54, 0x4C, 0x18, 0x0D, 0x0B, 0x1F, 0x23};
-    sbl_lcd_data_bytes(d, sizeof(d));
-  }
+  sbl_lcd_data_bytes(seq_e0, sizeof(seq_e0));
   sbl_lcd_cmd(0xE1U);
-  {
-    uint8_t d[] = {0xD0, 0x04, 0x0C, 0x11, 0x13, 0x2C, 0x3F,
-                   0x44, 0x51, 0x2F, 0x1F, 0x1F, 0x20, 0x23};
-    sbl_lcd_data_bytes(d, sizeof(d));
-  }
+  sbl_lcd_data_bytes(seq_e1, sizeof(seq_e1));
 
   sbl_lcd_cmd(0x21U);
   sbl_lcd_cmd(0x29U);

@@ -138,6 +138,7 @@ void PD_DrawSignalIcon(int16_t x, int16_t y, int signal);
 
 
 void PD_ShowSplashFadeStart(uint32_t fade_in_ms);
+void PD_SplashTick(void);
 void PD_SplashFinish(uint32_t fade_out_ms);
 uint8_t PD_IsSplashActive(void);
 

@@ -39,6 +39,7 @@
 #endif
 #include <stdio.h>                      // 添加这个头文件 for printf
 #include "core/sys/include/syswatchdog.h"
+#include "sah_common.h"
 #include "init.h"
 
 /* USER CODE END Includes */
@@ -104,6 +105,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  SAH_Run();
   SBL_Run();
 
   /* USER CODE END SysInit */
@@ -123,6 +125,8 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
   SysWatchdog_FeedNow();
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
 

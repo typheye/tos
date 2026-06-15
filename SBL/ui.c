@@ -60,7 +60,7 @@ static SBL_CODE void sbl_draw_menu(uint8_t selected) {
 }
 
 SBL_CODE void SBL_UiDrawFastboot(void) {
-  SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
+  SBL_LcdRect(0U, 28U, SBL_LCD_W, 178U, SBL_BLACK);
   sbl_draw_center_title();
   SBL_LcdDrawText(SBL_LEFT_X, SBL_HELP_Y, sbl_txt_help, SBL_WHITE,
                   SBL_FONT_SMALL);
@@ -94,7 +94,6 @@ SBL_CODE void SBL_UiRunFastboot(void) {
       } else if (selected == 1U) {
         SBL_WaitButtonRelease(250U);
       } else if (selected == 2U) {
-        SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
         SBL_DelayMs(1000U);
         selected = 0U;
         SBL_UiDrawFastboot();

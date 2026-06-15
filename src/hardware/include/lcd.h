@@ -83,6 +83,7 @@ extern "C" {
 
 
 void LCD_Init(void);
+void LCD_SetSahSplashPreserve(uint8_t preserve);
 void LCD_FillScreen(uint32_t color);
 void LCD_DrawPixel(int16_t x, int16_t y, uint32_t color);
 void LCD_FillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t color);

@@ -103,7 +103,21 @@ SECTIONS
   } >FLASH :flash
 
   __sbl_reserved_end__ = ORIGIN(FLASH) + 32K;
-  __tos_app_start__ = __sbl_reserved_end__;
+
+  .sah __sbl_reserved_end__ :
+  {
+    . = ALIGN(4);
+    __sah_start__ = .;
+    KEEP(*(.sah.text))
+    KEEP(*(.sah.text*))
+    KEEP(*(.sah.rodata))
+    KEEP(*(.sah.rodata*))
+    . = ALIGN(4);
+    __sah_end__ = .;
+  } >FLASH :flash
+
+  __sah_reserved_end__ = ORIGIN(FLASH) + 160K;
+  __tos_app_start__ = __sah_reserved_end__;
 
   /* The program code and other data goes into FLASH */
   .text __tos_app_start__ :

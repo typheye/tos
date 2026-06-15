@@ -16,6 +16,7 @@
  */
 
 #include "include/buzzer.hpp"
+#include "core/manager/include/settings_manager.h"
 #include "library/include/libdly.h"
 
 
@@ -40,7 +41,7 @@ void Buzzer::init() {
   _initialized = true;
 
   
-  if (isEnabled()) {
+  if (SM_BootGfx() && isEnabled()) {
     beep(50);
     JPDelay(100);
     beep(50);

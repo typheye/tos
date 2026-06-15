@@ -19,6 +19,30 @@
 
 
 #define CCMRAM __attribute__((section(".ccmram")))
+#define SM_MAGIC_V4 0x544F5304u
+
+typedef struct __attribute__((packed, aligned(4))) {
+  uint32_t magic;
+  uint32_t crc;
+  bool     disp_auto;
+  uint8_t  disp_bright;
+  uint8_t  disp_dir;
+  char     wlan_ssid[24];
+  char     wlan_pwd[32];
+  char     hs_ssid[24];
+  char     hs_pwd[32];
+  bool     wlan_on;
+  bool     wlan_auto_conn;
+  uint8_t  debug_dashboard;
+  uint8_t  _pad1[2];
+  uint8_t  saved_count;
+  SM_SavedNet_t saved[SM_SAVED_MAX];
+  bool     time_auto_sync;
+  bool     time_style_24h;
+  bool     hotspot_auto_close;
+  char     hotspot_ip[16];
+} SettingsV4_t;
+
 static CCMRAM Settings_t g_settings;
 
 static void copy_str(char *dst, const char *src, size_t cap) {
@@ -39,6 +63,7 @@ static void sanitize(void) {
     g_settings.saved_count = SM_SAVED_MAX;
   }
   g_settings.debug_dashboard = g_settings.debug_dashboard ? 1U : 0U;
+  g_settings.boot_gfx = g_settings.boot_gfx ? true : false;
   for (uint8_t i = 0; i < SM_SAVED_MAX; ++i) {
     g_settings.saved[i].ssid[sizeof(g_settings.saved[i].ssid) - 1] = '\0';
     g_settings.saved[i].pwd[sizeof(g_settings.saved[i].pwd) - 1] = '\0';
@@ -70,16 +95,48 @@ static void defaults(void) {
   g_settings.time_auto_sync     = true;
   g_settings.time_style_24h     = true;
   g_settings.hotspot_auto_close = true;
+  g_settings.boot_gfx           = true;
   copy_str(g_settings.hotspot_ip, "192.168.4.1", sizeof(g_settings.hotspot_ip));
   LOG_D("SMGR", "Defaults loaded");
+}
+
+static void migrate_v4(const SettingsV4_t *old) {
+  memset(&g_settings, 0, sizeof(g_settings));
+  g_settings.magic = SM_MAGIC;
+  g_settings.disp_auto = old->disp_auto;
+  g_settings.disp_bright = old->disp_bright;
+  g_settings.disp_dir = old->disp_dir;
+  copy_str(g_settings.wlan_ssid, old->wlan_ssid, sizeof(g_settings.wlan_ssid));
+  copy_str(g_settings.wlan_pwd, old->wlan_pwd, sizeof(g_settings.wlan_pwd));
+  copy_str(g_settings.hs_ssid, old->hs_ssid, sizeof(g_settings.hs_ssid));
+  copy_str(g_settings.hs_pwd, old->hs_pwd, sizeof(g_settings.hs_pwd));
+  g_settings.wlan_on = old->wlan_on;
+  g_settings.wlan_auto_conn = old->wlan_auto_conn;
+  g_settings.debug_dashboard = old->debug_dashboard;
+  g_settings.saved_count = old->saved_count;
+  memcpy(g_settings.saved, old->saved, sizeof(g_settings.saved));
+  g_settings.time_auto_sync = old->time_auto_sync;
+  g_settings.time_style_24h = old->time_style_24h;
+  g_settings.hotspot_auto_close = old->hotspot_auto_close;
+  g_settings.boot_gfx = true;
+  copy_str(g_settings.hotspot_ip, old->hotspot_ip, sizeof(g_settings.hotspot_ip));
+  sanitize();
+  LOG_I("SMGR", "Migrated settings TOS4 -> TOS5");
 }
 
 /* ========== Load from Flash ========== */
 static bool load(void) {
   Settings_t tmp;
-  Flash_Status_t st = Flash_Rolling_Read((uint32_t *)&tmp, sizeof(tmp), NULL);
+  uint32_t out_size = 0;
+  memset(&tmp, 0, sizeof(tmp));
+  Flash_Status_t st = Flash_Rolling_Read((uint32_t *)&tmp, sizeof(tmp), &out_size);
   if (st != FLASH_OK) return false;
   if (tmp.magic != SM_MAGIC) {
+    if (tmp.magic == SM_MAGIC_V4 && out_size == sizeof(SettingsV4_t)) {
+      migrate_v4((const SettingsV4_t *)&tmp);
+      SM_Save();
+      return true;
+    }
     LOG_W("SMGR", "Bad magic 0x%08lX", (unsigned long)tmp.magic);
     return false;
   }
@@ -94,8 +151,7 @@ static bool load(void) {
 void SM_Init(void) {
   Flash_Check_Backup();
   if (!load()) {
-    LOG_W("SMGR", "Load failed — erasing sector for clean start");
-    Flash_Erase_Sector();
+    LOG_W("SMGR", "Load failed - using defaults");
     defaults();
     SM_Save();
   }
@@ -202,6 +258,10 @@ const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }
 const char *SM_Hotspot_PWD(void)  { return g_settings.hs_pwd; }
 void SM_Hotspot_SetSSID(const char *s) { copy_str(g_settings.hs_ssid, s, sizeof(g_settings.hs_ssid)); SM_Save(); }
 void SM_Hotspot_SetPWD(const char *s)  { copy_str(g_settings.hs_pwd, s, sizeof(g_settings.hs_pwd)); SM_Save(); }
+
+/* --- Sound & GFX --- */
+bool SM_BootGfx(void)                  { return g_settings.boot_gfx ? true : false; }
+void SM_SetBootGfx(bool v)             { g_settings.boot_gfx = v ? true : false; SM_Save(); }
 
 /* --- Status icon helpers (C-callable) --- */
 bool esp_wlan_is_on(void) {

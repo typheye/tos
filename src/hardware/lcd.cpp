@@ -28,6 +28,7 @@ extern DMA_HandleTypeDef hdma_spi1_tx;
 static uint16_t lcd_tile_buffer[LCD_WIDTH * TILE_HEIGHT]
     __attribute__((section(".sysdram_lcd_fixed"), aligned(4), used));
 static volatile uint8_t lcd_debug_overlay_suppressed = 0;
+static volatile uint8_t lcd_preserve_sah_splash = 1;
 
 extern "C" void SysUI_DebugOverlayBeginFrame(void);
 extern "C" void SysUI_DebugOverlayEndFrame(void);
@@ -43,6 +44,9 @@ extern "C" {
 #endif
 
 void LCD_Init(void) { boardLCD.init(); }
+void LCD_SetSahSplashPreserve(uint8_t preserve) {
+  lcd_preserve_sah_splash = preserve ? 1U : 0U;
+}
 void LCD_UpdateAutoBrightness(void) { boardLCD.updateAutoBrightness(); }
 
 void LCD_FillScreen(uint32_t color) { boardLCD.fillScreen(color); }
@@ -97,6 +101,8 @@ uint16_t LCD_GetTileH(void) { return boardLCD.getTileH(); }
 LCD::LCD() {
   initialized = false;
   current_color_565 = 0xFFFF;
+  _rotation = 0;
+  _brightness_pwm = 1000;
   _auto_brightness = false;
   _tile_y = 0;
   _tile_h = TILE_HEIGHT;
@@ -217,13 +223,18 @@ void LCD::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
 
 
 void LCD::init() {
-  hardware_reset();
+  uint8_t preserve_sah_splash = lcd_preserve_sah_splash;
+  lcd_preserve_sah_splash = 0U;
 
-  write_cmd(0x01);
-  JPDelay(150);
+  if (!preserve_sah_splash) {
+    hardware_reset();
 
-  write_cmd(0x11);
-  JPDelay(120);
+    write_cmd(0x01);
+    JPDelay(150);
+
+    write_cmd(0x11);
+    JPDelay(120);
+  }
 
   write_cmd(0x3A);
   write_data(0x55);
@@ -301,27 +312,25 @@ void LCD::init() {
 
   
   
-  LCD_BL_OFF;
+  if (!preserve_sah_splash) {
+    LCD_BL_OFF;
 
-  
-  uint16_t black = rgb888_to_rgb565(LCD_COLOR_BLACK);
-  set_address(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
+    uint16_t black = rgb888_to_rgb565(LCD_COLOR_BLACK);
+    set_address(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
 
-  LCD_DC_DATA;
-  LCD_CS_L;
+    LCD_DC_DATA;
+    LCD_CS_L;
 
-  
-  for (uint32_t i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++) {
-    uint8_t buf[2];
-    buf[0] = black >> 8;
-    buf[1] = black & 0xFF;
-    HAL_SPI_Transmit(&hspi, buf, 2, HAL_MAX_DELAY);
+    for (uint32_t i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++) {
+      uint8_t buf[2];
+      buf[0] = black >> 8;
+      buf[1] = black & 0xFF;
+      HAL_SPI_Transmit(&hspi, buf, 2, HAL_MAX_DELAY);
+    }
+
+    LCD_CS_H;
+    JPDelay(100);
   }
-
-  LCD_CS_H;
-
-  
-  JPDelay(100);
 
   
   LCD_BL_ON;

@@ -34,7 +34,7 @@ bool ESP8266_IsHardDisabled(void);
 extern "C" {
 #endif
 
-#define SM_MAGIC        0x544F5304u  /* "TOS\4" — added hotspot_ip[16] */
+#define SM_MAGIC        0x544F5305u  /* "TOS\5" - added boot_gfx */
 #define SM_SAVED_MAX    10           /* max saved WiFi networks */
 
 /* ========== Saved WiFi network entry ========== */
@@ -77,6 +77,8 @@ typedef struct __attribute__((packed, aligned(4))) {
 
   /* --- Hotspot settings --- */
   bool     hotspot_auto_close; /* auto-close after 5min idle */
+  bool     boot_gfx;           /* boot sound/GFX on/off */
+  uint8_t  _pad2[2];           /* alignment */
   char     hotspot_ip[16];     /* hotspot gateway IP, default 192.168.4.1 */
 
 } Settings_t;
@@ -133,6 +135,10 @@ const char *SM_Hotspot_SSID(void);
 const char *SM_Hotspot_PWD(void);
 void SM_Hotspot_SetSSID(const char *s);
 void SM_Hotspot_SetPWD(const char *s);
+
+/* --- Sound & GFX --- */
+bool SM_BootGfx(void);
+void SM_SetBootGfx(bool v);
 
 #ifdef __cplusplus
 }

@@ -21,6 +21,7 @@
 #include "hardware/include/lcd.hpp"
 #include "hardware/include/trtc.hpp"
 #include "include/libpd.h"
+#include "core/manager/include/settings_manager.h"
 #include <cstdio>
 #include "core/sys/include/syslog.h"
 #include "core/sys/include/systime.h"

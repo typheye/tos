@@ -216,6 +216,7 @@ static void cleanup_sd_root_whitelist(void) {
 void TOS::init() {
   SysDram_Init();
   boardSerial.init();
+  SM_Init();
 
   
   boardLed.init();
@@ -253,7 +254,6 @@ void TOS::init() {
   boardPot.init();
   boardHID.init();
 
-  SM_Init();
   boardLCD.setAutoBrightness(SM_Disp_Auto());
   boardLCD.setRotation(SM_Disp_Dir());
   if (!SM_Disp_Auto())

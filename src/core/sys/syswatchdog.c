@@ -22,6 +22,7 @@
 
 
 extern void LED_ServiceTick(void);
+extern void PD_SplashTick(void);
 
 static uint32_t g_boot_code = SYS_ERR_NONE;
 static uint8_t g_inited = 0;
@@ -128,6 +129,7 @@ void SysWatchdog_Tick(void) {
   }
 
   LED_ServiceTick();
+  PD_SplashTick();
   service_hid_background(now);
   service_display_background(now);
   service_cloud_transport_background(now);

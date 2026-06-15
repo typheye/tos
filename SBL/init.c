@@ -21,6 +21,7 @@ SBL_CODE void SBL_Run(void) {
   MX_TIM4_Init();
 
   SBL_LedsOff();
-  SBL_LcdInit();
+  (void)HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
   SBL_UiRunFastboot();
 }

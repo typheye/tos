@@ -15,7 +15,6 @@
  ******************************************************************************
  */
 
-#define SYSLOGO_DEFINE
 #include "include/libpd.h"
 #include "library/include/libdly.h"
 
@@ -822,9 +821,8 @@ void PD_DrawFooterCenter(const char *left_text, const char *center_text,
 
 static volatile uint8_t splash_fade_out_requested = 0;
 static volatile uint8_t splash_in_progress = 0;
-static uint32_t splash_total_pixels = 0;
-static uint16_t *splash_logo_data = NULL;
-
+static volatile uint8_t splash_progress_level = 0;
+static uint32_t splash_last_tick_ms = 0;
 
 static uint16_t blend_rgb565(uint16_t color1, uint16_t color2, float ratio) {
   uint8_t r1 = (color1 >> 11) & 0x1F;
@@ -842,79 +840,91 @@ static uint16_t blend_rgb565(uint16_t color1, uint16_t color2, float ratio) {
   return (r << 11) | (g << 5) | b;
 }
 
+static void splash_draw_progress(uint8_t level, uint8_t alpha) {
+  const uint16_t bar_x = 91;
+  const uint16_t bar_y = 196;
+  const uint16_t bar_w = 58;
+  const uint16_t bar_h = 4;
+  const uint16_t tile_y = 188;
+  const uint16_t tile_h = 20;
+  uint16_t fill_w = (uint16_t)(((uint32_t)bar_w * level) / 100U);
+  if (fill_w > bar_w) fill_w = bar_w;
 
+  uint16_t track = blend_rgb565(0x0000, color_to_565(LCD_COLOR_WHITE),
+                                (alpha * 2U / 5U) / 255.0f);
+  uint16_t fill = blend_rgb565(0x0000, color_to_565(LCD_COLOR_WHITE),
+                               alpha / 255.0f);
+
+  LCD_BeginTileRender(tile_y, tile_h);
+  g_fb = LCD_GetFrameBuffer();
+  g_tile_y = tile_y;
+  g_tile_h = tile_h;
+  for (uint32_t i = 0; i < (uint32_t)LCD_WIDTH * tile_h; ++i) {
+    g_fb[i] = 0x0000;
+  }
+  for (uint16_t y = 0; y < bar_h; ++y) {
+    for (uint16_t x = 0; x < bar_w; ++x) {
+      uint16_t color = (x < fill_w) ? fill : track;
+      g_fb[(uint32_t)(bar_y - tile_y + y) * LCD_WIDTH + (bar_x + x)] = color;
+    }
+  }
+  LCD_EndTileRender();
+}
 
 void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   PD_Init();
 
   if (g_fb == NULL) {
-    LOG_E("PD", "Fade start failed: framebuffer is NULL");
+    LOG_E("PD", "Splash start failed: framebuffer is NULL");
     return;
   }
 
   if (splash_in_progress) {
-    LOG_W("PD", "Fade already in progress");
+    LOG_W("PD", "Splash already in progress");
     return;
   }
 
   splash_fade_out_requested = 0;
   splash_in_progress = 1;
-  splash_total_pixels = LOGO_WIDTH * LOGO_HEIGHT;
-  splash_logo_data = (uint16_t *)logo_data;
+  splash_progress_level = 0;
+  splash_last_tick_ms = HAL_GetTick();
 
-  LOG_I("PD", "Starting fade in animation (%lums)", (unsigned long)fade_in_ms);
+  LOG_I("PD", "Starting progress splash (%lums)", (unsigned long)fade_in_ms);
 
-  uint32_t steps = 30;
-  uint32_t step_delay = fade_in_ms / steps;
-
-  
-  for (uint32_t s = 0; s <= steps; s++) {
-    float t = (float)s / steps;
+  uint32_t steps = 18U;
+  uint32_t step_delay = steps ? fade_in_ms / steps : 0U;
+  for (uint32_t s = 0; s <= steps; ++s) {
+    float t = (float)s / (float)steps;
     float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
-
-    for (uint16_t ty = 0; ty < LOGO_HEIGHT; ty += TILE_HEIGHT) {
-      uint16_t h = (ty + TILE_HEIGHT <= LOGO_HEIGHT) ? TILE_HEIGHT : LOGO_HEIGHT - ty;
-      LCD_BeginTileRender(ty, h);
-      g_fb = LCD_GetFrameBuffer();
-      g_tile_y = ty;
-      g_tile_h = h;
-
-      for (uint32_t i = 0; i < (uint32_t)LOGO_WIDTH * h; i++) {
-        uint32_t src_idx = (uint32_t)ty * LOGO_WIDTH + i;
-        g_fb[i] = blend_rgb565(0x0000, logo_data[src_idx], ratio);
-      }
-
-      LCD_EndTileRender();
-    }
-
-    
-    if (splash_fade_out_requested) {
-      LOG_W("PD", "Fade in interrupted by fade out request");
-      break;
-    }
-
-    if (step_delay > 0) {
-      JPDelay(step_delay);
-    }
+    splash_progress_level = (uint8_t)(s * 22U / steps);
+    splash_draw_progress(splash_progress_level, (uint8_t)(ratio * 255.0f));
+    if (splash_fade_out_requested) break;
+    if (step_delay > 0U) JPDelay(step_delay);
   }
 
-  
   if (!splash_fade_out_requested) {
-    for (uint16_t ty = 0; ty < LOGO_HEIGHT; ty += TILE_HEIGHT) {
-      uint16_t h = (ty + TILE_HEIGHT <= LOGO_HEIGHT) ? TILE_HEIGHT : LOGO_HEIGHT - ty;
-      LCD_BeginTileRender(ty, h);
-      g_fb = LCD_GetFrameBuffer();
-      g_tile_y = ty;
-      g_tile_h = h;
-      memcpy(g_fb, &logo_data[ty * LOGO_WIDTH], LOGO_WIDTH * h * sizeof(uint16_t));
-      LCD_EndTileRender();
-    }
+    if (splash_progress_level < 22U) splash_progress_level = 22U;
+    splash_draw_progress(splash_progress_level, 255U);
   }
 
-  LOG_I("PD", "Fade in complete, waiting for finish signal");
+  LOG_I("PD", "Progress splash started, waiting for finish signal");
 }
 
+void PD_SplashTick(void) {
+  if (!splash_in_progress || splash_fade_out_requested) return;
 
+  uint32_t now = HAL_GetTick();
+  uint32_t interval = splash_progress_level < 45U ? 90U : 180U;
+  if ((uint32_t)(now - splash_last_tick_ms) < interval) return;
+  splash_last_tick_ms = now;
+
+  if (splash_progress_level < 92U) {
+    uint8_t inc = splash_progress_level < 45U ? 2U : 1U;
+    splash_progress_level = (uint8_t)(splash_progress_level + inc);
+    if (splash_progress_level > 92U) splash_progress_level = 92U;
+  }
+  splash_draw_progress(splash_progress_level, 255U);
+}
 
 void PD_SplashFinish(uint32_t fade_out_ms) {
   if (!splash_in_progress) {
@@ -922,56 +932,38 @@ void PD_SplashFinish(uint32_t fade_out_ms) {
     return;
   }
 
-  LOG_I("PD", "Finish requested, starting fade out (%lums)", (unsigned long)fade_out_ms);
+  LOG_I("PD", "Finish requested, completing progress (%lums)",
+        (unsigned long)fade_out_ms);
 
   splash_fade_out_requested = 1;
 
-  uint32_t steps = 10;
-  uint32_t step_delay = fade_out_ms / steps;
-
-  
-  for (uint32_t s = 0; s <= steps; s++) {
-    float t = (float)s / steps;
+  uint32_t steps = 16U;
+  uint32_t step_delay = steps ? fade_out_ms / steps : 0U;
+  uint8_t start = splash_progress_level;
+  for (uint32_t s = 0; s <= steps; ++s) {
+    float t = (float)s / (float)steps;
     float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
-
-    for (uint16_t ty = 0; ty < LOGO_HEIGHT; ty += TILE_HEIGHT) {
-      uint16_t h = (ty + TILE_HEIGHT <= LOGO_HEIGHT) ? TILE_HEIGHT : LOGO_HEIGHT - ty;
-      LCD_BeginTileRender(ty, h);
-      g_fb = LCD_GetFrameBuffer();
-      g_tile_y = ty;
-      g_tile_h = h;
-
-      for (uint32_t i = 0; i < (uint32_t)LOGO_WIDTH * h; i++) {
-        uint32_t src_idx = (uint32_t)ty * LOGO_WIDTH + i;
-        g_fb[i] = blend_rgb565(logo_data[src_idx], 0x0000, ratio);
-      }
-
-      LCD_EndTileRender();
-    }
-
-    if (step_delay > 0) {
-      JPDelay(step_delay);
-    }
+    uint8_t level = (uint8_t)(start + ((100U - start) * s / steps));
+    uint8_t alpha = (uint8_t)((1.0f - ratio) * 255.0f);
+    splash_draw_progress(level, alpha);
+    if (step_delay > 0U) JPDelay(step_delay);
   }
 
-  
-  for (uint16_t ty = 0; ty < LCD_HEIGHT; ty += TILE_HEIGHT) {
-    uint16_t h = (ty + TILE_HEIGHT <= LCD_HEIGHT) ? TILE_HEIGHT : LCD_HEIGHT - ty;
-    LCD_BeginTileRender(ty, h);
-    g_fb = LCD_GetFrameBuffer();
-    g_tile_y = ty;
-    g_tile_h = h;
-    uint16_t black = color_to_565(LCD_COLOR_BLACK);
-    for (uint32_t i = 0; i < (uint32_t)LCD_WIDTH * h; i++) {
-      g_fb[i] = black;
-    }
-    LCD_EndTileRender();
+  splash_draw_progress(100U, 255U);
+  JPDelay(500U);
+
+  uint32_t fade_steps = 18U;
+  uint32_t fade_delay = 300U / fade_steps;
+  for (uint32_t s = 0; s <= fade_steps; ++s) {
+    float t = (float)s / (float)fade_steps;
+    float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
+    splash_draw_progress(100U, (uint8_t)((1.0f - ratio) * 255.0f));
+    if (fade_delay > 0U) JPDelay(fade_delay);
   }
 
+  splash_draw_progress(100U, 0U);
   splash_in_progress = 0;
-  LOG_I("PD", "Fade out complete, splash finished");
+  LOG_I("PD", "Progress splash finished");
 }
-
-
 
 uint8_t PD_IsSplashActive(void) { return splash_in_progress; }

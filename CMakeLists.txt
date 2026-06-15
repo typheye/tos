@@ -36,6 +36,7 @@ add_executable(${CMAKE_PROJECT_NAME})
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
+add_subdirectory(cmake/sah)
 add_subdirectory(cmake/sbl)
 add_subdirectory(cmake/user)
 

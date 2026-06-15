@@ -45,28 +45,63 @@ static void draw_card(int idx, int sel, int cy, const char *text) {
   PD_DrawString(26, cy + 2, text);
 }
 
-static void draw_card_r(int idx, int sel, int cy, const char *label, bool muted) {
+static void draw_card_r(int idx, int sel, int cy, const char *label,
+                        bool on, bool edit) {
   bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
+  uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
+  if (edit && s && ((HAL_GetTick() / 300U) & 1U)) {
+    card_c = TOS_CARD_BG;
+  }
+  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
   PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
   PD_DrawString(26, cy + 2, label);
-  const char *val = muted ? "OFF" : "ON";
+  const char *val = on ? "ON" : "OFF";
   uint16_t vw = PD_GetStringWidth(val);
-  PD_SetColor(TOS_TEXT);
+  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
   PD_DrawString(220 - vw, cy + 2, val);
 }
 
 void sound_activity_run(void) {
   boardLCD.fillScreen(LCD_COLOR_BLACK);
-  int sel = 0; uint8_t le = 0; uint32_t lu = 0;
+  int sel = 0;
+  uint8_t le = 0;
+  uint32_t lu = 0;
+  bool edit = false;
+  bool boot_gfx = SM_BootGfx();
 
   while (1) {
     keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % 2; JPDelay(45); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + 2) % 2; JPDelay(45); }
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+      if (edit && sel == 2) {
+        boot_gfx = !boot_gfx;
+      } else {
+        sel = (sel + 1) % 3;
+      }
+      JPDelay(45);
+    }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+      if (edit && sel == 2) {
+        boot_gfx = !boot_gfx;
+      } else {
+        sel = (sel - 1 + 3) % 3;
+      }
+      JPDelay(45);
+    }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
-    if (ce && !le && sel == 0) return;
+    if (ce && !le) {
+      if (edit) {
+        if (sel == 2) {
+          SM_SetBootGfx(boot_gfx);
+        }
+        edit = false;
+      } else if (sel == 0) {
+        return;
+      } else if (sel == 2) {
+        boot_gfx = SM_BootGfx();
+        edit = true;
+      }
+    }
     le = ce;
 
     if (HAL_GetTick() - lu > 16) {
@@ -76,7 +111,8 @@ void sound_activity_run(void) {
         draw_frame_title("SOUND");
         PD_SetFont(FONT_ASCII_16);
         draw_card(0, sel, 33, "00 Return");
-        draw_card_r(1, sel, 58, "01 Mute", muted);
+        draw_card_r(1, sel, 58, "01 Mute", !muted, false);
+        draw_card_r(2, sel, 83, "02 Boot GFX", boot_gfx, edit && sel == 2);
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
     }
