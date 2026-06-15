@@ -27,6 +27,7 @@ extern DMA_HandleTypeDef hdma_spi1_tx;
 
 static uint16_t lcd_tile_buffer[LCD_WIDTH * TILE_HEIGHT]
     __attribute__((section(".sysdram_lcd_fixed"), aligned(4), used));
+static volatile uint8_t lcd_debug_overlay_suppressed = 0;
 
 extern "C" void SysUI_DebugOverlayBeginFrame(void);
 extern "C" void SysUI_DebugOverlayEndFrame(void);
@@ -61,6 +62,9 @@ uint16_t *LCD_GetFrameBuffer(void) { return boardLCD.getFrameBuffer(); }
 void LCD_BeginTileRender(uint16_t y, uint16_t h) { boardLCD.beginTileRender(y, h); }
 void LCD_EndTileRender(void) { boardLCD.endTileRender(); }
 void LCD_FlushTiled(void (*render_cb)(void)) { boardLCD.flushTiled(render_cb); }
+void LCD_SetDebugOverlaySuppressed(uint8_t suppressed) {
+  lcd_debug_overlay_suppressed = suppressed ? 1U : 0U;
+}
 void LCD_EmergencyPrepare(void) { boardLCD.emergencyPrepare(); }
 void LCD_FlushTiledBlocking(void (*render_cb)(void)) { boardLCD.flushTiledBlocking(render_cb); }
 void LCD_FlushFull(const uint16_t *data) { boardLCD.flushFull(data); }
@@ -466,7 +470,7 @@ uint16_t *LCD::getFrameBuffer(void) {
 }
 
 void LCD::beginTileRender(uint16_t y, uint16_t h) {
-  if (y == 0U) {
+  if (y == 0U && !lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayBeginFrame();
   }
   if (y >= LCD_HEIGHT)
@@ -491,7 +495,9 @@ void LCD::endTileRender(void) {
     return;
 
   const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
-  SysUI_DebugOverlayDraw();
+  if (!lcd_debug_overlay_suppressed) {
+    SysUI_DebugOverlayDraw();
+  }
   set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
 
   LCD_DC_DATA;
@@ -531,7 +537,7 @@ void LCD::endTileRender(void) {
   hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
 
   LCD_CS_H;
-  if (last_tile) {
+  if (last_tile && !lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayEndFrame();
   }
 }
@@ -569,7 +575,9 @@ void LCD::endTileRenderBlocking(void) {
   if (!initialized) return;
 
   const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
-  SysUI_DebugOverlayDraw();
+  if (!lcd_debug_overlay_suppressed) {
+    SysUI_DebugOverlayDraw();
+  }
   set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
   LCD_DC_DATA;
   LCD_CS_L;
@@ -588,7 +596,7 @@ void LCD::endTileRenderBlocking(void) {
   hspi.Init.DataSize = SPI_DATASIZE_8BIT;
   SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
   LCD_CS_H;
-  if (last_tile) {
+  if (last_tile && !lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayEndFrame();
   }
 }

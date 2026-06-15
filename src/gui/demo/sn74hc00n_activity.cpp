@@ -75,11 +75,11 @@ static void hc00n_monitor_subpage(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 5;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 5) % 5;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -89,7 +89,7 @@ static void hc00n_monitor_subpage(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 200) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       uint8_t outputs = boardHC00N.readOutputByte();
 
@@ -166,11 +166,11 @@ static void hc00n_truth_subpage(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 5;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 5) % 5;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -180,7 +180,7 @@ static void hc00n_truth_subpage(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 200) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("DEMO");
@@ -218,11 +218,11 @@ static void hc00n_test_subpage(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 6;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 6) % 6;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -232,7 +232,7 @@ static void hc00n_test_subpage(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 200) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       uint8_t outputs = boardHC00N.readOutputByte();
 
@@ -291,11 +291,11 @@ void hc00n_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % HC00N_N;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + HC00N_N) % HC00N_N;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -319,7 +319,7 @@ void hc00n_activity(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("DEMO");

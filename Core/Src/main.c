@@ -39,6 +39,7 @@
 #endif
 #include <stdio.h>                      // 添加这个头文件 for printf
 #include "core/sys/include/syswatchdog.h"
+#include "init.h"
 
 /* USER CODE END Includes */
 
@@ -103,6 +104,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  SBL_Run();
 
   /* USER CODE END SysInit */
 

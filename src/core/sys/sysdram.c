@@ -25,7 +25,7 @@
 #include "stm32f4xx.h"
 
 #ifndef SYSDRAM_RAM_HEAP_SIZE
-#define SYSDRAM_RAM_HEAP_SIZE ((92U * 1024U) + 288U)
+#define SYSDRAM_RAM_HEAP_SIZE ((69U * 1024U) + 796U)
 #endif
 
 #ifndef SYSDRAM_CCM_HEAP_SIZE

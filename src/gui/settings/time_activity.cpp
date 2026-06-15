@@ -142,13 +142,13 @@ void time_activity_run(void) {
           keyManager.collision_D0.getState() == KEY_PRESSED) {
         if (edit_sel == 1)  { auto_sync = !auto_sync; SM_Time_SetAutoSync(auto_sync); }
         if (edit_sel == 5)  { style_24h = !style_24h; SM_Time_SetStyle24h(style_24h); }
-        JPDelay(150);
+        JPDelay(45);
       }
     } else {
       if (keyManager.collision_A8.getState() == KEY_PRESSED)
-      { sel = (sel + 1) % 6; JPDelay(100); }
+      { sel = (sel + 1) % 6; JPDelay(45); }
       if (keyManager.collision_D0.getState() == KEY_PRESSED)
-      { sel = (sel - 1 + 6) % 6; JPDelay(100); }
+      { sel = (sel - 1 + 6) % 6; JPDelay(45); }
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -189,7 +189,7 @@ void time_activity_run(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 200) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       boardTRTC.getDateTime(&t, &d);
       snprintf(date_buf, sizeof(date_buf), "%04d-%02d-%02d",

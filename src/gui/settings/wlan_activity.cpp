@@ -384,11 +384,11 @@ static void scaning_run(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -461,7 +461,7 @@ static void scaning_run(void) {
       ea = false;
     }
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       draw_scaning(sel);
     }
@@ -496,11 +496,11 @@ static void connected_page(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 3;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 3) % 3;
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -520,7 +520,7 @@ static void connected_page(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("WLAN");
@@ -560,11 +560,11 @@ static void saved_net_action(int idx) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 4;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 4) % 4;
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -618,7 +618,7 @@ static void saved_net_action(int idx) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("WLAN");
@@ -655,11 +655,11 @@ static void saved_networks_page(void) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % total;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + total) % total;
-      JPDelay(150);
+      JPDelay(45);
     }
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
@@ -675,7 +675,7 @@ static void saved_networks_page(void) {
         sel = total - 1;
     }
     le = ce;
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("WLAN");
@@ -790,7 +790,7 @@ static int wlan_main_loop(void) {
       } else {
         sel = (sel + 1) % wlan_item_count();
       }
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (wlan_edit) {
@@ -809,7 +809,7 @@ static int wlan_main_loop(void) {
       } else {
         sel = (sel - 1 + wlan_item_count()) % wlan_item_count();
       }
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -837,7 +837,7 @@ static int wlan_main_loop(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       wlan_load_state();
       draw_wlan_main(sel);

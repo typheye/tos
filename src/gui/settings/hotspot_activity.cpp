@@ -590,7 +590,7 @@ static int hs_main_loop(void) {
         }
       } else
         sel = (sel + 1) % hs_item_count();
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (hs_edit) {
@@ -602,7 +602,7 @@ static int hs_main_loop(void) {
         }
       } else
         sel = (sel - 1 + hs_item_count()) % hs_item_count();
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -659,7 +659,7 @@ static int hs_main_loop(void) {
       lq = HAL_GetTick();
       hs_refresh_clients();
     }
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       draw_hs_main(sel);
     }
@@ -694,11 +694,11 @@ static void ssidpwd_run(void) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 3;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 3) % 3;
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -724,7 +724,7 @@ static void ssidpwd_run(void) {
       boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     le = ce;
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       draw_ssidpwd(sel);
     }
@@ -756,11 +756,11 @@ static void connected_page(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -785,7 +785,7 @@ static void connected_page(void) {
         sel = n - 1;
     }
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("HOTS");

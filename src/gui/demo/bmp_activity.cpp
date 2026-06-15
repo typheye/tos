@@ -133,7 +133,7 @@ static void update_chart_data(float t, float p) {
     press_max = p + 20;
   if (p < press_min)
     press_min = p - 20;
-  if (temp_max - temp_min > 100) {
+  if (temp_max - temp_min > 16) {
     temp_max = temp_min + 100;
   }
   if (press_max - press_min > 500) {
@@ -201,7 +201,7 @@ static void bmp180_realtime_activity(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "BMP180 Init...");
   });
-  JPDelay(100);
+  JPDelay(45);
 
   boardBMP180.init();
   if (!boardBMP180.isInitialized()) {
@@ -224,11 +224,11 @@ static void bmp180_realtime_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % BMP_RT_N;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + BMP_RT_N) % BMP_RT_N;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -238,7 +238,7 @@ static void bmp180_realtime_activity(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 200) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
 
       BMP180_Data_t d = boardBMP180.readData(BMP180_MODE_STD);
@@ -318,7 +318,7 @@ void bmp180_chart_activity(void) {
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "BMP180 Init...");
   });
-  JPDelay(100);
+  JPDelay(45);
 
   boardBMP180.init();
   if (!boardBMP180.isInitialized()) {
@@ -363,7 +363,7 @@ void bmp180_chart_activity(void) {
     BMP180_Data_t d = boardBMP180.readData(BMP180_MODE_STD);
     update_chart_data(d.temperature, d.pressure);
 
-    if (HAL_GetTick() - lu > 50) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
 
       float mx = chart_mode ? press_max : temp_max;
@@ -431,11 +431,11 @@ void bmp180_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % BM_N;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + BM_N) % BM_N;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -455,7 +455,7 @@ void bmp180_activity(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("DEMO");

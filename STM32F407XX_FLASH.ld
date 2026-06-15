@@ -90,8 +90,23 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH :flash
 
+  .sbl :
+  {
+    . = ALIGN(4);
+    __sbl_start__ = .;
+    KEEP(*(.sbl.text))
+    KEEP(*(.sbl.text*))
+    KEEP(*(.sbl.rodata))
+    KEEP(*(.sbl.rodata*))
+    . = ALIGN(4);
+    __sbl_end__ = .;
+  } >FLASH :flash
+
+  __sbl_reserved_end__ = ORIGIN(FLASH) + 32K;
+  __tos_app_start__ = __sbl_reserved_end__;
+
   /* The program code and other data goes into FLASH */
-  .text :
+  .text __tos_app_start__ :
   {
     . = ALIGN(4);
     *(.text)           /* .text sections (code) */

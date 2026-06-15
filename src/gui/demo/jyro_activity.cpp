@@ -304,11 +304,11 @@ static void jyro_text_subpage(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % TEXT_N;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + TEXT_N) % TEXT_N;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -319,7 +319,7 @@ static void jyro_text_subpage(void) {
     le = ce;
 
     /* Refresh data every 200ms */
-    if (HAL_GetTick() - lu > 200) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
 
       JY901S_Data_t data = boardJY901S.readData();
@@ -480,7 +480,7 @@ static void jyro_chart_subpage(void) {
     }
     update_chart_data(val0, val1, val2);
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("DEMO");
@@ -552,11 +552,11 @@ void jyro_activity(void) {
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % JYRO_N;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + JYRO_N) % JYRO_N;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -580,7 +580,7 @@ void jyro_activity(void) {
     }
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("DEMO");

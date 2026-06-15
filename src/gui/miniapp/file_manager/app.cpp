@@ -231,7 +231,7 @@ static void fm_format_progress(const char *step, FRESULT res, void *user) {
   fm_draw_formatting(line1, line2);
 
   /* Keep progress visible but do not slow the full format too much. */
-  JPDelay(120);
+  JPDelay(45);
 }
 
 static FRESULT fm_format_and_init_sd(void) {
@@ -545,11 +545,11 @@ void file_manager_run(void) {
 
     if (n > 0 && keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (n > 0 && keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     if ((HAL_GetTick() - last_probe) > 1200U && fm_mounted) {
@@ -579,10 +579,10 @@ void file_manager_run(void) {
         sel = n > 0 ? n - 1 : 0;
       }
       lu = 0;
-      JPDelay(120);
+      JPDelay(45);
     }
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
         draw_frame_title("FILE");

@@ -193,11 +193,11 @@ bool keyboard_open(const char *title, char *out, int max_len) {
     // UP/DOWN fine
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % total;
-      JPDelay(100);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + total) % total;
-      JPDelay(100);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -224,7 +224,7 @@ bool keyboard_open(const char *title, char *out, int max_len) {
           }
         }
       }
-      JPDelay(150);
+      JPDelay(45);
     }
     le = ce;
 
@@ -245,7 +245,7 @@ bool keyboard_open(const char *title, char *out, int max_len) {
       ea = false;
     }
 
-    if (HAL_GetTick() - lu > 80) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       draw_kb(out, len, sel, shift);
     }

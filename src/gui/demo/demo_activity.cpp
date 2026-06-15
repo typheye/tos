@@ -103,11 +103,11 @@ static int menu_loop(const char *title, const char **items, int count,
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % count;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + count) % count;
-      JPDelay(150);
+      JPDelay(45);
     }
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
@@ -115,7 +115,7 @@ static int menu_loop(const char *title, const char **items, int count,
       return sel;
     }
     le = ce;
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       draw_menu(title, items, count, sel);
     }

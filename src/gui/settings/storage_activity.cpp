@@ -63,7 +63,7 @@ static void draw_progress(int x, int y, int w, int h, int pct,
                           const char *label) {
   if (pct < 0)
     pct = 0;
-  if (pct > 100)
+  if (pct > 16)
     pct = 100;
   PD_SetColor(TOS_CARD_BG);
   PD_SetFill(true);
@@ -142,7 +142,7 @@ static bool get_sd_fs_info(int *used_pct, uint32_t *total_kb) {
   DWORD used_clusters = total_clusters - free_clusters;
   *used_pct = (int)(((uint64_t)used_clusters * 100ULL + total_clusters / 2U) /
                     (uint64_t)total_clusters);
-  if (*used_pct > 100)
+  if (*used_pct > 16)
     *used_pct = 100;
   if (*used_pct < 0)
     *used_pct = 0;
@@ -255,11 +255,11 @@ void storage_activity_run(void) {
     keyManager.btn_enter.tick();
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 2;
-      JPDelay(150);
+      JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 2) % 2;
-      JPDelay(150);
+      JPDelay(45);
     }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
@@ -284,7 +284,7 @@ void storage_activity_run(void) {
       }
     }
     le = ce;
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       draw_storage(sel);
     }

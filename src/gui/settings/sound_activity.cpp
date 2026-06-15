@@ -62,14 +62,14 @@ void sound_activity_run(void) {
 
   while (1) {
     keyManager.collision_A8.tick(); keyManager.collision_D0.tick(); keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % 2; JPDelay(150); }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + 2) % 2; JPDelay(150); }
+    if (keyManager.collision_A8.getState() == KEY_PRESSED) { sel = (sel + 1) % 2; JPDelay(45); }
+    if (keyManager.collision_D0.getState() == KEY_PRESSED) { sel = (sel - 1 + 2) % 2; JPDelay(45); }
 
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le && sel == 0) return;
     le = ce;
 
-    if (HAL_GetTick() - lu > 100) {
+    if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       bool muted = keyManager.isMuted();
       LCD_FLUSH({

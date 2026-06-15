@@ -104,6 +104,7 @@ void SysHandle_FatalFResult(FRESULT res, uint32_t fallback) {
 }
 
 extern TIM_HandleTypeDef htim4;
+extern void LCD_SetDebugOverlaySuppressed(uint8_t suppressed);
 
 static void syshandle_prepare_display(void) {
   /* Fatal errors may be raised from a network/SPI path while the LCD is dimmed
@@ -176,6 +177,7 @@ void SysHandle_Exception(uint32_t code) {
   LOG_F("SYSH", "System exception: 0x%08lX %s", (unsigned long)code,
         SysHandle_CodeName(code));
 
+  LCD_SetDebugOverlaySuppressed(1U);
   syshandle_prepare_display();
 
   for (g_draw_seconds = 6; g_draw_seconds >= 1; --g_draw_seconds) {
