@@ -9,6 +9,7 @@
 #define SBL_MENU_COUNT          2U
 #define SBL_PRESS_LONG_MS     800U
 #define SBL_PRESS_DEBOUNCE_MS  30U
+#define SBL_IDLE_REBOOT_MS 300000UL
 
 #define SBL_TITLE_Y            40U
 #define SBL_LEFT_X             30U
@@ -123,6 +124,7 @@ SBL_CODE void SBL_UiRunFastboot(void) {
   uint8_t was_down = 0U;
   uint8_t long_done = 0U;
   uint32_t press_start = 0U;
+  uint32_t last_action = HAL_GetTick();
 
   SBL_MemReset();
   sbl_load_page_params();
@@ -133,19 +135,26 @@ SBL_CODE void SBL_UiRunFastboot(void) {
     uint8_t down = SBL_IsButtonDown();
     uint32_t now = HAL_GetTick();
 
+    if ((uint32_t)(now - last_action) >= SBL_IDLE_REBOOT_MS) {
+      SBL_SystemReboot();
+    }
+
     if (down && !was_down) {
+      last_action = now;
       press_start = now;
       long_done = 0U;
       SBL_DelayMs(SBL_PRESS_DEBOUNCE_MS);
     } else if (down && !long_done &&
                (uint32_t)(now - press_start) >= SBL_PRESS_LONG_MS) {
       long_done = 1U;
+      last_action = now;
       if (selected == 0U) {
         SBL_SystemReboot();
       } else if (selected == 1U) {
         sbl_reload_fastboot(&selected);
       }
     } else if (!down && was_down) {
+      last_action = now;
       if (!long_done && (uint32_t)(now - press_start) >= SBL_PRESS_DEBOUNCE_MS) {
         selected = (uint8_t)((selected + 1U) % SBL_MENU_COUNT);
         sbl_draw_menu(selected);

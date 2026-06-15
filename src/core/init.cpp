@@ -224,8 +224,9 @@ void TOS::init() {
   errorLed.init();
 
   buzzer1.init();
-  boardLCD.init();
   SysWatchdog_Init();
+  SysWatchdog_FeedNow();
+  boardLCD.init();
   SysWatchdog_FeedNow();
   JPDelay(50);
 

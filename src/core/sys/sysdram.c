@@ -35,6 +35,7 @@
 #define SYSDRAM_MAGIC_USED 0x44524D55UL
 #define SYSDRAM_MAGIC_FREE 0x44524D46UL
 #define SYSDRAM_ALIGN      8U
+#define SYSDRAM_CODE __attribute__((section(".sbl.text"), noinline, used))
 
 typedef struct SysDram_Block {
   uint32_t magic;
@@ -55,33 +56,33 @@ typedef struct {
   uint32_t alloc_count;
 } SysDram_Pool_t;
 
-__attribute__((section(".sysdram_ram_heap"), aligned(8), used))
-static uint8_t g_sysdram_ram_heap[SYSDRAM_RAM_HEAP_SIZE];
-
-__attribute__((section(".sysdram_ccm_heap"), aligned(8), used))
-static uint8_t g_sysdram_ccm_heap[SYSDRAM_CCM_HEAP_SIZE];
-
 static SysDram_Pool_t g_pools[2];
 static volatile uint8_t g_inited = 0;
 
-static uint32_t align_up(uint32_t v) {
+extern uint8_t __sysdram_ram_fixed_end__;
+extern uint8_t _end;
+extern uint8_t _estack;
+extern uint32_t _Min_Stack_Size;
+extern uint8_t _eccmram;
+
+static SYSDRAM_CODE uint32_t align_up(uint32_t v) {
   return (v + (SYSDRAM_ALIGN - 1U)) & ~(SYSDRAM_ALIGN - 1U);
 }
 
-static uint32_t irq_save(void) {
+static SYSDRAM_CODE uint32_t irq_save(void) {
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
   return primask;
 }
 
-static void irq_restore(uint32_t primask) {
+static SYSDRAM_CODE void irq_restore(uint32_t primask) {
   if ((primask & 1U) == 0U) {
     __enable_irq();
   }
 }
 
-static void init_pool(SysDram_Pool_t *pool, uint8_t *base, uint32_t size,
-                      uint8_t region) {
+static SYSDRAM_CODE void init_pool(SysDram_Pool_t *pool, uint8_t *base,
+                                   uint32_t size, uint8_t region) {
   uintptr_t start = ((uintptr_t)base + (SYSDRAM_ALIGN - 1U)) &
                     ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
   uintptr_t end = ((uintptr_t)base + size) & ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
@@ -107,25 +108,35 @@ static void init_pool(SysDram_Pool_t *pool, uint8_t *base, uint32_t size,
   pool->first->reserved = 0;
 }
 
-void SysDram_Init(void) {
+SYSDRAM_CODE void SysDram_Init(void) {
   uint32_t irq = irq_save();
   if (!g_inited) {
-    init_pool(&g_pools[SYSDRAM_REGION_RAM], g_sysdram_ram_heap,
-              sizeof(g_sysdram_ram_heap), SYSDRAM_REGION_RAM);
-    init_pool(&g_pools[SYSDRAM_REGION_CCM], g_sysdram_ccm_heap,
-              sizeof(g_sysdram_ccm_heap), SYSDRAM_REGION_CCM);
+    uintptr_t ram_start = ((uintptr_t)&_end + (SYSDRAM_ALIGN - 1U)) &
+                          ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
+    uintptr_t ram_end = ((uintptr_t)&_estack - (uintptr_t)&_Min_Stack_Size) &
+                        ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
+    uintptr_t ccm_start = ((uintptr_t)&_eccmram + (SYSDRAM_ALIGN - 1U)) &
+                          ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
+    uintptr_t ccm_end = (0x10000000UL + 64UL * 1024UL) &
+                        ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
+    init_pool(&g_pools[SYSDRAM_REGION_RAM], (uint8_t *)ram_start,
+              ram_end > ram_start ? (uint32_t)(ram_end - ram_start) : 0U,
+              SYSDRAM_REGION_RAM);
+    init_pool(&g_pools[SYSDRAM_REGION_CCM], (uint8_t *)ccm_start,
+              ccm_end > ccm_start ? (uint32_t)(ccm_end - ccm_start) : 0U,
+              SYSDRAM_REGION_CCM);
     g_inited = 1;
   }
   irq_restore(irq);
 }
 
-static void ensure_init(void) {
+static SYSDRAM_CODE void ensure_init(void) {
   if (!g_inited) {
     SysDram_Init();
   }
 }
 
-static void split_block(SysDram_Block_t *block, uint32_t size) {
+static SYSDRAM_CODE void split_block(SysDram_Block_t *block, uint32_t size) {
   uint32_t remain = block->size - size;
   if (remain < sizeof(SysDram_Block_t) + SYSDRAM_ALIGN) {
     return;
@@ -147,7 +158,7 @@ static void split_block(SysDram_Block_t *block, uint32_t size) {
   block->size = size;
 }
 
-static void *pool_alloc(SysDram_Pool_t *pool, uint32_t size) {
+static SYSDRAM_CODE void *pool_alloc(SysDram_Pool_t *pool, uint32_t size) {
   if (!pool || !pool->first || size == 0U) {
     return NULL;
   }
@@ -169,7 +180,7 @@ static void *pool_alloc(SysDram_Pool_t *pool, uint32_t size) {
   return NULL;
 }
 
-static void merge_next(SysDram_Block_t *block) {
+static SYSDRAM_CODE void merge_next(SysDram_Block_t *block) {
   SysDram_Block_t *next = block ? block->next : NULL;
   if (!next || next->used || next->magic != SYSDRAM_MAGIC_FREE) {
     return;
@@ -182,7 +193,7 @@ static void merge_next(SysDram_Block_t *block) {
   }
 }
 
-static SysDram_Pool_t *ptr_pool(const void *ptr) {
+static SYSDRAM_CODE SysDram_Pool_t *ptr_pool(const void *ptr) {
   uintptr_t p = (uintptr_t)ptr;
   for (unsigned i = 0; i < 2U; ++i) {
     uintptr_t start = (uintptr_t)g_pools[i].base;
@@ -194,7 +205,7 @@ static SysDram_Pool_t *ptr_pool(const void *ptr) {
   return NULL;
 }
 
-void SysDram_Free(void *ptr) {
+SYSDRAM_CODE void SysDram_Free(void *ptr) {
   if (!ptr) {
     return;
   }
@@ -228,7 +239,7 @@ void SysDram_Free(void *ptr) {
   irq_restore(irq);
 }
 
-void *SysDram_AllocFast(size_t size) {
+SYSDRAM_CODE void *SysDram_AllocFast(size_t size) {
   ensure_init();
   if (size == 0U || size > 0x7FFFFFFFU) {
     return NULL;
@@ -244,7 +255,7 @@ void *SysDram_AllocFast(size_t size) {
   return p;
 }
 
-void *SysDram_AllocDma(size_t size) {
+SYSDRAM_CODE void *SysDram_AllocDma(size_t size) {
   ensure_init();
   if (size == 0U || size > 0x7FFFFFFFU) {
     return NULL;
@@ -257,7 +268,7 @@ void *SysDram_AllocDma(size_t size) {
   return p;
 }
 
-void *SysDram_Alloc(size_t size) {
+SYSDRAM_CODE void *SysDram_Alloc(size_t size) {
   ensure_init();
   if (size == 0U || size > 0x7FFFFFFFU) {
     return NULL;
@@ -273,7 +284,7 @@ void *SysDram_Alloc(size_t size) {
   return p;
 }
 
-void *SysDram_Calloc(size_t count, size_t size) {
+SYSDRAM_CODE void *SysDram_Calloc(size_t count, size_t size) {
   if (size != 0U && count > ((size_t)-1) / size) {
     errno = ENOMEM;
     return NULL;
@@ -286,7 +297,20 @@ void *SysDram_Calloc(size_t count, size_t size) {
   return p;
 }
 
-void *SysDram_Realloc(void *ptr, size_t size) {
+static SYSDRAM_CODE void *SysDram_CallocFast(size_t count, size_t size) {
+  if (size != 0U && count > ((size_t)-1) / size) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  size_t total = count * size;
+  void *p = SysDram_AllocFast(total);
+  if (p) {
+    memset(p, 0, total);
+  }
+  return p;
+}
+
+SYSDRAM_CODE void *SysDram_Realloc(void *ptr, size_t size) {
   if (!ptr) {
     return SysDram_Alloc(size);
   }
@@ -314,17 +338,18 @@ void *SysDram_Realloc(void *ptr, size_t size) {
   return np;
 }
 
-int SysDram_IsCcmPtr(const void *ptr) {
+SYSDRAM_CODE int SysDram_IsCcmPtr(const void *ptr) {
   ensure_init();
   return ptr_pool(ptr) == &g_pools[SYSDRAM_REGION_CCM];
 }
 
-int SysDram_IsRamPtr(const void *ptr) {
+SYSDRAM_CODE int SysDram_IsRamPtr(const void *ptr) {
   ensure_init();
   return ptr_pool(ptr) == &g_pools[SYSDRAM_REGION_RAM];
 }
 
-int SysDram_GetStats(SysDram_Region_t region, SysDram_Stats_t *out) {
+SYSDRAM_CODE int SysDram_GetStats(SysDram_Region_t region,
+                                  SysDram_Stats_t *out) {
   ensure_init();
   if (!out || region > SYSDRAM_REGION_CCM) {
     return 0;
@@ -358,27 +383,51 @@ void SysDram_LogStats(void) {
   SysDram_Stats_t ccm;
   if (SysDram_GetStats(SYSDRAM_REGION_RAM, &ram) &&
       SysDram_GetStats(SYSDRAM_REGION_CCM, &ccm)) {
-    LOG_I("DRAM", "RAM pool total=%lu free=%lu largest=%lu peak=%lu",
-          (unsigned long)ram.total, (unsigned long)ram.free,
-          (unsigned long)ram.largest_free, (unsigned long)ram.peak_used);
-    LOG_I("DRAM", "CCM pool total=%lu free=%lu largest=%lu peak=%lu",
-          (unsigned long)ccm.total, (unsigned long)ccm.free,
-          (unsigned long)ccm.largest_free, (unsigned long)ccm.peak_used);
+    LOG_I("DRAM", "RAM pool total=%lu used=%lu free=%lu largest=%lu peak=%lu",
+          (unsigned long)ram.total, (unsigned long)ram.used,
+          (unsigned long)ram.free, (unsigned long)ram.largest_free,
+          (unsigned long)ram.peak_used);
+    LOG_I("DRAM", "CCM pool total=%lu used=%lu free=%lu largest=%lu peak=%lu",
+          (unsigned long)ccm.total, (unsigned long)ccm.used,
+          (unsigned long)ccm.free, (unsigned long)ccm.largest_free,
+          (unsigned long)ccm.peak_used);
   }
 }
 
-void *malloc(size_t size) {
-  return SysDram_Alloc(size);
+SYSDRAM_CODE void *malloc(size_t size) {
+  return SysDram_AllocFast(size);
 }
 
-void free(void *ptr) {
+SYSDRAM_CODE void free(void *ptr) {
   SysDram_Free(ptr);
 }
 
-void *calloc(size_t count, size_t size) {
-  return SysDram_Calloc(count, size);
+SYSDRAM_CODE void *calloc(size_t count, size_t size) {
+  return SysDram_CallocFast(count, size);
 }
 
-void *realloc(void *ptr, size_t size) {
+SYSDRAM_CODE void *realloc(void *ptr, size_t size) {
+  return SysDram_Realloc(ptr, size);
+}
+
+struct _reent;
+
+SYSDRAM_CODE void *_malloc_r(struct _reent *r, size_t size) {
+  (void)r;
+  return SysDram_AllocFast(size);
+}
+
+SYSDRAM_CODE void _free_r(struct _reent *r, void *ptr) {
+  (void)r;
+  SysDram_Free(ptr);
+}
+
+SYSDRAM_CODE void *_calloc_r(struct _reent *r, size_t count, size_t size) {
+  (void)r;
+  return SysDram_CallocFast(count, size);
+}
+
+SYSDRAM_CODE void *_realloc_r(struct _reent *r, void *ptr, size_t size) {
+  (void)r;
   return SysDram_Realloc(ptr, size);
 }

@@ -141,6 +141,10 @@ void SysWatchdog_ShowBootReasonIfAny(void) {
 
   uint32_t code = g_boot_code;
   g_boot_code = SYS_ERR_NONE;
-  LOG_W("WDG", "Showing previous watchdog reset: 0x%08lX", (unsigned long)code);
+  if (code == SYS_ERR_IWDG_RESET) {
+    LOG_W("WDG", "Previous IWDG reset recorded; skip fatal boot screen");
+    return;
+  }
+  LOG_W("WDG", "Showing previous reset: 0x%08lX", (unsigned long)code);
   SysHandle_Exception(code);
 }

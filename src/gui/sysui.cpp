@@ -69,8 +69,12 @@ static void debug_sample_memory(void) {
 
   const uint32_t ram_total = 128U * 1024U;
   const uint32_t cram_total = 64U * 1024U;
-  g_dbg_ram_used = ram_total > ram.free ? ram_total - ram.free : ram_total;
-  g_dbg_cram_used = cram_total > ccm.free ? cram_total - ccm.free : cram_total;
+  uint32_t ram_static = ram_total > ram.total ? ram_total - ram.total : 0U;
+  uint32_t cram_static = cram_total > ccm.total ? cram_total - ccm.total : 0U;
+  g_dbg_ram_used = ram_static + ram.used;
+  g_dbg_cram_used = cram_static + ccm.used;
+  if (g_dbg_ram_used > ram_total) g_dbg_ram_used = ram_total;
+  if (g_dbg_cram_used > cram_total) g_dbg_cram_used = cram_total;
 
   uint32_t rp = (g_dbg_ram_used * 100U + ram_total / 2U) / ram_total;
   uint32_t cp = (g_dbg_cram_used * 100U + cram_total / 2U) / cram_total;

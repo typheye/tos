@@ -31,7 +31,7 @@
 
 #define LCD_WIDTH 240
 #define LCD_HEIGHT 240
-#define TILE_HEIGHT 80
+#define TILE_HEIGHT 60
 
 
 

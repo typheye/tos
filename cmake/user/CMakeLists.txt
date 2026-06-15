@@ -23,7 +23,6 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/init.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/sysfonts.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/sysdram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syscalls_override.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syshandle.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syswatchdog.c

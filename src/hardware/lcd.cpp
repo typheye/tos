@@ -16,6 +16,7 @@
  */
 
 #include "include/lcd.hpp"
+#include "core/sys/include/sysdram.h"
 #include "library/include/libdly.h"
 
 
@@ -25,8 +26,7 @@ LCD boardLCD;
 extern SPI_HandleTypeDef hspi1;
 extern DMA_HandleTypeDef hdma_spi1_tx;
 
-static uint16_t lcd_tile_buffer[LCD_WIDTH * TILE_HEIGHT]
-    __attribute__((section(".sysdram_lcd_fixed"), aligned(4), used));
+static uint16_t *lcd_tile_buffer = nullptr;
 static volatile uint8_t lcd_debug_overlay_suppressed = 0;
 static volatile uint8_t lcd_preserve_sah_splash = 1;
 
@@ -223,6 +223,15 @@ void LCD::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
 
 
 void LCD::init() {
+  if (!lcd_tile_buffer) {
+    lcd_tile_buffer =
+        (uint16_t *)SysDram_AllocDma(sizeof(uint16_t) * LCD_WIDTH * TILE_HEIGHT);
+    if (!lcd_tile_buffer) {
+      initialized = false;
+      return;
+    }
+  }
+
   uint8_t preserve_sah_splash = lcd_preserve_sah_splash;
   lcd_preserve_sah_splash = 0U;
 
@@ -479,6 +488,9 @@ uint16_t *LCD::getFrameBuffer(void) {
 }
 
 void LCD::beginTileRender(uint16_t y, uint16_t h) {
+  if (!lcd_tile_buffer) {
+    return;
+  }
   if (y == 0U && !lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayBeginFrame();
   }
@@ -500,7 +512,7 @@ void LCD::beginTileRender(uint16_t y, uint16_t h) {
 }
 
 void LCD::endTileRender(void) {
-  if (!initialized)
+  if (!initialized || !lcd_tile_buffer)
     return;
 
   const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
@@ -581,7 +593,7 @@ void LCD::emergencyPrepare(void) {
 }
 
 void LCD::endTileRenderBlocking(void) {
-  if (!initialized) return;
+  if (!initialized || !lcd_tile_buffer) return;
 
   const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
   if (!lcd_debug_overlay_suppressed) {
