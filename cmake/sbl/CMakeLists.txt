@@ -8,6 +8,8 @@ set(SBL_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/common.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/hw.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/lcd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/mem.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/state.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/ui.c
 )
 

@@ -103,6 +103,10 @@ SECTIONS
   } >FLASH :flash
 
   __sbl_reserved_end__ = ORIGIN(FLASH) + 32K;
+  __sbl_state_start__ = __sbl_reserved_end__ - 1K;
+  __sbl_state_end__ = __sbl_reserved_end__;
+  ASSERT(__sbl_end__ <= ORIGIN(FLASH) + 16K,
+         "SBL code must stay in FLASH sector 0; sector 1 is SBL state/reserved")
 
   .sah __sbl_reserved_end__ :
   {

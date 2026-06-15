@@ -52,6 +52,16 @@ static SBL_CODE void sbl_lcd_push_color(uint16_t color, uint32_t pixels) {
   SBL_GpioSet(GPIOD, SBL_LCD_CS_PIN);
 }
 
+SBL_CODE void SBL_LcdBacklightOff(void) {
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0U);
+  SBL_GpioReset(GPIOD, SBL_LCD_BL_PIN);
+}
+
+SBL_CODE void SBL_LcdBacklightFull(void) {
+  (void)HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
+}
+
 SBL_CODE void SBL_LcdRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                           uint16_t color) {
   if (x >= SBL_LCD_W || y >= SBL_LCD_H || w == 0U || h == 0U) {
@@ -125,8 +135,7 @@ SBL_CODE void SBL_LcdInit(void) {
   sbl_lcd_cmd(0x21U);
   sbl_lcd_cmd(0x29U);
   SBL_DelayMs(100U);
-  (void)HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
+  SBL_LcdBacklightFull();
 }
 
 static SBL_CODE uint8_t sbl_font5x7(char c, uint8_t col) {
