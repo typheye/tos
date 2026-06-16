@@ -44,6 +44,18 @@
             }
         },
         {
+            "label": "固件",
+            "type": "shell",
+            "icon": {
+                "id": "tag",
+                "tooltip": "生成可刷写固件"
+            },
+            "command": "scripts/export_partitions.ps1",
+            "presentation": {
+                "reveal": "always",
+            }
+        },
+        {
             "label": "运行",
             "type": "shell",
             "icon": {
