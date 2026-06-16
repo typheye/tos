@@ -3,6 +3,8 @@
 
 #define SBL_STATE_MAGIC   0x53424C55UL /* SBLU */
 #define SBL_STATE_VERSION 1UL
+#define SBL_STATE_OLD_ADDR 0x08007C00UL
+#define SBL_STATE_AREA_SIZE 1024UL
 
 extern const uint32_t __sbl_state_start__[];
 #define SBL_STATE_ADDR ((uint32_t)__sbl_state_start__)
@@ -18,15 +20,49 @@ static SBL_CODE uint32_t sbl_state_crc(const SBL_StateRecord *r) {
   return r->magic ^ r->version ^ r->unlocked ^ 0xA5A55A5AUL;
 }
 
-SBL_CODE uint8_t SBL_StateUnlocked(void) {
-  const SBL_StateRecord *r = (const SBL_StateRecord *)SBL_STATE_ADDR;
+static SBL_CODE uint8_t sbl_state_valid(const SBL_StateRecord *r) {
   if (r->magic != SBL_STATE_MAGIC || r->version != SBL_STATE_VERSION) {
     return 0U;
   }
   if (r->crc != sbl_state_crc(r)) {
     return 0U;
   }
-  return r->unlocked ? 1U : 0U;
+  return 1U;
+}
+
+static SBL_CODE uint8_t sbl_state_erased(const SBL_StateRecord *r) {
+  const uint32_t *w = (const uint32_t *)r;
+  for (uint32_t i = 0U; i < sizeof(SBL_StateRecord) / sizeof(uint32_t); i++) {
+    if (w[i] != 0xFFFFFFFFUL) {
+      return 0U;
+    }
+  }
+  return 1U;
+}
+
+static SBL_CODE const SBL_StateRecord *sbl_state_latest(void) {
+  const SBL_StateRecord *latest = 0;
+  for (uint32_t off = 0U; off + sizeof(SBL_StateRecord) <= SBL_STATE_AREA_SIZE;
+       off += sizeof(SBL_StateRecord)) {
+    const SBL_StateRecord *r = (const SBL_StateRecord *)(SBL_STATE_ADDR + off);
+    if (sbl_state_erased(r)) {
+      break;
+    }
+    if (sbl_state_valid(r)) {
+      latest = r;
+    }
+  }
+  if (latest) {
+    return latest;
+  }
+
+  const SBL_StateRecord *old = (const SBL_StateRecord *)SBL_STATE_OLD_ADDR;
+  return sbl_state_valid(old) ? old : 0;
+}
+
+SBL_CODE uint8_t SBL_StateUnlocked(void) {
+  const SBL_StateRecord *r = sbl_state_latest();
+  return (r && r->unlocked) ? 1U : 0U;
 }
 
 SBL_CODE uint8_t SBL_StateSetUnlocked(uint8_t unlocked) {
@@ -36,28 +72,28 @@ SBL_CODE uint8_t SBL_StateSetUnlocked(uint8_t unlocked) {
   r.unlocked = unlocked ? 1UL : 0UL;
   r.crc = sbl_state_crc(&r);
 
+  uint32_t addr = 0U;
+  for (uint32_t off = 0U; off + sizeof(SBL_StateRecord) <= SBL_STATE_AREA_SIZE;
+       off += sizeof(SBL_StateRecord)) {
+    const SBL_StateRecord *slot =
+        (const SBL_StateRecord *)(SBL_STATE_ADDR + off);
+    if (sbl_state_erased(slot)) {
+      addr = SBL_STATE_ADDR + off;
+      break;
+    }
+  }
+  if (addr == 0U) {
+    return 0U;
+  }
+
   HAL_FLASH_Unlock();
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                          FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
                          FLASH_FLAG_PGSERR);
 
-  FLASH_EraseInitTypeDef erase;
-  erase.TypeErase = FLASH_TYPEERASE_SECTORS;
-  erase.Banks = FLASH_BANK_1;
-  erase.Sector = FLASH_SECTOR_1;
-  erase.NbSectors = 1U;
-  erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
-
-  uint32_t err = 0U;
-  if (HAL_FLASHEx_Erase(&erase, &err) != HAL_OK) {
-    HAL_FLASH_Lock();
-    return 0U;
-  }
-
   const uint32_t *words = (const uint32_t *)&r;
   for (uint32_t i = 0U; i < sizeof(r) / sizeof(uint32_t); ++i) {
-    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,
-                          SBL_STATE_ADDR + i * sizeof(uint32_t),
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr + i * sizeof(uint32_t),
                           words[i]) != HAL_OK) {
       HAL_FLASH_Lock();
       return 0U;

@@ -36,7 +36,9 @@ extern "C" {
 
 #define FLASH_DATA_SECTOR    FLASH_SECTOR_11   
 #define FLASH_DATA_ADDR      0x080E0000u       
-#define FLASH_DATA_SIZE      0x20000u          
+#define FLASH_DATA_SIZE      0x1FC00u          
+#define FLASH_BL_STATE_ADDR  0x080FFC00u
+#define FLASH_BL_STATE_SIZE  0x400u
 
 #define FLASH_BACKUP_SECTOR  FLASH_SECTOR_10   
 #define FLASH_BACKUP_ADDR    0x080C0000u       

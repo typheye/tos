@@ -21,6 +21,15 @@
 
 #define FLASH_TIMEOUT    500u   
 #define ALIGN4(x)        (((uint32_t)(x) + 3u) & ~3u)
+#define FLASH_BL_STATE_MAGIC   0x53424C55u
+#define FLASH_BL_STATE_VERSION 1u
+
+typedef struct __attribute__((packed)) {
+  uint32_t magic;
+  uint32_t version;
+  uint32_t unlocked;
+  uint32_t crc;
+} Flash_BlStateRecord_t;
 
 
 static __attribute__((unused)) Flash_Status_t wait_ready(uint32_t timeout) {
@@ -74,6 +83,61 @@ static Flash_Status_t program_words(uint32_t addr, const uint32_t *data, uint32_
   return FLASH_OK;
 }
 
+static uint32_t flash_bl_state_crc(const Flash_BlStateRecord_t *r) {
+  return r->magic ^ r->version ^ r->unlocked ^ 0xA5A55A5Au;
+}
+
+static bool flash_bl_state_valid(const Flash_BlStateRecord_t *r) {
+  return r->magic == FLASH_BL_STATE_MAGIC &&
+         r->version == FLASH_BL_STATE_VERSION &&
+         r->crc == flash_bl_state_crc(r);
+}
+
+static bool flash_bl_state_erased(const Flash_BlStateRecord_t *r) {
+  const uint32_t *w = (const uint32_t *)r;
+  for (uint32_t i = 0; i < sizeof(*r) / sizeof(uint32_t); ++i) {
+    if (w[i] != 0xFFFFFFFFu) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool flash_bl_state_latest(Flash_BlStateRecord_t *out) {
+  bool found = false;
+  for (uint32_t off = 0; off + sizeof(Flash_BlStateRecord_t) <= FLASH_BL_STATE_SIZE;
+       off += sizeof(Flash_BlStateRecord_t)) {
+    const Flash_BlStateRecord_t *r =
+        (const Flash_BlStateRecord_t *)(FLASH_BL_STATE_ADDR + off);
+    if (flash_bl_state_erased(r)) {
+      break;
+    }
+    if (flash_bl_state_valid(r)) {
+      *out = *r;
+      found = true;
+    }
+  }
+  return found;
+}
+
+static Flash_Status_t flash_bl_state_restore(const Flash_BlStateRecord_t *r) {
+  if (!flash_bl_state_valid(r)) {
+    return FLASH_OK;
+  }
+  return program_words(FLASH_BL_STATE_ADDR, (const uint32_t *)r,
+                       sizeof(*r) / sizeof(uint32_t));
+}
+
+static Flash_Status_t erase_data_sector_preserve_bl(void) {
+  Flash_BlStateRecord_t bl;
+  bool have_bl = flash_bl_state_latest(&bl);
+  Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+  if (st == FLASH_OK && have_bl) {
+    st = flash_bl_state_restore(&bl);
+  }
+  return st;
+}
+
 
 uint32_t Flash_CRC32(const uint32_t *pData, uint32_t size) {
   uint32_t crc = 0xFFFFFFFFu;
@@ -98,7 +162,7 @@ static Flash_Status_t check_align(const uint32_t *pData, uint32_t size) {
 
 
 Flash_Status_t Flash_Erase_Sector(void) {
-  Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+  Flash_Status_t st = erase_data_sector_preserve_bl();
   LOG_I("FLASH", "Erase sector %d: %s", FLASH_DATA_SECTOR,
         st == FLASH_OK ? "OK" : "FAIL");
   return st;
@@ -121,7 +185,7 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   uint32_t total = sizeof(hdr) + dataSize;
   uint32_t words = (total + 3) / 4;
 
-  st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+  st = erase_data_sector_preserve_bl();
   if (st != FLASH_OK) return st;
 
   st = program_words(FLASH_DATA_ADDR, record, words);
@@ -176,7 +240,7 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
   LOG_I("FLASH", "Backup saved (%lu bytes)", (unsigned long)total);
 
   
-  st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+  st = erase_data_sector_preserve_bl();
   if (st != FLASH_OK) return st;
   st = program_words(FLASH_DATA_ADDR, buf, words);
   if (st != FLASH_OK) {
@@ -184,7 +248,7 @@ Flash_Status_t Flash_Write_With_Backup(const uint32_t *pData, uint32_t dataSize)
     
     for (uint32_t i = 0; i < words; i++)
       buf[i] = *(volatile uint32_t *)(FLASH_BACKUP_ADDR + i * 4);
-    st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+    st = erase_data_sector_preserve_bl();
     if (st == FLASH_OK)
       program_words(FLASH_DATA_ADDR, buf, words);
     return FLASH_ERR_PROGRAM;
@@ -207,7 +271,7 @@ bool Flash_Check_Backup(void) {
   for (uint32_t i = 0; i < words; i++)
     buf[i] = *(volatile uint32_t *)(FLASH_BACKUP_ADDR + i * 4);
 
-  Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+  Flash_Status_t st = erase_data_sector_preserve_bl();
   if (st == FLASH_OK) {
     program_words(FLASH_DATA_ADDR, buf, words);
     program_word(FLASH_BACKUP_ADDR, 0); 
@@ -302,14 +366,14 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
   
   if (next + slot_size > FLASH_DATA_ADDR + FLASH_DATA_SIZE) {
     LOG_W("FLASH", "Rolling sector full, erasing...");
-    st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+    st = erase_data_sector_preserve_bl();
     if (st != FLASH_OK) return st;
     next = FLASH_DATA_ADDR;
   }
 
   if (!flash_range_erased(next, slot_size)) {
     LOG_W("FLASH", "Rolling slot dirty, erasing sector...");
-    st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
+    st = erase_data_sector_preserve_bl();
     if (st != FLASH_OK) return st;
     next = FLASH_DATA_ADDR;
   }
