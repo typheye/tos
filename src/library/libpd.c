@@ -670,7 +670,7 @@ void PD_DrawEthIcon(int16_t x, int16_t y, bool connected) {
 }
 
 void PD_DrawSignalIcon(int16_t x, int16_t y, int signal) {
-  /* 2x scale of Python (10x8 â†?20x16) */
+  /* 2x scale of Python (10x8 ï¿½?20x16) */
   uint32_t c = signal > 0 ? TOS_ACCENT : TOS_CARD_BG;
   int16_t h = 16;
 
@@ -688,7 +688,7 @@ void PD_DrawSignalIcon(int16_t x, int16_t y, int signal) {
   };
   PD_DrawPolygon(tri, 7, c);
 
-  /* 5 signal bars (right side) â€?2px wide, 1px gap */
+  /* 5 signal bars (right side) ï¿½?2px wide, 1px gap */
   int bars_on = signal > 0 ? ((signal - 1) / 20 + 1) : 0;
   if (bars_on > 5) bars_on = 5;
   PD_SetFill(true);
@@ -896,14 +896,17 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   for (uint32_t s = 0; s <= steps; ++s) {
     float t = (float)s / (float)steps;
     float ratio = 0.5f - 0.5f * cosf(3.14159f * t);
-    splash_progress_level = (uint8_t)(s * 22U / steps);
+    splash_progress_level = (uint8_t)(s * 16U / steps);
     splash_draw_progress(splash_progress_level, (uint8_t)(ratio * 255.0f));
-    if (splash_fade_out_requested) break;
-    if (step_delay > 0U) JPDelay(step_delay);
+    if (splash_fade_out_requested)
+      break;
+    if (step_delay > 0U)
+      JPDelay(step_delay);
   }
 
   if (!splash_fade_out_requested) {
-    if (splash_progress_level < 22U) splash_progress_level = 22U;
+    if (splash_progress_level < 16U)
+      splash_progress_level = 16U;
     splash_draw_progress(splash_progress_level, 255U);
   }
 
@@ -911,17 +914,20 @@ void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
 }
 
 void PD_SplashTick(void) {
-  if (!splash_in_progress || splash_fade_out_requested) return;
+  if (!splash_in_progress || splash_fade_out_requested)
+    return;
 
   uint32_t now = HAL_GetTick();
-  uint32_t interval = splash_progress_level < 45U ? 90U : 180U;
-  if ((uint32_t)(now - splash_last_tick_ms) < interval) return;
+  uint32_t interval = splash_progress_level < 35U ? 90U : 180U;
+  if ((uint32_t)(now - splash_last_tick_ms) < interval)
+    return;
   splash_last_tick_ms = now;
 
-  if (splash_progress_level < 92U) {
-    uint8_t inc = splash_progress_level < 45U ? 2U : 1U;
+  if (splash_progress_level < 70U) {
+    uint8_t inc = splash_progress_level < 35U ? 2U : 1U;
     splash_progress_level = (uint8_t)(splash_progress_level + inc);
-    if (splash_progress_level > 92U) splash_progress_level = 92U;
+    if (splash_progress_level > 70U)
+      splash_progress_level = 70U;
   }
   splash_draw_progress(splash_progress_level, 255U);
 }

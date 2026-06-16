@@ -36,6 +36,7 @@
 #define SYSDRAM_MAGIC_FREE 0x44524D46UL
 #define SYSDRAM_ALIGN      8U
 #define SYSDRAM_CODE __attribute__((section(".sbl.text"), noinline, used))
+#define SYSDRAM_STACK_GUARD_SIZE (8U * 1024U)
 
 typedef struct SysDram_Block {
   uint32_t magic;
@@ -113,7 +114,11 @@ SYSDRAM_CODE void SysDram_Init(void) {
   if (!g_inited) {
     uintptr_t ram_start = ((uintptr_t)&_end + (SYSDRAM_ALIGN - 1U)) &
                           ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
-    uintptr_t ram_end = ((uintptr_t)&_estack - (uintptr_t)&_Min_Stack_Size) &
+    uintptr_t stack_reserve = (uintptr_t)&_Min_Stack_Size;
+    if (stack_reserve < SYSDRAM_STACK_GUARD_SIZE) {
+      stack_reserve = SYSDRAM_STACK_GUARD_SIZE;
+    }
+    uintptr_t ram_end = ((uintptr_t)&_estack - stack_reserve) &
                         ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
     uintptr_t ccm_start = ((uintptr_t)&_eccmram + (SYSDRAM_ALIGN - 1U)) &
                           ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
@@ -395,7 +400,7 @@ void SysDram_LogStats(void) {
 }
 
 SYSDRAM_CODE void *malloc(size_t size) {
-  return SysDram_AllocFast(size);
+  return SysDram_Alloc(size);
 }
 
 SYSDRAM_CODE void free(void *ptr) {
@@ -403,7 +408,7 @@ SYSDRAM_CODE void free(void *ptr) {
 }
 
 SYSDRAM_CODE void *calloc(size_t count, size_t size) {
-  return SysDram_CallocFast(count, size);
+  return SysDram_Calloc(count, size);
 }
 
 SYSDRAM_CODE void *realloc(void *ptr, size_t size) {
@@ -414,7 +419,7 @@ struct _reent;
 
 SYSDRAM_CODE void *_malloc_r(struct _reent *r, size_t size) {
   (void)r;
-  return SysDram_AllocFast(size);
+  return SysDram_Alloc(size);
 }
 
 SYSDRAM_CODE void _free_r(struct _reent *r, void *ptr) {
@@ -424,7 +429,7 @@ SYSDRAM_CODE void _free_r(struct _reent *r, void *ptr) {
 
 SYSDRAM_CODE void *_calloc_r(struct _reent *r, size_t count, size_t size) {
   (void)r;
-  return SysDram_CallocFast(count, size);
+  return SysDram_Calloc(count, size);
 }
 
 SYSDRAM_CODE void *_realloc_r(struct _reent *r, void *ptr, size_t size) {

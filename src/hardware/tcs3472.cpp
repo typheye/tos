@@ -35,7 +35,7 @@ TCS3472::TCS3472() {
   _addr = TCS3472_ADDR_8BIT;
   _initialized = false;
   _gain = TCS3472_CONTROL_AGAIN_16X;
-  _atime = 0x00; 
+  _atime = 0xEB; /* ~50 ms integration; responsive enough for backlight. */
 }
 
 
@@ -106,9 +106,11 @@ void TCS3472::init(void) {
   
   ledOff();
 
+  uint32_t integration_tenths_ms = (uint32_t)(256U - _atime) * 24U;
   LOG_I("TCS", "Initialized, ID=0x%02X", id);
-  LOG_I("TCS", "Gain=%dX, Integration=%.1fms", (int)pow(4, _gain),
-         (256 - _atime) * 2.4f);
+  LOG_I("TCS", "Gain=%dX, Integration=%lu.%lums", (int)pow(4, _gain),
+        (unsigned long)(integration_tenths_ms / 10U),
+        (unsigned long)(integration_tenths_ms % 10U));
 }
 
 
@@ -133,7 +135,7 @@ TCS3472_RawData_t TCS3472::readRaw(void) {
     return data;
 
   
-  if (!waitForData(100)) {
+  if (!waitForData(30)) {
     return data;
   }
 

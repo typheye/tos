@@ -255,11 +255,6 @@ void TOS::init() {
   boardPot.init();
   boardHID.init();
 
-  boardLCD.setAutoBrightness(SM_Disp_Auto());
-  boardLCD.setRotation(SM_Disp_Dir());
-  if (!SM_Disp_Auto())
-    boardLCD.setBrightness((uint16_t)SM_Disp_Bright() * 100);
-
   initialized_ = true;
 
   LOG_I("MAIN", "System initialized, CPU:168MHz");
@@ -374,6 +369,13 @@ void TOS::init() {
   JPDelay(50);
 
   PD_SplashFinish(100);
+  boardLCD.setRotation(SM_Disp_Dir());
+  boardLCD.setAutoBrightness(SM_Disp_Auto());
+  if (!SM_Disp_Auto()) {
+    boardLCD.setBrightness((uint16_t)SM_Disp_Bright() * 100);
+  } else {
+    boardLCD.updateAutoBrightness();
+  }
   SysUI_DebugOverlaySetEnabled(SM_Debug_Dashboard() ? 1U : 0U);
 
   

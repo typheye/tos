@@ -50,7 +50,7 @@ public:
   
   void setBrightness(uint16_t val);
   uint16_t getBrightness(void) const { return _brightness_pwm; }
-  void setAutoBrightness(bool on) { _auto_brightness = on; }
+  void setAutoBrightness(bool on);
   bool getAutoBrightness(void) const { return _auto_brightness; }
   void updateAutoBrightness(void);  // read TCS3472 and adjust PWM
   uint8_t getRotation(void) const { return _rotation; }
@@ -101,6 +101,9 @@ private:
   uint16_t _rotation;
   uint16_t _brightness_pwm;
   bool _auto_brightness;
+  bool _auto_brightness_logged;
+  bool _auto_brightness_force;
+  uint32_t _auto_brightness_last;
   uint16_t _tile_y;
   uint16_t _tile_h;
 

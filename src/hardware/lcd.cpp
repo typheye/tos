@@ -104,6 +104,9 @@ LCD::LCD() {
   _rotation = 0;
   _brightness_pwm = 1000;
   _auto_brightness = false;
+  _auto_brightness_logged = false;
+  _auto_brightness_force = false;
+  _auto_brightness_last = 0;
   _tile_y = 0;
   _tile_h = TILE_HEIGHT;
 }
@@ -432,26 +435,36 @@ void LCD::setBrightness(uint16_t val) {
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, val);
 }
 
+void LCD::setAutoBrightness(bool on) {
+  bool enabled = on ? true : false;
+  if (_auto_brightness != enabled) {
+    _auto_brightness_force = enabled;
+    _auto_brightness_last = 0;
+  } else if (enabled) {
+    _auto_brightness_force = true;
+  }
+  _auto_brightness = enabled;
+  if (!enabled) {
+    _auto_brightness_logged = false;
+  }
+}
 
 void LCD::updateAutoBrightness(void) {
-  static bool logged = false;
-  static uint32_t last = 0;
   uint32_t now = HAL_GetTick();
 
   if (!_auto_brightness) {
-    logged = false;
+    _auto_brightness_logged = false;
+    _auto_brightness_last = 0;
     return;
   }
-  if (!logged) {
+  if (!_auto_brightness_logged) {
     LOG_I("LCD", "Auto-brightness active");
-    logged = true;
+    _auto_brightness_logged = true;
   }
 
-  /* Called both from UI drawing and SysWatchdog_Tick().  Keep it low-rate so
-   * network-heavy periods do not starve brightness, but brightness updates also
-   * do not add visible jitter to HTTP. */
-  if ((uint32_t)(now - last) < 2000U) return;
-  last = now;
+  const uint32_t interval = _auto_brightness_force ? 0U : 300U;
+  if ((uint32_t)(now - _auto_brightness_last) < interval) return;
+  _auto_brightness_last = now;
 
   extern TCS3472 boardTCS3472;
   if (!boardTCS3472.isInitialized()) return;
@@ -466,16 +479,17 @@ void LCD::updateAutoBrightness(void) {
   else if (lux < 1000)  target = 750;
   else                  target = 1000;
 
-  /* Smooth changes: full jumps are harsh and can look like the backlight is
-   * fighting the UI while network work is running. */
   uint16_t cur = _brightness_pwm;
   uint16_t pwm;
-  if (target > cur) {
+  if (_auto_brightness_force) {
+    pwm = target;
+    _auto_brightness_force = false;
+  } else if (target > cur) {
     uint16_t d = target - cur;
-    pwm = cur + (d > 120U ? 120U : d);
+    pwm = cur + (d > 220U ? 220U : d);
   } else {
     uint16_t d = cur - target;
-    pwm = cur - (d > 120U ? 120U : d);
+    pwm = cur - (d > 220U ? 220U : d);
   }
 
   if (pwm != _brightness_pwm) setBrightness(pwm);
