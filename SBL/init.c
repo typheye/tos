@@ -18,18 +18,6 @@ extern uint32_t SystemCoreClock;
 
 static volatile uint8_t sbl_usb_ready;
 
-static SBL_CODE void SBL_UsbDisconnectPulse(void) {
-  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-  (void)RCC->AHB1ENR;
-
-  GPIOA->MODER &= ~(3UL << (12U * 2U));
-  GPIOA->MODER |=  (1UL << (12U * 2U));
-  GPIOA->OTYPER &= ~(1UL << 12U);
-  GPIOA->PUPDR &= ~(3UL << (12U * 2U));
-  GPIOA->BSRR = (1UL << (12U + 16U));
-  SBL_DelayMs(80U);
-}
-
 static SBL_CODE uint8_t SBL_ClockConfig(void) {
   uint32_t guard;
 
@@ -146,7 +134,7 @@ SBL_CODE void SBL_Run(void) {
   if (fastboot_requested) {
     SBL_UiDrawFastboot();
     if (SBL_UsbClockStart()) {
-      SBL_UsbDisconnectPulse();
+      SBL_USB_DisconnectPulse();
       if (SBL_USB_Init()) {
         HAL_NVIC_SetPriority(OTG_FS_IRQn, 6U, 0U);
         sbl_usb_ready = 1U;

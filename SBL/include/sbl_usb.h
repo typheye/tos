@@ -6,6 +6,7 @@
 
 SBL_CODE uint8_t SBL_USB_Init(void);
 SBL_CODE void SBL_USB_DeInit(void);
+SBL_CODE void SBL_USB_DisconnectPulse(void);
 SBL_CODE void SBL_USB_Tick(void);
 SBL_CODE uint8_t SBL_USB_IsConfigured(void);
 SBL_CODE uint8_t SBL_USB_Write(const uint8_t *data, uint16_t len);

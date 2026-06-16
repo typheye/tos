@@ -6,6 +6,8 @@
 #include "sbl_mem.h"
 #include "sbl_state.h"
 
+#include "stm32f407xx.h"
+
 #include "usbd_core.h"
 #include "usbd_ctlreq.h"
 #include "usbd_ioreq.h"
@@ -708,12 +710,23 @@ SBL_CODE uint8_t SBL_USB_Init(void) {
   return 1U;
 }
 
+SBL_CODE void SBL_USB_DisconnectPulse(void) {
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+  (void)RCC->AHB1ENR;
+
+  GPIOA->MODER &= ~(3UL << (12U * 2U));
+  GPIOA->MODER |=  (1UL << (12U * 2U));
+  GPIOA->OTYPER &= ~(1UL << 12U);
+  GPIOA->PUPDR &= ~(3UL << (12U * 2U));
+  GPIOA->BSRR = (1UL << (12U + 16U));
+  SBL_DelayMs(80U);
+}
+
 SBL_CODE void SBL_USB_DeInit(void) {
-  if (!sbl_usb_started) {
-    return;
+  if (sbl_usb_started) {
+    (void)USBD_Stop(&sbl_usb_dev);
+    (void)USBD_DeInit(&sbl_usb_dev);
   }
-  (void)USBD_Stop(&sbl_usb_dev);
-  (void)USBD_DeInit(&sbl_usb_dev);
   sbl_usb_started = 0U;
   sbl_usb_banner_sent = 0U;
   sbl_usb_unlock_pending = 0U;

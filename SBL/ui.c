@@ -36,6 +36,7 @@ typedef struct {
 } SBL_PageParams;
 
 static SBL_PageParams *sbl_page_params;
+static uint8_t sbl_fastboot_visible;
 
 static const char sbl_txt_title[] SBL_CONST = "FASTBOOT MENU";
 static const char sbl_txt_help[] SBL_CONST =
@@ -67,7 +68,7 @@ static const char sbl_unlock_yes[] SBL_CONST = "YES";
 static const char sbl_unlock_no[] SBL_CONST = "NO";
 static const char sbl_damage_title[] SBL_CONST = "SYSTEM DAMAGE";
 static const char sbl_damage_body[] SBL_CONST =
-    "Your system has encountered some errors.";
+    "The system has some errors.";
 
 static const char *const sbl_menus[SBL_MENU_COUNT] SBL_CONST = {
     sbl_txt_reboot,
@@ -273,6 +274,7 @@ SBL_CODE void SBL_UiDrawFastboot(void) {
   sbl_draw_menu(0U);
   sbl_draw_info();
   SBL_LcdDisplayOn();
+  sbl_fastboot_visible = 1U;
 }
 
 SBL_CODE void SBL_UiRunFastboot(void) {
@@ -282,11 +284,18 @@ SBL_CODE void SBL_UiRunFastboot(void) {
   uint32_t press_start = 0U;
   uint32_t last_action = HAL_GetTick();
   uint32_t usb_grace_start = last_action;
+  uint32_t usb_retry_at = last_action + 2500U;
   uint8_t usb_grace_done = 0U;
 
-  sbl_redraw_fastboot_hidden(&selected);
+  if (sbl_fastboot_visible) {
+    SBL_MemReset();
+    sbl_load_page_params();
+  } else {
+    sbl_redraw_fastboot_hidden(&selected);
+  }
   SBL_WaitButtonRelease(120U);
   usb_grace_start = HAL_GetTick();
+  usb_retry_at = usb_grace_start + 2500U;
 
   while (1) {
     uint32_t now = HAL_GetTick();
@@ -294,6 +303,19 @@ SBL_CODE void SBL_UiRunFastboot(void) {
         (uint32_t)(now - usb_grace_start) >= 2500U) {
       SBL_USB_DeInit();
       usb_grace_done = 1U;
+      usb_retry_at = now + 1200U;
+    }
+    if (usb_grace_done && !SBL_USB_IsConfigured() &&
+        (int32_t)(now - usb_retry_at) >= 0) {
+      SBL_USB_DisconnectPulse();
+      if (SBL_USB_Init()) {
+        usb_grace_done = 0U;
+        usb_grace_start = HAL_GetTick();
+        usb_retry_at = usb_grace_start + 2500U;
+      } else {
+        SBL_USB_DeInit();
+        usb_retry_at = HAL_GetTick() + 1200U;
+      }
     }
     SBL_USB_Tick();
     if (SBL_USB_IsBusy()) {
@@ -355,7 +377,7 @@ SBL_CODE void SBL_UiRunSystemDamage(void) {
   SBL_LcdDisplayOff();
   SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
   sbl_draw_text_center_line(102U, sbl_damage_title, SBL_RED, SBL_FONT_SMALL);
-  sbl_draw_text_center_block(126U, sbl_damage_body, SBL_RED, SBL_FONT_SMALL);
+  sbl_draw_text_center_block(126U, sbl_damage_body, SBL_WHITE, SBL_FONT_SMALL);
   SBL_LcdDisplayOn();
   while (1) {
     SBL_USB_Tick();
