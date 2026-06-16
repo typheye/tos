@@ -263,7 +263,7 @@ static SBL_CODE void sbl_run_unlock_page(uint8_t *selected) {
 
 SBL_CODE void SBL_UiDrawFastboot(void) {
   SBL_LcdDisplayOff();
-  SBL_LcdRect(0U, 28U, SBL_LCD_W, 178U, SBL_BLACK);
+  SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
   sbl_draw_center_title();
   SBL_LcdDrawText(SBL_LEFT_X, SBL_HELP_Y, sbl_txt_help, SBL_WHITE,
                   SBL_FONT_SMALL);

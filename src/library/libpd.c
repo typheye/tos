@@ -866,6 +866,15 @@ static void splash_draw_progress(uint8_t level, uint8_t alpha) {
 
 void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   PD_Init();
+  
+  LCD_BeginTileRender(0U, 48U);
+  g_fb = LCD_GetFrameBuffer();
+  g_tile_y = 0U;
+  g_tile_h = 48U;
+  for (uint32_t i = 0; i < (uint32_t)LCD_WIDTH * 48U; ++i) {
+    g_fb[i] = 0x0000;
+  }
+  LCD_EndTileRender();
 
   if (g_fb == NULL) {
     LOG_E("PD", "Splash start failed: framebuffer is NULL");
