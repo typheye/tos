@@ -7,14 +7,11 @@
 #include "sbl_splash.h"
 #include "sbl_ui.h"
 #include "sbl_usb.h"
-#include "trust.h"
 
 extern uint32_t _estack;
 extern void Reset_Handler(void);
 extern int main(void);
 extern void start_tos(void);
-extern const uint8_t __trust_start__[];
-extern const uint8_t __trust_end__[];
 
 SBL_CODE uint8_t SBL_AppLooksValid(void) {
   const uint32_t flash_lo = 0x08040000UL;
@@ -42,32 +39,16 @@ SBL_CODE uint8_t SBL_AppLooksValid(void) {
   return 1U;
 }
 
-SBL_CODE uint8_t SBL_TrustLooksValid(void) {
-  const Trust_Block_t *block = (const Trust_Block_t *)__trust_start__;
-  uintptr_t span = (uintptr_t)__trust_end__ - (uintptr_t)__trust_start__;
-  if (span < sizeof(Trust_Block_t)) {
-    return 0U;
-  }
-  if (block->magic != TRUST_MAGIC || block->version != TRUST_VERSION) {
-    return 0U;
-  }
-  if (block->crc != Trust_CalcCrc(block)) {
-    return 0U;
-  }
-  return 1U;
-}
-
 SBL_CODE void SBL_Run(void) {
   SBL_SplashRun();
   SBL_HwBootstrap();
-  if (!SBL_IsFastbootRequested() && SBL_AppLooksValid() &&
-      SBL_TrustLooksValid()) {
+  if (!SBL_IsFastbootRequested() && SBL_AppLooksValid()) {
     return;
   }
 
   SBL_LedsOff();
   (void)SBL_USB_Init();
-  if (!SBL_AppLooksValid() || !SBL_TrustLooksValid()) {
+  if (!SBL_AppLooksValid()) {
     SBL_UiRunSystemDamage();
   }
   SBL_UiRunFastboot();

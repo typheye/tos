@@ -98,28 +98,23 @@ SECTIONS
     KEEP(*(.sbl.text*))
     KEEP(*(.sbl.rodata))
     KEEP(*(.sbl.rodata*))
+    *stm32f4xx_it.c.obj(.text .text.* .rodata .rodata*)
+    *usbd_conf.c.obj(.text .text.* .rodata .rodata*)
+    *usbd_core.c.obj(.text .text.* .rodata .rodata*)
+    *usbd_ctlreq.c.obj(.text .text.* .rodata .rodata*)
+    *usbd_ioreq.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_hal_pcd.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_hal_pcd_ex.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_ll_usb.c.obj(.text .text.* .rodata .rodata*)
     . = ALIGN(4);
     __sbl_end__ = .;
   } >FLASH :flash
 
-  __sbl_reserved_end__ = ORIGIN(FLASH) + 64K;
-  __trust_start__ = ORIGIN(FLASH) + 64K;
-  __trust_end__ = ORIGIN(FLASH) + 128K;
+  __sbl_reserved_end__ = ORIGIN(FLASH) + 128K;
   __sbl_state_start__ = ORIGIN(FLASH) + LENGTH(FLASH) - 1K;
   __sbl_state_end__ = ORIGIN(FLASH) + LENGTH(FLASH);
   ASSERT(__sbl_end__ <= __sbl_reserved_end__,
-         "SBL code exceeds reserved 64KB partition")
-
-  .trust __trust_start__ :
-  {
-    . = ALIGN(4);
-    KEEP(*(.trust.rodata))
-    KEEP(*(.trust.rodata*))
-    . = ALIGN(4);
-  } >FLASH :flash
-
-  ASSERT(. <= __trust_end__,
-         "TRUST data exceeds reserved 64KB partition")
+         "SBL code exceeds reserved 128KB partition")
 
   __sah_data_start__ = ORIGIN(FLASH) + 128K;
 

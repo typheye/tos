@@ -15,9 +15,7 @@ $tmpHex = Join-Path $firmwareDir "flash.hex"
 $flashBase = 0x08000000
 $flashSize = 0x00100000
 $sblOffset = 0x00000000
-$sblSize = 0x00010000
-$trustOffset = 0x00010000
-$trustSize = 0x00010000
+$sblSize = 0x00020000
 $sahOffset = 0x00020000
 $sahSize = 0x00020000
 $systemOffset = 0x00040000
@@ -107,13 +105,11 @@ function Write-Slice {
 }
 
 $sblPath = Join-Path $firmwareDir "sbl.bin"
-$trustPath = Join-Path $firmwareDir "trust.bin"
 $sahPath = Join-Path $firmwareDir "sah.bin"
 $systemPath = Join-Path $firmwareDir "system.bin"
 $csvPath = Join-Path $distDir "partitions.csv"
 
 Write-Slice -Source $full -Offset $sblOffset -Length $sblSize -Path $sblPath
-Write-Slice -Source $full -Offset $trustOffset -Length $trustSize -Path $trustPath
 Write-Slice -Source $full -Offset $sahOffset -Length $sahSize -Path $sahPath
 Write-Slice -Source $full -Offset $systemOffset -Length $systemSize -Path $systemPath
 
@@ -122,7 +118,6 @@ Remove-Item -LiteralPath $tmpHex -Force
 $csv = @(
   "Name,Offset,Size"
   ('sbl,0x{0:X8},0x{1:X8}' -f $sblOffset, $sblSize)
-  ('trust,0x{0:X8},0x{1:X8}' -f $trustOffset, $trustSize)
   ('sah,0x{0:X8},0x{1:X8}' -f $sahOffset, $sahSize)
   ('system,0x{0:X8},0x{1:X8}' -f $systemOffset, $systemSize)
 )
@@ -130,7 +125,6 @@ Set-Content -LiteralPath $csvPath -Value $csv -Encoding ASCII
 
 Write-Host "Export complete:"
 Write-Host "  sbl.bin    $(('{0} bytes @ 0x{1:X8}' -f $sblSize, ($flashBase + $sblOffset)))"
-Write-Host "  trust.bin  $(('{0} bytes @ 0x{1:X8}' -f $trustSize, ($flashBase + $trustOffset)))"
 Write-Host "  sah.bin    $(('{0} bytes @ 0x{1:X8}' -f $sahSize, ($flashBase + $sahOffset)))"
 Write-Host "  system.bin $(('{0} bytes @ 0x{1:X8}' -f $systemSize, ($flashBase + $systemOffset)))"
 Write-Host "  partitions.csv"

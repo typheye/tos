@@ -9,7 +9,6 @@ extern "C" {
 
 void SBL_Run(void);
 uint8_t SBL_AppLooksValid(void);
-uint8_t SBL_TrustLooksValid(void);
 
 #ifdef __cplusplus
 }
