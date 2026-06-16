@@ -17,6 +17,7 @@
 
 #include "include/time_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 
 extern KeyManager keyManager;
@@ -34,42 +35,6 @@ static int  edit_sel = -1;
  *  Draw
  * ================================================================== */
 
-static void draw_frame(const char *title) {
-  PD_Init(); PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t; Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8]; time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text, bool grey) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(grey ? TOS_GREY : (s ? TOS_TEXT : TOS_TEXT_SEC));
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value, bool editing_this, bool grey) {
-  bool s = (idx == sel);
-  uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
-  if (editing_this && (HAL_GetTick() / 200) % 2) cc = TOS_CARD_BG;
-  PD_DrawAngledCard(14, cy, 212, 20, 5, cc);
-  PD_SetColor(grey ? TOS_GREY : (s ? TOS_TEXT : TOS_TEXT_SEC));
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
-
 /* ==================================================================
  *  Sync (direct draw, no alert component during wait)
  * ================================================================== */
@@ -81,8 +46,7 @@ static bool do_sync(void) {
     return false;
   }
 
-  /* Show "Syncing..." â€?alert-style (frame + left-aligned msg) */
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
+  /* Show "Syncing..." éˆ¥?alert-style (frame + left-aligned msg) */
   LCD_FLUSH({
     PD_Init(); PD_FillScreen(TOS_BG);
     PD_DrawFrame();
@@ -102,11 +66,8 @@ static bool do_sync(void) {
     JPDelay(1000);
     ok = SysTime_Sync();
   }
-
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   if (ok) alert_show("TIME", "Synced OK!");
   else    alert_show("TIME", "Sync failed");
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   return ok;
 }
 
@@ -115,7 +76,6 @@ static bool do_sync(void) {
  * ================================================================== */
 
 void time_activity_run(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
 
   auto_sync = SM_Time_AutoSync();
   style_24h = SM_Time_Style24h();
@@ -169,7 +129,6 @@ void time_activity_run(void) {
                 boardTRTC.setDate((uint8_t)(y - 2000), (uint8_t)mo, (uint8_t)da, (uint8_t)wk);
               }
             }
-            boardLCD.fillScreen(LCD_COLOR_BLACK);
           }
           break;
         case 4:
@@ -180,7 +139,6 @@ void time_activity_run(void) {
                 boardTRTC.setTime((uint8_t)h, (uint8_t)m, (uint8_t)s);
               }
             }
-            boardLCD.fillScreen(LCD_COLOR_BLACK);
           }
           break;
         case 5: editing = true; edit_sel = 5; break;
@@ -200,21 +158,21 @@ void time_activity_run(void) {
 
       bool sync_on = auto_sync;
       LCD_FLUSH({
-        draw_frame("TIME");
+        UI_DrawFrameTitle("TIME");
         PD_SetFont(FONT_ASCII_16);
         for (int i = 0; i < 6; i++) {
           int cy = 33 + i * 25;
           switch (i) {
-          case 0: draw_card(0, sel, cy, "00 Return", false); break;
+          case 0: UI_DrawMenuCardEx(0, sel, cy, "00 Return", false); break;
           case 1: { char b[32]; snprintf(b,sizeof(b),"01 Auto Sync");
-            draw_card_r(1,sel,cy,b,auto_sync?"ON":"OFF",editing&&edit_sel==1,false); break; }
-          case 2: draw_card(2,sel,cy,"   Sync Now",!sync_on); break;
+            UI_DrawMenuValueEx(1,sel,cy,b,auto_sync?"ON":"OFF",editing&&edit_sel==1,false); break; }
+          case 2: UI_DrawMenuCardEx(2,sel,cy,"   Sync Now",!sync_on); break;
           case 3: { char b[32]; snprintf(b,sizeof(b),"   Date");
-            draw_card_r(3,sel,cy,b,date_buf,false,sync_on); break; }
+            UI_DrawMenuValueEx(3,sel,cy,b,date_buf,false,sync_on); break; }
           case 4: { char b[32]; snprintf(b,sizeof(b),"   Time");
-            draw_card_r(4,sel,cy,b,time_buf,false,sync_on); break; }
+            UI_DrawMenuValueEx(4,sel,cy,b,time_buf,false,sync_on); break; }
           case 5: { char b[32]; snprintf(b,sizeof(b),"02 Style");
-            draw_card_r(5,sel,cy,b,style_24h?"24H":"12H",editing&&edit_sel==5,false); break; }
+            UI_DrawMenuValueEx(5,sel,cy,b,style_24h?"24H":"12H",editing&&edit_sel==5,false); break; }
           }
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");

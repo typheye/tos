@@ -37,6 +37,8 @@
 #define SYSDRAM_ALIGN      8U
 #define SYSDRAM_CODE __attribute__((section(".sbl.text"), noinline, used))
 #define SYSDRAM_STACK_GUARD_SIZE (8U * 1024U)
+#define SYSDRAM_PHYS_RAM_SIZE (128UL * 1024UL)
+#define SYSDRAM_PHYS_CCM_SIZE (64UL * 1024UL)
 
 typedef struct SysDram_Block {
   uint32_t magic;
@@ -302,19 +304,6 @@ SYSDRAM_CODE void *SysDram_Calloc(size_t count, size_t size) {
   return p;
 }
 
-static SYSDRAM_CODE void *SysDram_CallocFast(size_t count, size_t size) {
-  if (size != 0U && count > ((size_t)-1) / size) {
-    errno = ENOMEM;
-    return NULL;
-  }
-  size_t total = count * size;
-  void *p = SysDram_AllocFast(total);
-  if (p) {
-    memset(p, 0, total);
-  }
-  return p;
-}
-
 SYSDRAM_CODE void *SysDram_Realloc(void *ptr, size_t size) {
   if (!ptr) {
     return SysDram_Alloc(size);
@@ -388,6 +377,19 @@ void SysDram_LogStats(void) {
   SysDram_Stats_t ccm;
   if (SysDram_GetStats(SYSDRAM_REGION_RAM, &ram) &&
       SysDram_GetStats(SYSDRAM_REGION_CCM, &ccm)) {
+    uint32_t dyn_total = ram.total + ccm.total;
+    uint32_t phys_total = SYSDRAM_PHYS_RAM_SIZE + SYSDRAM_PHYS_CCM_SIZE;
+    LOG_I("DRAM", "Dynamic cap RAM=%lu/%luB(%lu.%lu%%) CCM=%lu/%luB(%lu.%lu%%)",
+          (unsigned long)ram.total, (unsigned long)SYSDRAM_PHYS_RAM_SIZE,
+          (unsigned long)(ram.total * 1000UL / SYSDRAM_PHYS_RAM_SIZE / 10UL),
+          (unsigned long)(ram.total * 1000UL / SYSDRAM_PHYS_RAM_SIZE % 10UL),
+          (unsigned long)ccm.total, (unsigned long)SYSDRAM_PHYS_CCM_SIZE,
+          (unsigned long)(ccm.total * 1000UL / SYSDRAM_PHYS_CCM_SIZE / 10UL),
+          (unsigned long)(ccm.total * 1000UL / SYSDRAM_PHYS_CCM_SIZE % 10UL));
+    LOG_I("DRAM", "Dynamic cap total=%lu/%luB(%lu.%lu%%)",
+          (unsigned long)dyn_total, (unsigned long)phys_total,
+          (unsigned long)(dyn_total * 1000UL / phys_total / 10UL),
+          (unsigned long)(dyn_total * 1000UL / phys_total % 10UL));
     LOG_I("DRAM", "RAM pool total=%lu used=%lu free=%lu largest=%lu peak=%lu",
           (unsigned long)ram.total, (unsigned long)ram.used,
           (unsigned long)ram.free, (unsigned long)ram.largest_free,

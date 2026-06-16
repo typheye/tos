@@ -601,6 +601,11 @@ void LCD::emergencyPrepare(void) {
   if (initialized) {
     write_cmd(0x11); /* sleep out */
     JPDelay(20);
+    write_cmd(0x3A); /* RGB565 */
+    write_data(0x55);
+    write_cmd(0x36); /* same default orientation as LCD::init() */
+    write_data(0x10);
+    write_cmd(0x21); /* display inversion on: matches normal TOS init */
     write_cmd(0x29); /* display on */
     JPDelay(20);
   }

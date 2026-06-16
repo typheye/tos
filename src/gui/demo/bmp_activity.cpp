@@ -17,6 +17,7 @@
 
 #include "include/bmp_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 #include "core/sys/include/sysdram.h"
 
 #ifndef CCMRAM
@@ -74,43 +75,6 @@ static void chart_free(void) {
 /* ==================================================================
  *  Standard template functions
  * ================================================================== */
-
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
 
 /* ==================================================================
  *  Chart data helpers
@@ -193,11 +157,9 @@ static void draw_chart_line(float *data, int x, int y, int w, int h, float mx,
  * ================================================================== */
 
 static void bmp180_realtime_activity(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   /* Loading screen */
   LCD_FLUSH({
-    draw_frame_title("DEMO");
+    UI_DrawFrameTitle("DEMO");
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "BMP180 Init...");
   });
@@ -277,7 +239,7 @@ static void bmp180_realtime_activity(void) {
       };
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
 
         int vis = BMP_RT_VIS;
@@ -293,9 +255,9 @@ static void bmp180_realtime_activity(void) {
             break;
           int cy = 33 + i * 25;
           if (idx == 0)
-            draw_card(idx, sel, cy, rt_items[idx]);
+            UI_DrawMenuCard(idx, sel, cy, rt_items[idx]);
           else
-            draw_card_r(idx, sel, cy, rt_items[idx], rt_vals[idx]);
+            UI_DrawMenuValue(idx, sel, cy, rt_items[idx], rt_vals[idx], false);
         }
 
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -310,11 +272,9 @@ static void bmp180_realtime_activity(void) {
  * ================================================================== */
 
 void bmp180_chart_activity(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   /* Loading screen */
   LCD_FLUSH({
-    draw_frame_title("DEMO");
+    UI_DrawFrameTitle("DEMO");
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "BMP180 Init...");
   });
@@ -376,7 +336,7 @@ void bmp180_chart_activity(void) {
       char f[16], db[64];
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
 
         /* Left-aligned title at x=16 with TOS_TEXT */
         PD_SetFont(FONT_ASCII_12);
@@ -389,7 +349,7 @@ void bmp180_chart_activity(void) {
         draw_chart_line(cdata, chart_x, chart_y, chart_w, chart_h, mx, mn,
                         lcol);
 
-        /* Legend â€?colored fill rectangles with text labels */
+        /* Legend éˆ¥?colored fill rectangles with text labels */
         PD_SetFont(FONT_ASCII_12);
 
         PD_FillRect(10, 148, 10, 8, TOS_RED);
@@ -418,8 +378,6 @@ void bmp180_chart_activity(void) {
  * ================================================================== */
 
 void bmp180_activity(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   int sel = 0;
   uint8_t le = 0;
   uint32_t lu = 0;
@@ -445,11 +403,9 @@ void bmp180_activity(void) {
         return;
       case 1:
         bmp180_realtime_activity();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 2:
         bmp180_chart_activity();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       }
     }
@@ -458,12 +414,12 @@ void bmp180_activity(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
 
         for (int i = 0; i < BM_N; i++) {
           int cy = 33 + i * 25;
-          draw_card(i, sel, cy, bmp_menus[i]);
+          UI_DrawMenuCard(i, sel, cy, bmp_menus[i]);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });

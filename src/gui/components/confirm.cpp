@@ -95,7 +95,6 @@ static void draw_wrapped_message(int16_t x, int16_t y, int16_t max_w,
 }
 
 bool confirm_show(const char *title, const char *msg) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   int sel = 0; /* 0=Yes, 1=No */
   uint8_t le = 0;
   uint32_t lu = 0;

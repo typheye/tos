@@ -17,6 +17,7 @@
 
 #include "include/jyro_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 #include "core/sys/include/sysdram.h"
 
 
@@ -28,7 +29,7 @@ extern LCD boardLCD;
 extern JY901S boardJY901S;
 extern KeyManager keyManager;
 
-/* ── Shared chart state ── */
+/* 鈹€鈹€ Shared chart state 鈹€鈹€ */
 #define CHART_HISTORY 240
 static float (*chart_data)[CHART_HISTORY] = nullptr;
 static CCMRAM int chart_index = 0;
@@ -50,45 +51,8 @@ static void chart_free(void) {
   chart_data = nullptr;
 }
 
-/* ── Standard template functions ── */
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
-
-/* ── Chart helper functions ── */
+/* 鈹€鈹€ Standard template functions 鈹€鈹€ */
+/* 鈹€鈹€ Chart helper functions 鈹€鈹€ */
 static void reset_chart(void) {
   if (!chart_data)
     return;
@@ -180,13 +144,11 @@ static void draw_chart_all(int x, int y, int width, int height, float max_val) {
   }
 }
 
-/* ── 01 3D Cube sub-page ── */
+/* 鈹€鈹€ 01 3D Cube sub-page 鈹€鈹€ */
 static void jyro_cube_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   /* Loading screen */
   LCD_FLUSH({
-    draw_frame_title("DEMO");
+    UI_DrawFrameTitle("DEMO");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
     PD_DrawString(16, 33, "Initializing gyro...");
@@ -279,15 +241,13 @@ static void jyro_cube_subpage(void) {
   }
 }
 
-/* ── 02 Text Data sub-page (scrollable menu) ── */
+/* 鈹€鈹€ 02 Text Data sub-page (scrollable menu) 鈹€鈹€ */
 #define TEXT_N 10
 static const char *text_labels[TEXT_N] = {
     "00 Return", "01 Acc X", "   Acc Y", "   Acc Z", "02 Gyr X",
     "   Gyr Y",  "   Gyr Z", "03 Roll",  "   Pitch", "   Yaw"};
 
 static void jyro_text_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   int sel = 0;
   uint8_t le = 0;
   uint32_t lu = 0;
@@ -369,7 +329,7 @@ static void jyro_text_subpage(void) {
       snprintf(values[9], sizeof(values[9]), "%s deg", fstr);
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
 
         int vis = TEXT_N < 7 ? TEXT_N : 7;
@@ -385,9 +345,9 @@ static void jyro_text_subpage(void) {
             break;
           int cy = 33 + i * 25;
           if (idx == 0)
-            draw_card(idx, sel, cy, text_labels[idx]);
+            UI_DrawMenuCard(idx, sel, cy, text_labels[idx]);
           else
-            draw_card_r(idx, sel, cy, text_labels[idx], values[idx]);
+            UI_DrawMenuValue(idx, sel, cy, text_labels[idx], values[idx], false);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
@@ -396,9 +356,8 @@ static void jyro_text_subpage(void) {
   }
 }
 
-/* ── 03 Chart sub-page ── */
+/* 鈹€鈹€ 03 Chart sub-page 鈹€鈹€ */
 static void jyro_chart_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   if (!chart_alloc()) {
     LCD_FLUSH({
       PD_Init();
@@ -483,9 +442,9 @@ static void jyro_chart_subpage(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
 
-        /* Group name �?left-aligned at x=16 with TOS_TEXT */
+        /* Group name 鈥?left-aligned at x=16 with TOS_TEXT */
         PD_SetFont(FONT_ASCII_12);
         PD_SetColor(TOS_TEXT);
         char title[32];
@@ -493,12 +452,12 @@ static void jyro_chart_subpage(void) {
                  group_names[chart_param_group]);
         PD_DrawString(16, 33, title);
 
-        /* Chart �?shifted down: chart_y = 50 */
+        /* Chart 鈥?shifted down: chart_y = 50 */
         int chart_x = 10, chart_y = 50, chart_w = 220, chart_h = 90;
         draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
         draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
 
-        /* Color legend �?small filled rectangles with abbreviated labels */
+        /* Color legend 鈥?small filled rectangles with abbreviated labels */
         const char *lnames[3];
         switch (chart_param_group) {
         case 0:
@@ -533,11 +492,9 @@ static void jyro_chart_subpage(void) {
   }
 }
 
-/* ── Main activity (standard menu loop) ── */
+/* 鈹€鈹€ Main activity (standard menu loop) 鈹€鈹€ */
 #define JYRO_N 4
 void jyro_activity(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   const char *items[JYRO_N] = {"00 Return", "01 3D Cube", "02 Text Data",
                                "03 Chart"};
 
@@ -566,15 +523,12 @@ void jyro_activity(void) {
         return;
       case 1:
         jyro_cube_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 2:
         jyro_text_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 3:
         jyro_chart_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       }
     }
@@ -583,7 +537,7 @@ void jyro_activity(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
 
         int vis = JYRO_N < 7 ? JYRO_N : 7;
@@ -598,7 +552,7 @@ void jyro_activity(void) {
           if (idx >= JYRO_N)
             break;
           int cy = 33 + i * 25;
-          draw_card(idx, sel, cy, items[idx]);
+          UI_DrawMenuCard(idx, sel, cy, items[idx]);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });

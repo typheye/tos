@@ -118,7 +118,7 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
     PD_DrawRect(lmargin, 50, 240 - lmargin - rmargin, 2);
     PD_SetFill(false);
 
-    // Key grid â€?symmetric margins
+    // Key grid ï¿½?symmetric margins
     int base_y = 56, row_h = 28, margin = 8;
     int flat_idx = 0;
     for (int r = 0; r < N_ROWS; r++) {
@@ -156,7 +156,6 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
 // ============ Public ============
 
 bool keyboard_open(const char *title, char *out, int max_len) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   int len = (int)strlen(out); /* preserve initial value */
   bool shift = true;
   int total = flat_n();

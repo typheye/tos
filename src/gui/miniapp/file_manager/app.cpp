@@ -17,6 +17,7 @@
 
 #include "include/app.h"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 #include "core/sys/include/sysdram.h"
 
 
@@ -86,26 +87,6 @@ static void fm_free_context(void) {
   fm_cur_path = nullptr;
   fm_count = 0;
   fm_stack_depth = 0;
-}
-
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
 }
 
 static void fm_copy_limited(char *out, size_t out_sz, const char *src,
@@ -208,7 +189,7 @@ static void fm_unmount(void) {
 
 static void fm_draw_formatting(const char *line1, const char *line2) {
   LCD_FLUSH({
-    draw_frame_title("FILE");
+    UI_DrawFrameTitle("FILE");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
     PD_DrawString(22, 33, line1 ? line1 : "Working...");
@@ -511,8 +492,6 @@ void file_manager_run(void) {
     alert_show("SYS", "SD card is disable!");
     return;
   }
-
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   if (!fm_alloc_context()) {
     alert_show("FILE", "Memory failed");
     return;
@@ -585,7 +564,7 @@ void file_manager_run(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("FILE");
+        UI_DrawFrameTitle("FILE");
         PD_SetFont(FONT_ASCII_16);
         int vis = n < 7 ? n : 7;
         if (n == 0)

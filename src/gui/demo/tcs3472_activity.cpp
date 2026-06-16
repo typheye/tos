@@ -17,6 +17,7 @@
 
 #include "include/tcs3472_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 #include "core/sys/include/sysdram.h"
 
 extern KeyManager keyManager;
@@ -27,7 +28,7 @@ extern TCS3472 boardTCS3472;
 #define CCMRAM __attribute__((section(".ccmram")))
 #endif
 
-/* ── Chart state ── */
+/* 鈹€鈹€ Chart state 鈹€鈹€ */
 #define CHART_HISTORY 240
 static uint16_t *chart_r = nullptr;
 static uint16_t *chart_g = nullptr;
@@ -61,45 +62,8 @@ static void chart_free(void) {
   chart_b = nullptr;
 }
 
-/* ── Standard template functions (exact copy from about-page) ── */
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
-
-/* ── Chart helper functions ── */
+/* 鈹€鈹€ Standard template functions (exact copy from about-page) 鈹€鈹€ */
+/* 鈹€鈹€ Chart helper functions 鈹€鈹€ */
 static void reset_chart(void) {
   if (!chart_r || !chart_g || !chart_b)
     return;
@@ -171,9 +135,8 @@ static void draw_chart_all(int x, int y, int w, int h, uint16_t max_val) {
   draw_chart_line(chart_b, CHART_HISTORY, x, y, w, h, max_val, 0x0000FF);
 }
 
-/* ── 01 Read Raw sub-page (scrollable menu) ── */
+/* 鈹€鈹€ 01 Read Raw sub-page (scrollable menu) 鈹€鈹€ */
 static void tcs3472_read_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   int sel = 0;
   uint8_t le = 0;
   uint32_t lu = 0;
@@ -205,7 +168,7 @@ static void tcs3472_read_subpage(void) {
       TCS3472_ColorData_t color = boardTCS3472.readColor();
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
 
         char buf[32];
@@ -214,39 +177,39 @@ static void tcs3472_read_subpage(void) {
 
         /* Item 0: 00 Return */
         cy = 33;
-        draw_card(0, sel, cy, "00 Return");
+        UI_DrawMenuCard(0, sel, cy, "00 Return");
 
         /* Item 1: 01 R */
         cy += 25;
         snprintf(buf, sizeof(buf), "%4u", raw.red);
-        draw_card_r(1, sel, cy, "01 R", buf);
+        UI_DrawMenuValue(1, sel, cy, "01 R", buf, false);
 
         /* Item 2: 02 G */
         cy += 25;
         snprintf(buf, sizeof(buf), "%4u", raw.green);
-        draw_card_r(2, sel, cy, "   G", buf);
+        UI_DrawMenuValue(2, sel, cy, "   G", buf, false);
 
         /* Item 3: 03 B */
         cy += 25;
         snprintf(buf, sizeof(buf), "%4u", raw.blue);
-        draw_card_r(3, sel, cy, "   B", buf);
+        UI_DrawMenuValue(3, sel, cy, "   B", buf, false);
 
         /* Item 4: 04 C */
         cy += 25;
         snprintf(buf, sizeof(buf), "%4u", raw.clear);
-        draw_card_r(4, sel, cy, "   C", buf);
+        UI_DrawMenuValue(4, sel, cy, "   C", buf, false);
 
         /* Item 5: 05 CCT */
         cy += 25;
         float_to_str(color.color_temp, fstr);
         snprintf(buf, sizeof(buf), "%s K", fstr);
-        draw_card_r(5, sel, cy, "02 CCT", buf);
+        UI_DrawMenuValue(5, sel, cy, "02 CCT", buf, false);
 
         /* Item 6: 06 Lux */
         cy += 25;
         float_to_str(color.lux, fstr);
         snprintf(buf, sizeof(buf), "%s lx", fstr);
-        draw_card_r(6, sel, cy, "03 Lux", buf);
+        UI_DrawMenuValue(6, sel, cy, "03 Lux", buf, false);
 
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
@@ -255,9 +218,8 @@ static void tcs3472_read_subpage(void) {
   }
 }
 
-/* ── 02 Color Demo sub-page ── */
+/* 鈹€鈹€ 02 Color Demo sub-page 鈹€鈹€ */
 static void tcs3472_color_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   boardTCS3472.ledOn();
   uint32_t lu = 0;
 
@@ -273,9 +235,9 @@ static void tcs3472_color_subpage(void) {
       TCS3472_RawData_t raw = boardTCS3472.readRaw();
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
 
-        /* Left-aligned text values at (16, 33) �?alert.cpp style */
+        /* Left-aligned text values at (16, 33) 鈥?alert.cpp style */
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         char buf[64];
@@ -283,7 +245,7 @@ static void tcs3472_color_subpage(void) {
                  raw.green, raw.blue, raw.clear);
         PD_DrawString(16, 33, buf);
 
-        /* Color block inside a card �?much smaller, about 80px tall */
+        /* Color block inside a card 鈥?much smaller, about 80px tall */
         PD_DrawAngledCard(20, 80, 200, 80, 6, TOS_CARD_BG);
         uint32_t display_color =
             ((raw.red >> 8) << 16) | ((raw.green >> 8) << 8) | (raw.blue >> 8);
@@ -301,13 +263,11 @@ static void tcs3472_color_subpage(void) {
   }
 }
 
-/* ── 03 CCT & Lux sub-page ── */
+/* 鈹€鈹€ 03 CCT & Lux sub-page 鈹€鈹€ */
 static void tcs3472_cct_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   /* Sampling phase */
   LCD_FLUSH({
-    draw_frame_title("DEMO");
+    UI_DrawFrameTitle("DEMO");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
     PD_DrawString(16, 33, "Sampling...");
@@ -357,7 +317,7 @@ static void tcs3472_cct_subpage(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
 
@@ -396,9 +356,8 @@ static void tcs3472_cct_subpage(void) {
   }
 }
 
-/* ── 04 Chart sub-page ── */
+/* 鈹€鈹€ 04 Chart sub-page 鈹€鈹€ */
 static void tcs3472_chart_subpage(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   if (!chart_alloc()) {
     alert_show("ALERT", "Chart memory failed");
     return;
@@ -448,9 +407,9 @@ static void tcs3472_chart_subpage(void) {
       lu = HAL_GetTick();
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
 
-        /* Left-aligned chart title �?jyro chart 03 style */
+        /* Left-aligned chart title 鈥?jyro chart 03 style */
         PD_SetFont(FONT_ASCII_12);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(16, 33, "Chart: RGB");
@@ -466,7 +425,7 @@ static void tcs3472_chart_subpage(void) {
         PD_SetColor(TOS_TEXT);
         PD_DrawString(176, 149, "LED");
 
-        /* Legend �?colored fill rectangles with R/G/B labels (jyro style) */
+        /* Legend 鈥?colored fill rectangles with R/G/B labels (jyro style) */
         PD_FillRect(10, 148, 10, 8, 0xFF0000);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(23, 147, "R");
@@ -500,11 +459,9 @@ static void tcs3472_chart_subpage(void) {
   }
 }
 
-/* ── Main activity (standard menu loop) ── */
+/* 鈹€鈹€ Main activity (standard menu loop) 鈹€鈹€ */
 #define TCS3472_N 5
 void tcs3472_activity(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   if (!boardTCS3472.isInitialized()) {
     boardTCS3472.init();
     if (!boardTCS3472.isInitialized()) {
@@ -541,19 +498,15 @@ void tcs3472_activity(void) {
         return;
       case 1:
         tcs3472_read_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 2:
         tcs3472_color_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 3:
         tcs3472_cct_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 4:
         tcs3472_chart_subpage();
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       }
     }
@@ -562,7 +515,7 @@ void tcs3472_activity(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
         int vis = TCS3472_N < 7 ? TCS3472_N : 7;
         int start = sel - vis / 2;
@@ -575,7 +528,7 @@ void tcs3472_activity(void) {
           if (idx >= TCS3472_N)
             break;
           int cy = 33 + i * 25;
-          draw_card(idx, sel, cy, items[idx]);
+          UI_DrawMenuCard(idx, sel, cy, items[idx]);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });

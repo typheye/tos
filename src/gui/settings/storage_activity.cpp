@@ -17,6 +17,7 @@
 
 #include "include/storage_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -29,35 +30,6 @@ static uint32_t builtin_cap_kb = 1024; // 1MB flash
 static int builtin_used_pct = 0;
 
 // ============ Draw helpers ============
-
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool selected = (idx == sel);
-  uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-  uint32_t txt_c = selected ? TOS_TEXT : TOS_TEXT_SEC;
-  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-  PD_SetColor(txt_c);
-  PD_DrawString(26, cy + 2, text);
-}
 
 static void draw_progress(int x, int y, int w, int h, int pct,
                           const char *label) {
@@ -158,7 +130,7 @@ static void refresh(void) {
   builtin_used_pct = 31; // flash
   builtin_cap_kb = 1024; // 1MB
 
-  /* If SD card is hard-disabled, skip probing entirely â€?   * avoids triggering SysHandle_Exception. */
+  /* If SD card is hard-disabled, skip probing entirely éˆ¥?   * avoids triggering SysHandle_Exception. */
   if (TSDIO_IsHardDisabled()) {
     sd_present = false;
     sd_cap_kb = 0;
@@ -193,11 +165,11 @@ static void refresh(void) {
 
 static void draw_storage(int sel) {
   LCD_FLUSH({
-    draw_frame_title("SD");
+    UI_DrawFrameTitle("SD");
     PD_SetFont(FONT_ASCII_16);
 
-    draw_card(0, sel, 33, "00 Return");
-    draw_card(1, sel, 58, "01 Refresh");
+    UI_DrawMenuCard(0, sel, 33, "00 Return");
+    UI_DrawMenuCard(1, sel, 58, "01 Refresh");
 
     // Built-In Storage
     int y = 94;
@@ -228,8 +200,6 @@ static void draw_storage(int sel) {
 // ============ Main ============
 
 void storage_activity_run(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   // Show loading
   LCD_FLUSH({
     PD_Init();
@@ -267,7 +237,6 @@ void storage_activity_run(void) {
       if (sel == 0)
         return;
       if (sel == 1) {
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         LCD_FLUSH({
           PD_Init();
           PD_FillScreen(TOS_BG);

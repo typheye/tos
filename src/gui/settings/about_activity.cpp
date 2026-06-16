@@ -17,6 +17,7 @@
 
 #include "include/about_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -26,61 +27,6 @@ extern "C" void SysUI_DebugOverlaySetEnabled(uint8_t enabled);
 #define BUILD_DEBUG_CLICKS 5U
 #define BUILD_DEBUG_WINDOW_MS 1400U
 
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card_ex(int idx, int sel, int cy, const char *text,
-                         bool editing) {
-  bool s = (idx == sel);
-  uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
-  if (editing && s && ((HAL_GetTick() / 300U) & 1U)) {
-    card_c = TOS_CARD_BG;
-  }
-  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  draw_card_ex(idx, sel, cy, text, false);
-}
-
-static void draw_card_r_ex(int idx, int sel, int cy, const char *label,
-                           const char *value, bool editing) {
-  bool s = (idx == sel);
-  uint32_t card_c = s ? TOS_ACCENT : TOS_CARD_BG;
-  if (editing && s && ((HAL_GetTick() / 300U) & 1U)) {
-    card_c = TOS_CARD_BG;
-  }
-  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value) {
-  draw_card_r_ex(idx, sel, cy, label, value, false);
-}
-
 static void format_uptime(char *buf, size_t len) {
   uint32_t sec = HAL_GetTick() / 1000U;
   snprintf(buf, len, "%lu:%02lu:%02lu", (unsigned long)(sec / 3600U),
@@ -88,7 +34,6 @@ static void format_uptime(char *buf, size_t len) {
 }
 
 static void debug_page(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   uint32_t wait_start = HAL_GetTick();
   while ((uint32_t)(HAL_GetTick() - wait_start) < 600U) {
     keyManager.btn_enter.tick();
@@ -130,7 +75,6 @@ static void debug_page(void) {
     uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (sel == 0) {
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         return;
       }
       if (!editing) {
@@ -148,16 +92,16 @@ static void debug_page(void) {
     if (HAL_GetTick() - lu > 16U) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("DEBUG");
+        UI_DrawFrameTitle("DEBUG");
         PD_SetFont(FONT_ASCII_16);
         for (int i = 0; i < 2; i++) {
           int cy = 33 + i * 25;
           if (i == 1) {
-            draw_card_r_ex(i, sel, cy, items[i],
+            UI_DrawMenuValue(i, sel, cy, items[i],
                            pending_dashboard ? "ON" : "OFF",
                            editing && sel == i);
           } else {
-            draw_card_ex(i, sel, cy, items[i], false);
+            UI_DrawMenuCardEx(i, sel, cy, items[i], false);
           }
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -191,7 +135,6 @@ static bool handle_build_debug_click(uint32_t now, bool on_build) {
 }
 
 void about_activity_run(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
 
   char running_value[16];
   format_uptime(running_value, sizeof(running_value));
@@ -252,16 +195,14 @@ void about_activity_run(void) {
           if (confirm_show("DEBUG", "Whether to enter debugging settings?")) {
             debug_page();
           }
-          boardLCD.fillScreen(LCD_COLOR_BLACK);
           dirty = true;
           last_draw = 0;
         }
         break;
       case 9: /* Update System */ {
         /* Loading screen */
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         LCD_FLUSH({
-          draw_frame_title("UPD");
+          UI_DrawFrameTitle("UPD");
           PD_SetColor(TOS_TEXT);
           PD_DrawString(26, 33, "Checking...");
         });
@@ -286,21 +227,18 @@ void about_activity_run(void) {
         } else {
           alert_show("UPD", "Check failed.\nCheck WiFi connection.");
         }
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       }
       case 10: /* Reboot Device */
         if (confirm_show("REB", "Reboot the device now?")) {
           NVIC_SystemReset();
         }
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       case 11: /* Restore to Default */
         if (confirm_show("RST", "Erase all settings?\nDevice will reboot.")) {
           /* Loading screen */
-          boardLCD.fillScreen(LCD_COLOR_BLACK);
           LCD_FLUSH({
-            draw_frame_title("RST");
+            UI_DrawFrameTitle("RST");
             PD_SetColor(TOS_TEXT);
             PD_DrawString(26, 33, "Resetting...");
           });
@@ -309,7 +247,6 @@ void about_activity_run(void) {
           Flash_Erase_Sector();
           NVIC_SystemReset();
         }
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
         break;
       }
       if (sel != 6) {
@@ -330,7 +267,7 @@ void about_activity_run(void) {
       last_draw = now;
       dirty = false;
       LCD_FLUSH({
-        draw_frame_title("ABOUT");
+        UI_DrawFrameTitle("ABOUT");
         PD_SetFont(FONT_ASCII_16);
 
         int vis = AM_N < 7 ? AM_N : 7;
@@ -346,9 +283,9 @@ void about_activity_run(void) {
             break;
           int cy = 33 + i * 25;
           if (items[idx].v[0])
-            draw_card_r(idx, sel, cy, items[idx].l, items[idx].v);
+            UI_DrawMenuValue(idx, sel, cy, items[idx].l, items[idx].v, false);
           else
-            draw_card(idx, sel, cy, items[idx].l);
+            UI_DrawMenuCard(idx, sel, cy, items[idx].l);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });

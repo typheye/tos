@@ -17,6 +17,7 @@
 
 #include "include/i2c_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 extern KeyManager keyManager;
 extern I2C_HandleTypeDef hi2c1;
@@ -69,33 +70,6 @@ static const char *get_known_device_name(uint8_t addr_7bit) {
  *  Draw helpers
  * ================================================================== */
 
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
 static void draw_progress(int x, int y, int w, int h, int pct) {
   PD_SetColor(TOS_CARD_BG);
   PD_SetFill(true);
@@ -140,7 +114,7 @@ static void do_i2c_scan(void) {
       last_lcd = HAL_GetTick();
       int pct = (addr - 0x08 + 1) * 100 / (0x77 - 0x08 + 1);
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(16, 33, "Scanning I2C bus...");
@@ -158,7 +132,7 @@ static void do_i2c_scan(void) {
 
 static void draw_results_page(int sel) {
   LCD_FLUSH({
-    draw_frame_title("DEMO");
+    UI_DrawFrameTitle("DEMO");
     int n = 1 + (int)result_count;
     int visible = n < 7 ? n : 7;
     int start = sel - visible / 2;
@@ -177,7 +151,7 @@ static void draw_results_page(int sel) {
       int cy = 33 + i * 25;
 
       if (idx == 0) {
-        draw_card(idx, sel, cy, "00 Return");
+        UI_DrawMenuCard(idx, sel, cy, "00 Return");
       } else {
         int dev_idx = idx - 1;
         char buf[36];
@@ -185,7 +159,7 @@ static void draw_results_page(int sel) {
             buf, sizeof(buf), " - 0x%02X %s", scan_results[dev_idx].addr_7bit,
             scan_results[dev_idx].known_name ? scan_results[dev_idx].known_name
                                              : "Unknown");
-        draw_card(idx, sel, cy, buf);
+        UI_DrawMenuCard(idx, sel, cy, buf);
       }
     }
     PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -201,7 +175,7 @@ void i2c_scan_activity_gui(void) {
 
   /* 1. Show initial loading screen */
   LCD_FLUSH({
-    draw_frame_title("DEMO");
+    UI_DrawFrameTitle("DEMO");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
     PD_DrawString(16, 33, "Scanning I2C bus...");
@@ -213,7 +187,7 @@ void i2c_scan_activity_gui(void) {
   /* 3. No devices found */
   if (result_count == 0) {
     LCD_FLUSH({
-      draw_frame_title("DEMO");
+      UI_DrawFrameTitle("DEMO");
       PD_SetFont(FONT_ASCII_16);
       PD_SetColor(TOS_RED);
       PD_DrawString(26, 33, "No I2C devices found!");
@@ -223,7 +197,7 @@ void i2c_scan_activity_gui(void) {
     return;
   }
 
-  /* 4. Results page â€?scrollable device list */
+  /* 4. Results page éˆ¥?scrollable device list */
   int sel = 1;
   uint8_t le = 0;
 

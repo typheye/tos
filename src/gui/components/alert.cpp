@@ -24,7 +24,6 @@ extern LCD boardLCD;
 extern TRTC boardTRTC;
 
 void alert_show(const char *title, const char *msg) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   uint32_t lu = 0;
 
   while (1) {
@@ -51,7 +50,7 @@ void alert_show(const char *title, const char *msg) {
         PD_SetColor(TOS_ACCENT);
         PD_DrawString(22, 5, title);
 
-        // Message â€?split on \n, draw each line
+        // Message ï¿½?split on \n, draw each line
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         int msg_y = 33;

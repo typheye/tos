@@ -17,6 +17,7 @@
 
 #include "include/pages.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 
 extern KeyManager keyManager;
@@ -25,37 +26,11 @@ extern THID boardHID;
 extern TRTC boardTRTC;
 extern JY901S boardJY901S;
 
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool selected = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, selected ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(selected ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
 static void draw_message(const char *title, const char *line1,
                          const char *line2 = nullptr,
                          const char *line3 = nullptr) {
   LCD_FLUSH({
-    draw_frame_title(title);
+    UI_DrawFrameTitle(title);
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
     if (line1)
@@ -106,7 +81,7 @@ static int page_menu(const char *title, const char **items, int count,
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title(title);
+        UI_DrawFrameTitle(title);
         int visible = count < 7 ? count : 7;
         int start = sel - visible / 2;
         if (start < 0)
@@ -117,7 +92,7 @@ static int page_menu(const char *title, const char **items, int count,
           start = 0;
         for (int i = 0; i < visible; ++i) {
           int idx = start + i;
-          draw_card(idx, sel, 33 + i * 25, items[idx]);
+          UI_DrawMenuCard(idx, sel, 33 + i * 25, items[idx]);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });
@@ -308,7 +283,7 @@ static void draw_gyro_mouse_status(float gx, float gz, int8_t dx, int8_t dy,
                                    uint8_t buttons) {
   LCD_FLUSH({
     char line[48];
-    draw_frame_title("HID");
+    UI_DrawFrameTitle("HID");
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_TEXT);
     PD_DrawString(18, 34, "Gyro Mouse");

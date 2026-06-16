@@ -16,6 +16,7 @@
  */
 
 #include "include/libpd.h"
+#include "include/libui.h"
 #include "library/include/libdly.h"
 
 
@@ -739,9 +740,7 @@ void PD_DrawFrame(void) {
     PD_DrawPolygon(d3, 3, TOS_ACCENT);
   }
 
-  
-  extern void draw_icon_ico(void);
-  draw_icon_ico();
+  UI_DrawFrameStatusIcons();
 
   // Header time (set by PD_SetHeaderTime)
   if (g_header_time[0] != '\0') {
@@ -750,12 +749,6 @@ void PD_DrawFrame(void) {
     PD_DrawString(195, 2, g_header_time);
   }
 
-  /* Status icons (WiFi signal, WLAN, hotspot) */
-  extern void status_icons_draw(bool wlan_on, bool wlan_connected, bool hotspot_on);
-  extern bool esp_wlan_is_on(void);
-  extern bool esp_wlan_is_connected(void);
-  extern bool hotspot_is_active(void);
-  status_icons_draw(esp_wlan_is_on(), esp_wlan_is_connected(), hotspot_is_active());
 }
 
 void PD_SetHeaderTime(const char *time_str) {

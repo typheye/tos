@@ -17,6 +17,7 @@
 
 #include "include/hotspot_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -400,52 +401,6 @@ static void hs_configure_dhcp_range(void) {
 
 // ============ Draw helpers ============
 
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text,
-                      bool editing) {
-  bool selected = (idx == sel);
-  uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-  uint32_t txt_c = selected ? TOS_TEXT : TOS_TEXT_SEC;
-  if (editing && selected && (HAL_GetTick() / 300) % 2)
-    card_c = TOS_CARD_BG;
-  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-  PD_SetColor(txt_c);
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value, bool editing) {
-  bool selected = (idx == sel);
-  uint32_t card_c = selected ? TOS_ACCENT : TOS_CARD_BG;
-  uint32_t txt_c = selected ? TOS_TEXT : TOS_TEXT_SEC;
-  if (editing && selected && (HAL_GetTick() / 300) % 2)
-    card_c = TOS_CARD_BG;
-  PD_DrawAngledCard(14, cy, 212, 20, 5, card_c);
-  PD_SetColor(txt_c);
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
-
 // ============ Hotspot ON/OFF ============
 
 static void hs_start(void) {
@@ -505,7 +460,7 @@ static int hs_item_count(void) {
 
 static void draw_hs_main(int sel) {
   LCD_FLUSH({
-    draw_frame_title("HOTS");
+    UI_DrawFrameTitle("HOTS");
     PD_SetFont(FONT_ASCII_16);
     int n = hs_item_count();
     int visible = n < 7 ? n : 7;
@@ -522,12 +477,12 @@ static void draw_hs_main(int sel) {
       int cy = 33 + i * 25;
       switch (idx) {
       case 0:
-        draw_card(idx, sel, cy, "00 Return", false);
+        UI_DrawMenuCardEx(idx, sel, cy, "00 Return", false);
         break;
       case 1: {
         char b[32];
         snprintf(b, sizeof(b), "01 Hotspot");
-        draw_card_r(idx, sel, cy, b, hs_on ? "ON" : "OFF", hs_edit);
+        UI_DrawMenuValue(idx, sel, cy, b, hs_on ? "ON" : "OFF", hs_edit);
         break;
       }
       case 2: {
@@ -535,7 +490,7 @@ static void draw_hs_main(int sel) {
         if (can_use) {
           char b[32];
           snprintf(b, sizeof(b), "   Auto Close");
-          draw_card_r(idx, sel, cy, b, hs_auto_close ? "ON" : "OFF",
+          UI_DrawMenuValue(idx, sel, cy, b, hs_auto_close ? "ON" : "OFF",
                       hs_edit && (sel == 2));
         } else {
           bool s = (idx == sel);
@@ -547,18 +502,18 @@ static void draw_hs_main(int sel) {
         break;
       }
       case 3:
-        draw_card(idx, sel, cy, "02 SSID & Password", false);
+        UI_DrawMenuCardEx(idx, sel, cy, "02 SSID & Password", false);
         break;
       case 4: {
         char b[32];
         snprintf(b, sizeof(b), "03 IP");
-        draw_card_r(idx, sel, cy, b, hs_ip, hs_edit && (idx == 4));
+        UI_DrawMenuValue(idx, sel, cy, b, hs_ip, hs_edit && (idx == 4));
         break;
       }
       case 5: {
         char cb[32];
         snprintf(cb, sizeof(cb), "04 Connected (%d)", hs_client_count);
-        draw_card(idx, sel, cy, cb, false);
+        UI_DrawMenuCardEx(idx, sel, cy, cb, false);
         break;
       }
       }
@@ -648,7 +603,6 @@ static int hs_main_loop(void) {
           SM_Hotspot_SetIP(hs_ip);
           alert_show("HOTS", "Invalid IP! Reset to default");
         }
-        boardLCD.fillScreen(LCD_COLOR_BLACK);
       } else if (hs_on && sel == 5) {
         return 5; // Connected
       }
@@ -671,19 +625,18 @@ static int hs_main_loop(void) {
 
 static void draw_ssidpwd(int sel) {
   LCD_FLUSH({
-    draw_frame_title("HOTS");
+    UI_DrawFrameTitle("HOTS");
     PD_SetFont(FONT_ASCII_16);
 
-    draw_card(0, sel, 33, "00 Return", false);
-    draw_card(1, sel, 58, "01 Edit SSID", false);
-    draw_card(2, sel, 83, "02 Edit Password", false);
+    UI_DrawMenuCardEx(0, sel, 33, "00 Return", false);
+    UI_DrawMenuCardEx(1, sel, 58, "01 Edit SSID", false);
+    UI_DrawMenuCardEx(2, sel, 83, "02 Edit Password", false);
 
     PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
   });
 }
 
 static void ssidpwd_run(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   int sel = 0;
   uint8_t le = 0;
   uint32_t lu = 0;
@@ -721,7 +674,6 @@ static void ssidpwd_run(void) {
         if (hs_on)
           hs_start();
       }
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     le = ce;
     if (HAL_GetTick() - lu > 16) {
@@ -736,9 +688,8 @@ static void ssidpwd_run(void) {
 
 static void connected_page(void) {
   /* Loading screen */
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   LCD_FLUSH({
-    draw_frame_title("HOTS");
+    UI_DrawFrameTitle("HOTS");
     PD_SetColor(TOS_TEXT);
     PD_DrawString(26, 33, "Querying...");
   });
@@ -788,7 +739,7 @@ static void connected_page(void) {
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
       LCD_FLUSH({
-        draw_frame_title("HOTS");
+        UI_DrawFrameTitle("HOTS");
         PD_SetFont(FONT_ASCII_16);
         int vis = n < 7 ? n : 7;
         int start = sel - vis / 2;
@@ -803,12 +754,12 @@ static void connected_page(void) {
             break;
           int cy = 33 + i * 25;
           if (idx == 0) {
-            draw_card(0, sel, cy, "00 Return", false);
+            UI_DrawMenuCardEx(0, sel, cy, "00 Return", false);
           } else {
             HsClient *c = &hs_clients[idx - 1];
             char b[40];
             snprintf(b, sizeof(b), " - %s", c->mac[0] ? c->mac : "-");
-            draw_card(idx, sel, cy, b, false);
+            UI_DrawMenuCardEx(idx, sel, cy, b, false);
           }
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -826,8 +777,6 @@ void hotspot_activity_run(void) {
     alert_show("SYS", "ESP8266 is disable!");
     return;
   }
-
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
   /* Load from Flash */
   hs_auto_close = SM_Hotspot_AutoClose();
   hs_copy(hs_ip, sizeof(hs_ip), SM_Hotspot_IP());
@@ -846,11 +795,9 @@ void hotspot_activity_run(void) {
       return;
     if (act == 3) {
       ssidpwd_run();
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
     if (act == 5) {
       connected_page();
-      boardLCD.fillScreen(LCD_COLOR_BLACK);
     }
   }
 }

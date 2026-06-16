@@ -17,55 +17,17 @@
 
 #include "include/key_activity.hpp"
 #include "library/include/libdly.h"
+#include "library/include/libui.h"
 
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-/* ── Standard template functions (exact copy from about-page) ── */
-static void draw_frame_title(const char *title) {
-  PD_Init();
-  PD_FillScreen(TOS_BG);
-  extern TRTC boardTRTC;
-  static uint32_t last_tm = 0;
-  if (HAL_GetTick() - last_tm > 1000) {
-    last_tm = HAL_GetTick();
-    Time_t t;
-    Date_t d;
-    boardTRTC.getDateTime(&t, &d);
-    char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
-    PD_SetHeaderTime(ts);
-  }
-  PD_DrawFrame();
-  PD_SetFont(FONT_ASCII_16);
-  PD_SetColor(TOS_ACCENT);
-  PD_DrawString(22, 5, title);
-}
-
-static void draw_card(int idx, int sel, int cy, const char *text) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, text);
-}
-
-static void draw_card_r(int idx, int sel, int cy, const char *label,
-                        const char *value) {
-  bool s = (idx == sel);
-  PD_DrawAngledCard(14, cy, 212, 20, 5, s ? TOS_ACCENT : TOS_CARD_BG);
-  PD_SetColor(s ? TOS_TEXT : TOS_TEXT_SEC);
-  PD_DrawString(26, cy + 2, label);
-  uint16_t vw = PD_GetStringWidth(value);
-  PD_DrawString(220 - vw, cy + 2, value);
-}
-
+/* 鈹€鈹€ Standard template functions (exact copy from about-page) 鈹€鈹€ */
 #define KEY_N 14
 #define KEY_VIS 7
 
 void key_test_activity(void) {
-  boardLCD.fillScreen(LCD_COLOR_BLACK);
-
   const char *key_labels[KEY_N] = {
       "00 Return", "01 SW1",  "   SW2",  "   SW3",  "   SW4",
       "02 SW5",    "   SW6",  "   SW7",  "   SW8",  "   SW9",
@@ -113,7 +75,7 @@ void key_test_activity(void) {
       bool s12 = keyManager.sw12_B12.isOn();
       bool s13 = keyManager.sw13_B14.isOn();
 
-      /* Build value strings & colors �?ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
+      /* Build value strings & colors 鈥?ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
       char key_vals[KEY_N][8];
       key_vals[0][0] = '\0';
 
@@ -123,7 +85,7 @@ void key_test_activity(void) {
       snprintf(key_vals[3], 8, "%s", s3 ? "ON" : "OFF");
       snprintf(key_vals[4], 8, "%s", s4 ? "ON" : "OFF");
 
-      // Group 2: SW5-SW9 (inverted logic �?true=OFF, false=ON)
+      // Group 2: SW5-SW9 (inverted logic 鈥?true=OFF, false=ON)
       snprintf(key_vals[5], 8, "%s", s5 ? "ON" : "OFF");
       snprintf(key_vals[6], 8, "%s", s6 ? "ON" : "OFF");
       snprintf(key_vals[7], 8, "%s", s7 ? "ON" : "OFF");
@@ -137,7 +99,7 @@ void key_test_activity(void) {
       snprintf(key_vals[13], 8, "%s", s13 ? "ON" : "OFF");
 
       LCD_FLUSH({
-        draw_frame_title("DEMO");
+        UI_DrawFrameTitle("DEMO");
         PD_SetFont(FONT_ASCII_16);
 
         int vis = KEY_VIS;
@@ -153,9 +115,9 @@ void key_test_activity(void) {
             break;
           int cy = 33 + i * 25;
           if (idx == 0)
-            draw_card(idx, sel, cy, key_labels[idx]);
+            UI_DrawMenuCard(idx, sel, cy, key_labels[idx]);
           else
-            draw_card_r(idx, sel, cy, key_labels[idx], key_vals[idx]);
+            UI_DrawMenuValue(idx, sel, cy, key_labels[idx], key_vals[idx], false);
         }
 
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
