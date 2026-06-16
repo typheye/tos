@@ -39,7 +39,6 @@
 #endif
 #include <stdio.h>                      // 添加这个头文件 for printf
 #include "core/sys/include/syswatchdog.h"
-#include "sah_common.h"
 #include "init.h"
 
 /* USER CODE END Includes */

@@ -16,7 +16,7 @@
  */
 
 #include "include/sysui.hpp"
-#include "core/sys/include/sysdram.h"
+#include "dram.h"
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
@@ -48,12 +48,10 @@ static char g_dbg_line_mem[28] = "RAM:   0% | CRM:   0%";
 
 static void debug_format_lines(void) {
   uint16_t fps = g_dbg_fps > 999U ? 999U : g_dbg_fps;
-  snprintf(g_dbg_line_perf, sizeof(g_dbg_line_perf),
-           "FPS: %3uF | CPU: %3u%%", (unsigned)fps,
-           (unsigned)g_dbg_cpu_pct);
-  snprintf(g_dbg_line_mem, sizeof(g_dbg_line_mem),
-           "RAM: %3u%% | CRM: %3u%%", (unsigned)g_dbg_ram_pct,
-           (unsigned)g_dbg_cram_pct);
+  snprintf(g_dbg_line_perf, sizeof(g_dbg_line_perf), "FPS: %3uF | CPU: %3u%%",
+           (unsigned)fps, (unsigned)g_dbg_cpu_pct);
+  snprintf(g_dbg_line_mem, sizeof(g_dbg_line_mem), "RAM: %3u%% | CRM: %3u%%",
+           (unsigned)g_dbg_ram_pct, (unsigned)g_dbg_cram_pct);
 }
 
 static void debug_sample_memory(void) {
@@ -74,8 +72,10 @@ static void debug_sample_memory(void) {
   uint32_t cram_static = cram_total > ccm.total ? cram_total - ccm.total : 0U;
   g_dbg_ram_used = ram_static + ram.used;
   g_dbg_cram_used = cram_static + ccm.used;
-  if (g_dbg_ram_used > ram_total) g_dbg_ram_used = ram_total;
-  if (g_dbg_cram_used > cram_total) g_dbg_cram_used = cram_total;
+  if (g_dbg_ram_used > ram_total)
+    g_dbg_ram_used = ram_total;
+  if (g_dbg_cram_used > cram_total)
+    g_dbg_cram_used = cram_total;
 
   uint32_t rp = (g_dbg_ram_used * 100U + ram_total / 2U) / ram_total;
   uint32_t cp = (g_dbg_cram_used * 100U + cram_total / 2U) / cram_total;
@@ -195,12 +195,8 @@ void SysUI::runCurrentTest(void) {
   current_test_func = nullptr;
 }
 
-void SysUI::setActivity(int a) {
-  now_activity = a;
-}
+void SysUI::setActivity(int a) { now_activity = a; }
 int SysUI::getActivity(void) { return now_activity; }
 void SysUI::setCurrentTest(void (*f)(void)) { current_test_func = f; }
 void SysUI::resetMenuPosition(void) {}
-void SysUI::updateCpuUsage(uint32_t w) {
-  cpu_usage = (int)w;
-}
+void SysUI::updateCpuUsage(uint32_t w) { cpu_usage = (int)w; }

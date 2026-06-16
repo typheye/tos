@@ -16,10 +16,9 @@
  */
 
 #include "include/app.h"
+#include "dram.h"
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
-#include "core/sys/include/sysdram.h"
-
 
 extern KeyManager keyManager;
 extern LCD boardLCD;

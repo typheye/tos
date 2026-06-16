@@ -343,13 +343,18 @@ SBL_CODE void SBL_UiRunFastboot(void) {
 }
 
 SBL_CODE void SBL_UiRunSystemDamage(void) {
+  uint32_t start = HAL_GetTick();
   SBL_LcdDisplayOff();
   SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
   sbl_draw_text_center_line(102U, sbl_damage_title, SBL_RED, SBL_FONT_SMALL);
   sbl_draw_text_center_block(126U, sbl_damage_body, SBL_RED, SBL_FONT_SMALL);
   SBL_LcdDisplayOn();
-  while (1) {
+  SBL_WaitButtonRelease(120U);
+  while ((uint32_t)(HAL_GetTick() - start) < 1200U) {
     SBL_USB_Tick();
+    if (SBL_IsButtonDown()) {
+      break;
+    }
     SBL_DelayMs(10U);
   }
 }

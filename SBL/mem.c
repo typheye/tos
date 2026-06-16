@@ -1,5 +1,5 @@
 #include "sbl_mem.h"
-#include "core/sys/include/sysdram.h"
+#include "dram.h"
 
 SBL_CODE void SBL_MemReset(void) {
   SysDram_Init();

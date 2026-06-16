@@ -16,10 +16,9 @@
  */
 
 #include "include/jyro_activity.hpp"
+#include "dram.h"
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
-#include "core/sys/include/sysdram.h"
-
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
@@ -42,7 +41,8 @@ static const char *group_names[3] = {"Acceleration", "Angular Velocity",
 static bool chart_alloc(void) {
   if (chart_data)
     return true;
-  chart_data = (float (*)[CHART_HISTORY])SysDram_AllocFast(sizeof(float) * 3U * CHART_HISTORY);
+  chart_data = (float (*)[CHART_HISTORY])SysDram_AllocFast(sizeof(float) * 3U *
+                                                           CHART_HISTORY);
   return chart_data != nullptr;
 }
 
@@ -347,7 +347,8 @@ static void jyro_text_subpage(void) {
           if (idx == 0)
             UI_DrawMenuCard(idx, sel, cy, text_labels[idx]);
           else
-            UI_DrawMenuValue(idx, sel, cy, text_labels[idx], values[idx], false);
+            UI_DrawMenuValue(idx, sel, cy, text_labels[idx], values[idx],
+                             false);
         }
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });

@@ -16,9 +16,10 @@
  */
 
 #include "include/bmp_activity.hpp"
+#include "dram.h"
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
-#include "core/sys/include/sysdram.h"
+
 
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))

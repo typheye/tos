@@ -4,9 +4,9 @@
 
 #include "sbl_hw.h"
 #include "sbl_lcd.h"
+#include "sbl_splash.h"
 #include "sbl_ui.h"
 #include "sbl_usb.h"
-#include "sah_common.h"
 #include "trust.h"
 
 extern uint32_t _estack;
@@ -58,7 +58,7 @@ SBL_CODE uint8_t SBL_TrustLooksValid(void) {
 }
 
 SBL_CODE void SBL_Run(void) {
-  SAH_Run();
+  SBL_SplashRun();
   SBL_HwBootstrap();
   if (!SBL_IsFastbootRequested() && SBL_AppLooksValid() &&
       SBL_TrustLooksValid()) {

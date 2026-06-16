@@ -17,7 +17,7 @@
 
 
 #include "include/lib3dox.h"
-#include "core/sys/include/sysdram.h"
+#include "dram.h"
 
 
 #define CCMRAM __attribute__((section(".ccmram")))

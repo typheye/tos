@@ -16,7 +16,7 @@
  */
 
 #include "include/libfs.h"
-#include "core/sys/include/sysdram.h"
+#include "dram.h"
 
 /* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
 extern bool TSDIO_IsHardDisabled(void);

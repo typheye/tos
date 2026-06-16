@@ -1,6 +1,21 @@
 #include "sbl_common.h"
 
-extern uint32_t HAL_GetTick(void);
+static volatile uint32_t sbl_tick_ms;
+
+SBL_CODE void HAL_IncTick(void) {
+  sbl_tick_ms++;
+}
+
+SBL_CODE uint32_t HAL_GetTick(void) {
+  return sbl_tick_ms;
+}
+
+SBL_CODE void HAL_Delay(uint32_t ms) {
+  uint32_t start = HAL_GetTick();
+  while ((uint32_t)(HAL_GetTick() - start) < ms) {
+    __NOP();
+  }
+}
 
 #define SBL_FLASH_STATUS_ERRORS \
   (FLASH_SR_OPERR | FLASH_SR_WRPERR | FLASH_SR_PGAERR | \

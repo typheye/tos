@@ -16,9 +16,10 @@
  */
 
 #include "include/wlan_activity.hpp"
+#include "dram.h"
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
-#include "core/sys/include/sysdram.h"
+
 
 extern KeyManager keyManager;
 extern LCD boardLCD;
@@ -697,7 +698,7 @@ static void draw_wlan_main(int sel) {
         char buf[32];
         snprintf(buf, sizeof(buf), "02 Auto Connect");
         UI_DrawMenuValue(idx, sel, cy, buf, wlan_auto_conn ? "ON" : "OFF",
-                    wlan_edit && (idx == 3));
+                         wlan_edit && (idx == 3));
       } else if (idx == 4 && wlan_on) {
         char buf[32];
         snprintf(buf, sizeof(buf), "03 Saved (%u)", SM_Saved_Count());
