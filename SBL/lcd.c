@@ -62,6 +62,14 @@ SBL_CODE void SBL_LcdBacklightFull(void) {
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
 }
 
+SBL_CODE void SBL_LcdDisplayOff(void) {
+  sbl_lcd_cmd(0x28U);
+}
+
+SBL_CODE void SBL_LcdDisplayOn(void) {
+  sbl_lcd_cmd(0x29U);
+}
+
 SBL_CODE void SBL_LcdRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                           uint16_t color) {
   if (x >= SBL_LCD_W || y >= SBL_LCD_H || w == 0U || h == 0U) {
@@ -86,7 +94,7 @@ static SBL_CODE void sbl_lcd_reset(void) {
   SBL_DelayMs(120U);
 }
 
-SBL_CODE void SBL_LcdInit(void) {
+static SBL_CODE void sbl_lcd_init_impl(uint8_t visible) {
   SBL_Spi1InitForLcd();
   sbl_lcd_reset();
 
@@ -133,9 +141,22 @@ SBL_CODE void SBL_LcdInit(void) {
   sbl_lcd_data_bytes(seq_e1, sizeof(seq_e1));
 
   sbl_lcd_cmd(0x21U);
-  sbl_lcd_cmd(0x29U);
-  SBL_DelayMs(100U);
-  SBL_LcdBacklightFull();
+  if (visible) {
+    sbl_lcd_cmd(0x29U);
+    SBL_DelayMs(100U);
+    SBL_LcdBacklightFull();
+  } else {
+    sbl_lcd_cmd(0x28U);
+    SBL_LcdBacklightOff();
+  }
+}
+
+SBL_CODE void SBL_LcdInit(void) {
+  sbl_lcd_init_impl(1U);
+}
+
+SBL_CODE void SBL_LcdInitDark(void) {
+  sbl_lcd_init_impl(0U);
 }
 
 static SBL_CODE uint8_t sbl_font5x7(char c, uint8_t col) {
