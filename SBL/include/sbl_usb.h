@@ -14,5 +14,6 @@ SBL_CODE uint8_t SBL_USB_WriteTextWait(const char *text);
 SBL_CODE uint8_t SBL_USB_ConsumeUnlockRequest(void);
 SBL_CODE uint8_t SBL_USB_ConsumeBootloaderReloadRequest(void);
 SBL_CODE void SBL_USB_SendUnlockResult(uint8_t accepted, uint8_t flash_ok);
+SBL_CODE uint8_t SBL_USB_IsBusy(void);
 
 #endif /* SBL_USB_H */

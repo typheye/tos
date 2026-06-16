@@ -1,7 +1,6 @@
 #include "sbl_lcd.h"
 
 #include "sbl_hw.h"
-#include "tim.h"
 
 #define SBL_LCD_CS_PIN   11U
 #define SBL_LCD_DC_PIN   12U
@@ -53,13 +52,11 @@ static SBL_CODE void sbl_lcd_push_color(uint16_t color, uint32_t pixels) {
 }
 
 SBL_CODE void SBL_LcdBacklightOff(void) {
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0U);
   SBL_GpioReset(GPIOD, SBL_LCD_BL_PIN);
 }
 
 SBL_CODE void SBL_LcdBacklightFull(void) {
-  (void)HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
+  SBL_GpioSet(GPIOD, SBL_LCD_BL_PIN);
 }
 
 SBL_CODE void SBL_LcdDisplayOff(void) {

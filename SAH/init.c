@@ -1,10 +1,8 @@
 #include "sah_common.h"
 
-#include "dma.h"
-#include "gpio.h"
 #include "sah_logo.h"
-#include "spi.h"
-#include "tim.h"
+#include "sbl_common.h"
+#include "sbl_hw.h"
 
 #define SAH_LCD_CS_PIN  11U
 #define SAH_LCD_DC_PIN  12U
@@ -26,9 +24,6 @@
 #define SAH_SBL_STATE_OLD_ADDR 0x08007C00UL
 #define SAH_SBL_STATE_AREA_SIZE 1024UL
 
-extern SPI_HandleTypeDef hspi1;
-extern TIM_HandleTypeDef htim4;
-extern uint32_t HAL_GetTick(void);
 extern const uint32_t __sbl_state_start__[];
 
 typedef struct {
@@ -38,7 +33,7 @@ typedef struct {
   uint32_t crc;
 } SAH_SblStateRecord;
 
-static const uint8_t sah_unlock_20x20[60] SAH_CONST = {
+static const uint8_t sah_unlock_20x20[60] SBL_CONST = {
     0x00, 0x00, 0x00,
     0x00, 0x7C, 0x00,
     0x01, 0x86, 0x00,
@@ -62,10 +57,7 @@ static const uint8_t sah_unlock_20x20[60] SAH_CONST = {
 };
 
 SAH_CODE void SAH_DelayMs(uint32_t ms) {
-  uint32_t start = HAL_GetTick();
-  while ((uint32_t)(HAL_GetTick() - start) < ms) {
-    __NOP();
-  }
+  SBL_DelayMs(ms);
 }
 
 static SAH_CODE void sah_gpio_set(GPIO_TypeDef *port, uint32_t pin) {
@@ -117,16 +109,11 @@ static SAH_CODE void sah_backlight_full(void) {
 }
 
 static SAH_CODE void sah_spi_write(uint8_t v) {
-  (void)HAL_SPI_Transmit(&hspi1, &v, 1U, 100U);
+  SBL_Spi1Write(v);
 }
 
 static SAH_CODE void sah_spi_write_bytes(const uint8_t *data, uint32_t len) {
-  while (len > 0U) {
-    uint16_t chunk = len > 0xFFFFU ? 0xFFFFU : (uint16_t)len;
-    (void)HAL_SPI_Transmit(&hspi1, (uint8_t *)data, chunk, 1000U);
-    data += chunk;
-    len -= chunk;
-  }
+  SBL_Spi1WriteBytes(data, len);
 }
 
 static SAH_CODE void sah_lcd_cmd(uint8_t cmd) {
@@ -243,6 +230,7 @@ static SAH_CODE void sah_draw_unlock_icon(void) {
 }
 
 static SAH_CODE void sah_lcd_init(void) {
+  SBL_Spi1InitForLcd();
   sah_backlight_off();
   sah_gpio_set(GPIOD, SAH_LCD_CS_PIN);
   sah_gpio_reset(GPIOD, SAH_LCD_DC_PIN);
@@ -282,23 +270,31 @@ static SAH_CODE void sah_lcd_init(void) {
   sah_lcd_cmd(0x21U);
   sah_lcd_cmd(0x29U);
   SAH_DelayMs(100U);
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0U);
-  (void)HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   sah_lcd_fill(0x0000U);
   SAH_DelayMs(100U);
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0U);
 }
 
 static SAH_CODE void sah_draw_logo(void) {
-  sah_lcd_addr(0U, 0U, SAH_LCD_W - 1U, SAH_LCD_H - 1U);
-  sah_gpio_set(GPIOD, SAH_LCD_DC_PIN);
-  sah_gpio_reset(GPIOD, SAH_LCD_CS_PIN);
-  for (uint32_t i = 0; i < (uint32_t)SAH_LCD_W * SAH_LCD_H; ++i) {
-    uint16_t color = sah_logo_data[i];
-    sah_spi_write((uint8_t)(color >> 8));
-    sah_spi_write((uint8_t)color);
+  uint8_t missing = 1U;
+  for (uint32_t i = 0U; i < 512U; ++i) {
+    if (sah_logo_data[i] != 0xFFFFU) {
+      missing = 0U;
+      break;
+    }
   }
-  sah_gpio_set(GPIOD, SAH_LCD_CS_PIN);
+  if (missing) {
+    sah_lcd_fill(0x0000U);
+  } else {
+    sah_lcd_addr(0U, 0U, SAH_LCD_W - 1U, SAH_LCD_H - 1U);
+    sah_gpio_set(GPIOD, SAH_LCD_DC_PIN);
+    sah_gpio_reset(GPIOD, SAH_LCD_CS_PIN);
+    for (uint32_t i = 0; i < (uint32_t)SAH_LCD_W * SAH_LCD_H; ++i) {
+      uint16_t color = sah_logo_data[i];
+      sah_spi_write((uint8_t)(color >> 8));
+      sah_spi_write((uint8_t)color);
+    }
+    sah_gpio_set(GPIOD, SAH_LCD_CS_PIN);
+  }
   if (sah_bootloader_unlocked()) {
     sah_draw_unlock_icon();
   }
@@ -307,12 +303,6 @@ static SAH_CODE void sah_draw_logo(void) {
 SAH_CODE void SAH_Run(void) {
   sah_leds_off();
   sah_backlight_off();
-
-  MX_GPIO_Init();
-  sah_backlight_off();
-  MX_DMA_Init();
-  MX_SPI1_Init();
-  MX_TIM4_Init();
 
   sah_leds_off();
   sah_lcd_init();

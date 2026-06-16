@@ -105,7 +105,6 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  SAH_Run();
   SBL_Run();
 
   /* USER CODE END SysInit */

@@ -65,6 +65,9 @@ static const char sbl_unlock_help[] SBL_CONST =
     "continue:long press the button";
 static const char sbl_unlock_yes[] SBL_CONST = "YES";
 static const char sbl_unlock_no[] SBL_CONST = "NO";
+static const char sbl_damage_title[] SBL_CONST = "SYSTEM DAMAGE";
+static const char sbl_damage_body[] SBL_CONST =
+    "Your system has encountered some errors.";
 
 static const char *const sbl_menus[SBL_MENU_COUNT] SBL_CONST = {
     sbl_txt_reboot,
@@ -284,6 +287,12 @@ SBL_CODE void SBL_UiRunFastboot(void) {
 
   while (1) {
     SBL_USB_Tick();
+    if (SBL_USB_IsBusy()) {
+      was_down = 0U;
+      long_done = 0U;
+      SBL_DelayMs(4U);
+      continue;
+    }
     if (SBL_USB_ConsumeUnlockRequest()) {
       sbl_run_unlock_page(&selected);
       last_action = HAL_GetTick();
@@ -329,6 +338,18 @@ SBL_CODE void SBL_UiRunFastboot(void) {
     }
 
     was_down = down;
+    SBL_DelayMs(10U);
+  }
+}
+
+SBL_CODE void SBL_UiRunSystemDamage(void) {
+  SBL_LcdDisplayOff();
+  SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
+  sbl_draw_text_center_line(102U, sbl_damage_title, SBL_RED, SBL_FONT_SMALL);
+  sbl_draw_text_center_block(126U, sbl_damage_body, SBL_RED, SBL_FONT_SMALL);
+  SBL_LcdDisplayOn();
+  while (1) {
+    SBL_USB_Tick();
     SBL_DelayMs(10U);
   }
 }

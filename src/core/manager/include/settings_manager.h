@@ -34,7 +34,7 @@ bool ESP8266_IsHardDisabled(void);
 extern "C" {
 #endif
 
-#define SM_MAGIC        0x544F5305u  /* "TOS\5" - added boot_gfx */
+#define SM_MAGIC        0x544F5300u  /* stable TOS settings family magic */
 #define SM_SAVED_MAX    10           /* max saved WiFi networks */
 
 /* ========== Saved WiFi network entry ========== */
@@ -65,7 +65,8 @@ typedef struct __attribute__((packed, aligned(4))) {
   bool     wlan_on;          /* WiFi enabled */
   bool     wlan_auto_conn;   /* auto-connect on enable */
   uint8_t  debug_dashboard;  /* debug FPS/CPU/RAM overlay */
-  uint8_t  _pad1[2];         /* alignment */
+  uint8_t  debug_log_com;    /* debug logs over USART1 */
+  uint8_t  _pad1[1];         /* alignment */
 
   /* --- Saved networks --- */
   uint8_t  saved_count;                    /* 0 .. SM_SAVED_MAX */
@@ -112,6 +113,8 @@ void SM_Wlan_SetAutoConn(bool v);
 /* --- Debug --- */
 bool SM_Debug_Dashboard(void);
 void SM_Debug_SetDashboard(bool v);
+bool SM_Debug_LogCom(void);
+void SM_Debug_SetLogCom(bool v);
 
 /* --- Saved networks --- */
 uint8_t SM_Saved_Count(void);

@@ -43,10 +43,11 @@ static void debug_page(void) {
     JPDelay(5);
   }
 
-  const char *items[2] = {"00 Return", "01 Dashboard"};
+  const char *items[3] = {"00 Return", "01 Dashboard", "02 Logd on COM"};
   int sel = 0;
   bool editing = false;
   bool pending_dashboard = SM_Debug_Dashboard();
+  bool pending_log_com = SM_Debug_LogCom();
   uint8_t le = 0;
   uint32_t lu = 0;
 
@@ -58,16 +59,20 @@ static void debug_page(void) {
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       if (editing && sel == 1) {
         pending_dashboard = !pending_dashboard;
+      } else if (editing && sel == 2) {
+        pending_log_com = !pending_log_com;
       } else {
-        sel = (sel + 1) % 2;
+        sel = (sel + 1) % 3;
       }
       JPDelay(45);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       if (editing && sel == 1) {
         pending_dashboard = !pending_dashboard;
+      } else if (editing && sel == 2) {
+        pending_log_com = !pending_log_com;
       } else {
-        sel = (sel - 1 + 2) % 2;
+        sel = (sel - 1 + 3) % 3;
       }
       JPDelay(45);
     }
@@ -79,9 +84,14 @@ static void debug_page(void) {
       }
       if (!editing) {
         pending_dashboard = SM_Debug_Dashboard();
+        pending_log_com = SM_Debug_LogCom();
         editing = true;
       } else {
-        SM_Debug_SetDashboard(pending_dashboard);
+        if (sel == 1) {
+          SM_Debug_SetDashboard(pending_dashboard);
+        } else if (sel == 2) {
+          SM_Debug_SetLogCom(pending_log_com);
+        }
         SysUI_DebugOverlaySetEnabled(pending_dashboard ? 1U : 0U);
         editing = false;
       }
@@ -94,11 +104,15 @@ static void debug_page(void) {
       LCD_FLUSH({
         UI_DrawFrameTitle("DEBUG");
         PD_SetFont(FONT_ASCII_16);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
           int cy = 33 + i * 25;
           if (i == 1) {
             UI_DrawMenuValue(i, sel, cy, items[i],
                            pending_dashboard ? "ON" : "OFF",
+                           editing && sel == i);
+          } else if (i == 2) {
+            UI_DrawMenuValue(i, sel, cy, items[i],
+                           pending_log_com ? "ON" : "OFF",
                            editing && sel == i);
           } else {
             UI_DrawMenuCardEx(i, sel, cy, items[i], false);

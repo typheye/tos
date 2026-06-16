@@ -6,6 +6,7 @@ set(SBL_Include_Dirs
 set(SBL_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/init.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/common.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/flash.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/hw.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/lcd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/mem.c

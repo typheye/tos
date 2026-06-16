@@ -16,6 +16,7 @@
  */
 
 #include "include/syscalls_override.h"
+#include "core/manager/include/settings_manager.h"
 
 
 extern UART_HandleTypeDef huart1;
@@ -59,6 +60,10 @@ int _write(int file, char *ptr, int len) {
   (void)file;
   if (ptr == NULL || len <= 0) {
     return 0;
+  }
+
+  if (!SM_Debug_LogCom()) {
+    return len;
   }
 
   if (huart1.Instance == NULL || huart1.gState == HAL_UART_STATE_RESET) {

@@ -86,20 +86,18 @@ SBL_CODE uint8_t SBL_StateSetUnlocked(uint8_t unlocked) {
     return 0U;
   }
 
-  HAL_FLASH_Unlock();
-  __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
-                         FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
-                         FLASH_FLAG_PGSERR);
+  if (!SBL_FlashUnlock()) {
+    return 0U;
+  }
 
   const uint32_t *words = (const uint32_t *)&r;
   for (uint32_t i = 0U; i < sizeof(r) / sizeof(uint32_t); ++i) {
-    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr + i * sizeof(uint32_t),
-                          words[i]) != HAL_OK) {
-      HAL_FLASH_Lock();
+    if (!SBL_FlashProgramWord(addr + i * sizeof(uint32_t), words[i])) {
+      SBL_FlashLock();
       return 0U;
     }
   }
 
-  HAL_FLASH_Lock();
+  SBL_FlashLock();
   return 1U;
 }

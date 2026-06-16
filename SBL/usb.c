@@ -1,7 +1,9 @@
 #include "sbl_usb.h"
 
 #include "build.h"
+#include "sbl_flash.h"
 #include "sbl_hw.h"
+#include "sbl_mem.h"
 #include "sbl_state.h"
 
 #include "usbd_core.h"
@@ -37,8 +39,21 @@ typedef struct {
   uint8_t line_coding[7];
 } SBL_USB_CDC_Handle;
 
+typedef struct {
+  SBL_FlashSession session;
+  const SBL_FlashPartition *part;
+  uint8_t *chunk_buf;
+  uint32_t chunk_len;
+  uint32_t chunk_received;
+  uint32_t chunk_crc;
+  uint32_t chunk_offset;
+  uint8_t rx_raw;
+  uint8_t active;
+} SBL_USB_FlashContext;
+
 static USBD_HandleTypeDef sbl_usb_dev;
 static SBL_USB_CDC_Handle sbl_cdc;
+static SBL_USB_FlashContext sbl_flash_ctx;
 static uint8_t sbl_usb_started;
 static uint8_t sbl_usb_banner_sent;
 static volatile uint8_t sbl_usb_unlock_pending;
@@ -159,6 +174,266 @@ static SBL_CODE uint8_t sbl_streq(const uint8_t *a, const char *b) {
   return a[i] == 0U;
 }
 
+static SBL_CODE uint8_t sbl_is_space(uint8_t c) {
+  return c == ' ' || c == '\t';
+}
+
+static SBL_CODE uint32_t sbl_parse_u32(const uint8_t *text, uint32_t *out) {
+  uint32_t value = 0U;
+  uint32_t i = 0U;
+  if (!text || !out || text[0] == 0U) {
+    return 0U;
+  }
+  while (text[i] >= '0' && text[i] <= '9') {
+    value = (value * 10U) + (uint32_t)(text[i] - '0');
+    i++;
+  }
+  if (i == 0U) {
+    return 0U;
+  }
+  *out = value;
+  return i;
+}
+
+static SBL_CODE uint32_t sbl_parse_hex32(const uint8_t *text, uint32_t *out) {
+  uint32_t value = 0U;
+  uint32_t i = 0U;
+  if (!text || !out || text[0] == 0U) {
+    return 0U;
+  }
+  if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
+    i = 2U;
+  }
+  {
+    uint32_t digits = 0U;
+    while (1) {
+      uint8_t c = text[i];
+      uint8_t nibble;
+      if (c >= '0' && c <= '9') {
+        nibble = (uint8_t)(c - '0');
+      } else if (c >= 'a' && c <= 'f') {
+        nibble = (uint8_t)(c - 'a' + 10U);
+      } else if (c >= 'A' && c <= 'F') {
+        nibble = (uint8_t)(c - 'A' + 10U);
+      } else {
+        break;
+      }
+      value = (value << 4) | nibble;
+      i++;
+      digits++;
+    }
+    if (digits == 0U) {
+      return 0U;
+    }
+  }
+  *out = value;
+  return i;
+}
+
+static SBL_CODE const uint8_t *sbl_skip_space(const uint8_t *p) {
+  while (p && sbl_is_space(*p)) {
+    p++;
+  }
+  return p;
+}
+
+static SBL_CODE void sbl_copy_token(char *dst, uint32_t dst_len,
+                                    const uint8_t *src, uint32_t len) {
+  uint32_t n = (len + 1U < dst_len) ? len : (dst_len - 1U);
+  for (uint32_t i = 0U; i < n; ++i) {
+    dst[i] = (char)src[i];
+  }
+  dst[n] = 0;
+}
+
+static SBL_CODE void sbl_flash_reset(void) {
+  if (sbl_flash_ctx.chunk_buf) {
+    SBL_MemFree(sbl_flash_ctx.chunk_buf);
+    sbl_flash_ctx.chunk_buf = 0;
+  }
+  SBL_FlashAbort(&sbl_flash_ctx.session);
+  sbl_flash_ctx.part = 0;
+  sbl_flash_ctx.chunk_len = 0U;
+  sbl_flash_ctx.chunk_received = 0U;
+  sbl_flash_ctx.chunk_crc = 0U;
+  sbl_flash_ctx.chunk_offset = 0U;
+  sbl_flash_ctx.rx_raw = 0U;
+  sbl_flash_ctx.active = 0U;
+}
+
+static SBL_CODE uint8_t sbl_flash_parse_begin(const uint8_t *line) {
+  const uint8_t *p = line + 10U;
+  const uint8_t *name_start;
+  uint32_t name_len = 0U;
+  uint32_t size = 0U;
+  uint32_t crc = 0U;
+  char part_name[16];
+
+  if (!SBL_StateUnlocked()) {
+    SBL_USB_WriteText("FAIL bootloader locked\r\n");
+    return 1U;
+  }
+
+  p = sbl_skip_space(p);
+  name_start = p;
+  while (*p && !sbl_is_space(*p)) {
+    p++;
+    name_len++;
+  }
+  if (name_len == 0U) {
+    SBL_USB_WriteText("FAIL missing partition\r\n");
+    return 1U;
+  }
+  sbl_copy_token(part_name, sizeof(part_name), name_start, name_len);
+  p = sbl_skip_space(p);
+  p += sbl_parse_u32(p, &size);
+  p = sbl_skip_space(p);
+  if (size == 0U || sbl_parse_hex32(p, &crc) == 0U) {
+    SBL_USB_WriteText("FAIL bad flash begin args\r\n");
+    return 1U;
+  }
+
+  sbl_flash_reset();
+  sbl_flash_ctx.part = SBL_FlashFindPartition(part_name);
+  if (!sbl_flash_ctx.part) {
+    SBL_USB_WriteText("FAIL unknown partition\r\n");
+    return 1U;
+  }
+  if (sbl_flash_ctx.part->self_flash) {
+    SBL_USB_WriteText("FAIL self-flash unsupported\r\n");
+    return 1U;
+  }
+  if (!sbl_flash_ctx.part->allow_flash) {
+    SBL_USB_WriteText("FAIL flash disabled for partition\r\n");
+    return 1U;
+  }
+  if (sbl_flash_ctx.part->runtime_unsafe) {
+    SBL_USB_WriteText("FAIL runtime-unsafe partition\r\n");
+    return 1U;
+  }
+  if (!SBL_FlashBegin(&sbl_flash_ctx.session, sbl_flash_ctx.part, size, crc)) {
+    SBL_USB_WriteText("FAIL flash begin rejected\r\n");
+    return 1U;
+  }
+  sbl_flash_ctx.chunk_buf = (uint8_t *)SBL_MemAlloc(SBL_FlashChunkSize());
+  if (!sbl_flash_ctx.chunk_buf) {
+    sbl_flash_reset();
+    SBL_USB_WriteText("FAIL no memory for flash\r\n");
+    return 1U;
+  }
+  sbl_flash_ctx.active = 1U;
+  SBL_USB_WriteText("OKAY READY 16384\r\n");
+  return 1U;
+}
+
+static SBL_CODE uint8_t sbl_flash_parse_data(const uint8_t *line) {
+  const uint8_t *p = line + 9U;
+  uint32_t len = 0U;
+  uint32_t offset = 0U;
+  uint32_t crc = 0U;
+
+  if (!sbl_flash_ctx.active) {
+    SBL_USB_WriteText("FAIL no active flash\r\n");
+    return 1U;
+  }
+  p = sbl_skip_space(p);
+  {
+    uint32_t n = sbl_parse_u32(p, &len);
+    if (n == 0U) {
+      SBL_USB_WriteText("FAIL bad chunk length\r\n");
+      return 1U;
+    }
+    p += n;
+  }
+  p = sbl_skip_space(p);
+  {
+    uint32_t n = sbl_parse_u32(p, &offset);
+    if (n == 0U) {
+      SBL_USB_WriteText("FAIL bad chunk offset\r\n");
+      return 1U;
+    }
+    p += n;
+  }
+  p = sbl_skip_space(p);
+  if (sbl_parse_hex32(p, &crc) == 0U) {
+    SBL_USB_WriteText("FAIL bad chunk crc\r\n");
+    return 1U;
+  }
+  if (len == 0U || len > SBL_FlashChunkSize() || (len & 3U) != 0U) {
+    SBL_USB_WriteText("FAIL invalid chunk size\r\n");
+    return 1U;
+  }
+  sbl_flash_ctx.chunk_len = len;
+  sbl_flash_ctx.chunk_received = 0U;
+  sbl_flash_ctx.chunk_crc = crc;
+  sbl_flash_ctx.chunk_offset = offset;
+  sbl_flash_ctx.rx_raw = 1U;
+  SBL_USB_WriteText("OKAY SEND\r\n");
+  return 1U;
+}
+
+static SBL_CODE uint8_t sbl_flash_parse_erase(const uint8_t *line) {
+  const uint8_t *p = line + 5U;
+  const uint8_t *name_start;
+  uint32_t name_len = 0U;
+  char part_name[16];
+  const SBL_FlashPartition *part;
+
+  if (!SBL_StateUnlocked()) {
+    SBL_USB_WriteText("FAIL bootloader locked\r\n");
+    return 1U;
+  }
+  p = sbl_skip_space(p);
+  name_start = p;
+  while (*p && !sbl_is_space(*p)) {
+    p++;
+    name_len++;
+  }
+  if (name_len == 0U) {
+    SBL_USB_WriteText("FAIL missing partition\r\n");
+    return 1U;
+  }
+  sbl_copy_token(part_name, sizeof(part_name), name_start, name_len);
+  part = SBL_FlashFindPartition(part_name);
+  if (!part) {
+    SBL_USB_WriteText("FAIL unknown partition\r\n");
+    return 1U;
+  }
+  if (part->self_flash) {
+    SBL_USB_WriteText("FAIL self-erase unsupported\r\n");
+    return 1U;
+  }
+  if (!part->allow_erase) {
+    SBL_USB_WriteText("FAIL erase disabled for partition\r\n");
+    return 1U;
+  }
+  if (part->runtime_unsafe) {
+    SBL_USB_WriteText("FAIL runtime-unsafe partition\r\n");
+    return 1U;
+  }
+  if (!SBL_FlashErasePartition(part)) {
+    SBL_USB_WriteText("FAIL erase failed\r\n");
+    return 1U;
+  }
+  SBL_USB_WriteText("OKAY ERASED\r\n");
+  return 1U;
+}
+
+static SBL_CODE uint8_t sbl_flash_parse_end(void) {
+  if (!sbl_flash_ctx.active) {
+    SBL_USB_WriteText("FAIL no active flash\r\n");
+    return 1U;
+  }
+  if (!SBL_FlashFinalize(&sbl_flash_ctx.session)) {
+    sbl_flash_reset();
+    SBL_USB_WriteText("FAIL flash verify failed\r\n");
+    return 1U;
+  }
+  sbl_flash_reset();
+  SBL_USB_WriteText("OKAY FLASHED\r\n");
+  return 1U;
+}
+
 static SBL_CODE void sbl_usb_get_string(const char *ascii, uint16_t *length) {
   uint16_t len = sbl_strlen(ascii);
   if (len > 31U) {
@@ -263,6 +538,7 @@ static SBL_CODE uint8_t SBL_USBD_CDC_Init(USBD_HandleTypeDef *pdev,
   sbl_cdc.line_coding[4] = 0x00U;
   sbl_cdc.line_coding[5] = 0x00U;
   sbl_cdc.line_coding[6] = 0x08U;
+  sbl_flash_reset();
 
   pdev->pClassData = &sbl_cdc;
   pdev->pClassDataCmsit[pdev->classId] = &sbl_cdc;
@@ -357,7 +633,14 @@ static SBL_CODE uint8_t SBL_USBD_CDC_DataOut(USBD_HandleTypeDef *pdev,
     len = SBL_USB_CDC_DATA_MPS;
   }
   for (uint32_t i = 0U; i < len; i++) {
-    sbl_ring_push(sbl_cdc.rx_buf[i]);
+    if (sbl_flash_ctx.rx_raw) {
+      if (sbl_flash_ctx.chunk_received < sbl_flash_ctx.chunk_len &&
+          sbl_flash_ctx.chunk_buf) {
+        sbl_flash_ctx.chunk_buf[sbl_flash_ctx.chunk_received++] = sbl_cdc.rx_buf[i];
+      }
+    } else {
+      sbl_ring_push(sbl_cdc.rx_buf[i]);
+    }
   }
   (void)USBD_LL_PrepareReceive(pdev, SBL_USB_CDC_DATA_OUT_EP,
                                sbl_cdc.rx_buf, SBL_USB_CDC_DATA_MPS);
@@ -431,6 +714,7 @@ SBL_CODE void SBL_USB_DeInit(void) {
   sbl_usb_banner_sent = 0U;
   sbl_usb_unlock_pending = 0U;
   sbl_usb_reload_pending = 0U;
+  sbl_flash_reset();
 }
 
 SBL_CODE uint8_t SBL_USB_ConsumeUnlockRequest(void) {
@@ -459,6 +743,10 @@ SBL_CODE void SBL_USB_SendUnlockResult(uint8_t accepted, uint8_t flash_ok) {
   } else {
     SBL_USB_WriteTextWait("FAIL unlock canceled\r\n");
   }
+}
+
+SBL_CODE uint8_t SBL_USB_IsBusy(void) {
+  return (uint8_t)(sbl_flash_ctx.active || sbl_flash_ctx.rx_raw);
 }
 
 static SBL_CODE uint8_t sbl_read_line(uint8_t *line, uint16_t max_len) {
@@ -493,8 +781,28 @@ static SBL_CODE void sbl_send_info(void) {
 }
 
 static SBL_CODE void sbl_handle_command(const uint8_t *line) {
-  if (sbl_streq(line, "PING") || sbl_streq(line, "ping")) {
-    SBL_USB_WriteText("PONG\r\n");
+  if ((line[0] == 'F' || line[0] == 'f') &&
+      (line[1] == 'L' || line[1] == 'l') &&
+      (line[2] == 'A' || line[2] == 'a') &&
+      (line[3] == 'S' || line[3] == 's') &&
+      (line[4] == 'H' || line[4] == 'h') &&
+      (line[5] == 'B' || line[5] == 'b')) {
+    (void)sbl_flash_parse_begin(line);
+  } else if ((line[0] == 'F' || line[0] == 'f') &&
+             (line[1] == 'L' || line[1] == 'l') &&
+             (line[2] == 'A' || line[2] == 'a') &&
+             (line[3] == 'S' || line[3] == 's') &&
+             (line[4] == 'H' || line[4] == 'h') &&
+             (line[5] == 'D' || line[5] == 'd')) {
+    (void)sbl_flash_parse_data(line);
+  } else if ((line[0] == 'E' || line[0] == 'e') &&
+             (line[1] == 'R' || line[1] == 'r') &&
+             (line[2] == 'A' || line[2] == 'a') &&
+             (line[3] == 'S' || line[3] == 's') &&
+             (line[4] == 'E' || line[4] == 'e')) {
+    (void)sbl_flash_parse_erase(line);
+  } else if (sbl_streq(line, "FLASHEND") || sbl_streq(line, "flashend")) {
+    (void)sbl_flash_parse_end();
   } else if (sbl_streq(line, "INFO") || sbl_streq(line, "info")) {
     sbl_send_info();
   } else if (sbl_streq(line, "REBOOT") || sbl_streq(line, "reboot")) {
@@ -537,6 +845,20 @@ SBL_CODE void SBL_USB_Tick(void) {
   }
   if (!sbl_usb_banner_sent && !sbl_cdc.tx_busy) {
     sbl_usb_banner_sent = SBL_USB_WriteText("TOS-SBL CDC READY\r\n");
+  }
+  if (sbl_flash_ctx.rx_raw && sbl_flash_ctx.chunk_received >= sbl_flash_ctx.chunk_len) {
+    sbl_flash_ctx.rx_raw = 0U;
+    if (!SBL_FlashWriteChunk(&sbl_flash_ctx.session,
+                             sbl_flash_ctx.chunk_offset,
+                             sbl_flash_ctx.chunk_buf,
+                             sbl_flash_ctx.chunk_len,
+                             sbl_flash_ctx.chunk_crc)) {
+      sbl_flash_reset();
+      SBL_USB_WriteText("FAIL flash write failed\r\n");
+      return;
+    }
+    SBL_USB_WriteTextWait("OKAY DATA\r\n");
+    return;
   }
   if (!sbl_cdc.tx_busy && sbl_read_line(sbl_cdc.line, sizeof(sbl_cdc.line))) {
     sbl_handle_command(sbl_cdc.line);

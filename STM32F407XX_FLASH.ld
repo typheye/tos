@@ -102,25 +102,40 @@ SECTIONS
     __sbl_end__ = .;
   } >FLASH :flash
 
-  __sbl_reserved_end__ = ORIGIN(FLASH) + 32K;
+  __sbl_reserved_end__ = ORIGIN(FLASH) + 64K;
+  __trust_start__ = ORIGIN(FLASH) + 64K;
+  __trust_end__ = ORIGIN(FLASH) + 128K;
   __sbl_state_start__ = ORIGIN(FLASH) + LENGTH(FLASH) - 1K;
   __sbl_state_end__ = ORIGIN(FLASH) + LENGTH(FLASH);
-  ASSERT(__sbl_end__ <= ORIGIN(FLASH) + 16K,
-         "SBL code must stay in FLASH sector 0; sector 1 is SBL state/reserved")
+  ASSERT(__sbl_end__ <= __sbl_reserved_end__,
+         "SBL code exceeds reserved 64KB partition")
 
-  .sah __sbl_reserved_end__ :
+  .trust __trust_start__ :
+  {
+    . = ALIGN(4);
+    KEEP(*(.trust.rodata))
+    KEEP(*(.trust.rodata*))
+    . = ALIGN(4);
+  } >FLASH :flash
+
+  ASSERT(. <= __trust_end__,
+         "TRUST data exceeds reserved 64KB partition")
+
+  __sah_data_start__ = ORIGIN(FLASH) + 128K;
+
+  .sah __sah_data_start__ :
   {
     . = ALIGN(4);
     __sah_start__ = .;
-    KEEP(*(.sah.text))
-    KEEP(*(.sah.text*))
     KEEP(*(.sah.rodata))
     KEEP(*(.sah.rodata*))
     . = ALIGN(4);
     __sah_end__ = .;
   } >FLASH :flash
 
-  __sah_reserved_end__ = ORIGIN(FLASH) + 160K;
+  __sah_reserved_end__ = ORIGIN(FLASH) + 256K;
+  ASSERT(__sah_end__ <= __sah_reserved_end__,
+         "SAH data exceeds reserved 128KB partition")
   __tos_app_start__ = __sah_reserved_end__;
 
   /* The program code and other data goes into FLASH */
@@ -262,6 +277,7 @@ SECTIONS
   PROVIDE( __data_source = LOADADDR(.data) );
   PROVIDE( __data_source_end = __tdata_source_end );
   PROVIDE( __data_source_size = __data_source_end - __data_source );
+  __tos_flash_image_end__ = __data_source_end;
   /* Uninitialized data section */
   .tbss (NOLOAD) : ALIGN(4)
   {
@@ -343,5 +359,8 @@ SECTIONS
     libm.a:* ( * )
     libgcc.a:* ( * )
   }
+
+  ASSERT(__tos_flash_image_end__ <= (ORIGIN(FLASH) + 0x000C0000),
+         "TOS flash image exceeds 512KB system partition")
 
 }
