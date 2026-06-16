@@ -281,11 +281,20 @@ SBL_CODE void SBL_UiRunFastboot(void) {
   uint8_t long_done = 0U;
   uint32_t press_start = 0U;
   uint32_t last_action = HAL_GetTick();
+  uint32_t usb_grace_start = last_action;
+  uint8_t usb_grace_done = 0U;
 
   sbl_redraw_fastboot_hidden(&selected);
   SBL_WaitButtonRelease(120U);
+  usb_grace_start = HAL_GetTick();
 
   while (1) {
+    uint32_t now = HAL_GetTick();
+    if (!usb_grace_done && !SBL_USB_IsConfigured() &&
+        (uint32_t)(now - usb_grace_start) >= 2500U) {
+      SBL_USB_DeInit();
+      usb_grace_done = 1U;
+    }
     SBL_USB_Tick();
     if (SBL_USB_IsBusy()) {
       was_down = 0U;
@@ -308,7 +317,7 @@ SBL_CODE void SBL_UiRunFastboot(void) {
       continue;
     }
     uint8_t down = SBL_IsButtonDown();
-    uint32_t now = HAL_GetTick();
+    now = HAL_GetTick();
 
     if ((uint32_t)(now - last_action) >= SBL_IDLE_REBOOT_MS) {
       SBL_SystemReboot();

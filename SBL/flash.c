@@ -20,10 +20,14 @@ typedef struct {
   uint32_t sector_index;
 } SBL_SectorInfo;
 
+static const char sbl_part_name_sbl[] SBL_CONST = "sbl";
+static const char sbl_part_name_sah[] SBL_CONST = "sah";
+static const char sbl_part_name_system[] SBL_CONST = "system";
+
 static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
-    {"sbl",    SBL_PART_SBL_OFFSET,    SBL_FLASH_BASE + SBL_PART_SBL_OFFSET,    SBL_PART_SBL_SIZE,    1U, 1U, 0U, 0U},
-    {"sah",    SBL_PART_SAH_OFFSET,    SBL_FLASH_BASE + SBL_PART_SAH_OFFSET,    SBL_PART_SAH_SIZE,    0U, 0U, 1U, 1U},
-    {"system", SBL_PART_SYSTEM_OFFSET, SBL_FLASH_BASE + SBL_PART_SYSTEM_OFFSET, SBL_PART_SYSTEM_SIZE, 0U, 0U, 1U, 1U},
+    {sbl_part_name_sbl,    SBL_PART_SBL_OFFSET,    SBL_FLASH_BASE + SBL_PART_SBL_OFFSET,    SBL_PART_SBL_SIZE,    1U, 1U, 0U, 0U},
+    {sbl_part_name_sah,    SBL_PART_SAH_OFFSET,    SBL_FLASH_BASE + SBL_PART_SAH_OFFSET,    SBL_PART_SAH_SIZE,    0U, 0U, 1U, 1U},
+    {sbl_part_name_system, SBL_PART_SYSTEM_OFFSET, SBL_FLASH_BASE + SBL_PART_SYSTEM_OFFSET, SBL_PART_SYSTEM_SIZE, 0U, 0U, 1U, 1U},
 };
 
 static const SBL_SectorInfo sbl_sectors[] SBL_CONST = {

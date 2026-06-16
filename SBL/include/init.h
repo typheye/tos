@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 void SBL_Run(void);
+void SBL_PreMain(void);
 uint8_t SBL_AppLooksValid(void);
 
 #ifdef __cplusplus

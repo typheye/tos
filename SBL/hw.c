@@ -19,13 +19,12 @@ SBL_CODE void SBL_HwBootstrap(void) {
 }
 
 SBL_CODE uint8_t SBL_IsFastbootRequested(void) {
-  SBL_DelayMs(700U);
   uint8_t pressed = 0U;
   for (uint8_t i = 0; i < 12U; ++i) {
     if ((SBL_BTN_PORT->IDR & (1UL << SBL_BTN_PIN)) == 0U) {
       pressed++;
     }
-    SBL_DelayMs(20U);
+    SBL_DelayMs(10U);
   }
   return pressed >= 9U;
 }

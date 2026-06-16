@@ -692,12 +692,16 @@ SBL_CODE uint8_t SBL_USB_Init(void) {
 
   sbl_usb_banner_sent = 0U;
   if (USBD_Init(&sbl_usb_dev, &SBL_USB_Desc, DEVICE_FS) != USBD_OK) {
+    (void)USBD_DeInit(&sbl_usb_dev);
     return 0U;
   }
   if (USBD_RegisterClass(&sbl_usb_dev, &SBL_USBD_CDC_CLASS) != USBD_OK) {
+    (void)USBD_DeInit(&sbl_usb_dev);
     return 0U;
   }
   if (USBD_Start(&sbl_usb_dev) != USBD_OK) {
+    (void)USBD_Stop(&sbl_usb_dev);
+    (void)USBD_DeInit(&sbl_usb_dev);
     return 0U;
   }
   sbl_usb_started = 1U;

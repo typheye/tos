@@ -1,6 +1,55 @@
 #include "sbl_common.h"
 
+#include <stddef.h>
+
 static volatile uint32_t sbl_tick_ms;
+
+SBL_CODE void *memset(void *dst, int value, size_t len) {
+  uint8_t *p = (uint8_t *)dst;
+  while (len--) {
+    *p++ = (uint8_t)value;
+  }
+  return dst;
+}
+
+SBL_CODE void *memcpy(void *dst, const void *src, size_t len) {
+  uint8_t *d = (uint8_t *)dst;
+  const uint8_t *s = (const uint8_t *)src;
+  while (len--) {
+    *d++ = *s++;
+  }
+  return dst;
+}
+
+SBL_CODE void *memmove(void *dst, const void *src, size_t len) {
+  uint8_t *d = (uint8_t *)dst;
+  const uint8_t *s = (const uint8_t *)src;
+  if (d > s && d < (s + len)) {
+    d += len;
+    s += len;
+    while (len--) {
+      *--d = *--s;
+    }
+  } else {
+    while (len--) {
+      *d++ = *s++;
+    }
+  }
+  return dst;
+}
+
+SBL_CODE int memcmp(const void *a, const void *b, size_t len) {
+  const uint8_t *pa = (const uint8_t *)a;
+  const uint8_t *pb = (const uint8_t *)b;
+  while (len--) {
+    if (*pa != *pb) {
+      return (int)*pa - (int)*pb;
+    }
+    pa++;
+    pb++;
+  }
+  return 0;
+}
 
 SBL_CODE void HAL_IncTick(void) {
   sbl_tick_ms++;
@@ -21,9 +70,11 @@ SBL_CODE void HAL_Delay(uint32_t ms) {
   (FLASH_SR_OPERR | FLASH_SR_WRPERR | FLASH_SR_PGAERR | \
    FLASH_SR_PGPERR | FLASH_SR_PGSERR)
 
-static SBL_CODE uint8_t sbl_flash_wait_ready(void) {
-  uint32_t guard = 0x00FFFFFFUL;
+static SBL_CODE uint8_t sbl_flash_wait_ready(uint32_t guard) {
   while ((FLASH->SR & FLASH_SR_BSY) != 0U) {
+    if ((guard & 0x3FFFU) == 0U) {
+      IWDG->KR = 0xAAAAU;
+    }
     if (--guard == 0U) {
       return 0U;
     }
@@ -53,7 +104,7 @@ SBL_CODE void SBL_GpioReset(GPIO_TypeDef *port, uint32_t pin) {
 }
 
 SBL_CODE uint8_t SBL_FlashUnlock(void) {
-  if (!sbl_flash_wait_ready()) {
+  if (!sbl_flash_wait_ready(0x0FFFFFFFUL)) {
     return 0U;
   }
   if ((FLASH->CR & FLASH_CR_LOCK) != 0U) {
@@ -71,8 +122,27 @@ SBL_CODE void SBL_FlashClearStatus(void) {
   FLASH->SR = FLASH_SR_EOP | SBL_FLASH_STATUS_ERRORS;
 }
 
+SBL_CODE void SBL_FlashFlushCaches(void) {
+  uint32_t acr = FLASH->ACR;
+
+  if ((acr & FLASH_ACR_ICEN) != 0U) {
+    FLASH->ACR = acr & ~FLASH_ACR_ICEN;
+    FLASH->ACR |= FLASH_ACR_ICRST;
+    FLASH->ACR &= ~FLASH_ACR_ICRST;
+    FLASH->ACR |= FLASH_ACR_ICEN;
+  }
+
+  acr = FLASH->ACR;
+  if ((acr & FLASH_ACR_DCEN) != 0U) {
+    FLASH->ACR = acr & ~FLASH_ACR_DCEN;
+    FLASH->ACR |= FLASH_ACR_DCRST;
+    FLASH->ACR &= ~FLASH_ACR_DCRST;
+    FLASH->ACR |= FLASH_ACR_DCEN;
+  }
+}
+
 SBL_CODE uint8_t SBL_FlashProgramWord(uint32_t addr, uint32_t word) {
-  if (!sbl_flash_wait_ready()) {
+  if (!sbl_flash_wait_ready(0x0FFFFFFFUL)) {
     return 0U;
   }
 
@@ -83,7 +153,7 @@ SBL_CODE uint8_t SBL_FlashProgramWord(uint32_t addr, uint32_t word) {
 
   *(volatile uint32_t *)addr = word;
 
-  if (!sbl_flash_wait_ready()) {
+  if (!sbl_flash_wait_ready(0x0FFFFFFFUL)) {
     FLASH->CR &= ~FLASH_CR_PG;
     return 0U;
   }
@@ -93,11 +163,12 @@ SBL_CODE uint8_t SBL_FlashProgramWord(uint32_t addr, uint32_t word) {
     SBL_FlashClearStatus();
     return 0U;
   }
+  SBL_FlashFlushCaches();
   return 1U;
 }
 
 SBL_CODE uint8_t SBL_FlashEraseSectorIndex(uint32_t sector_index) {
-  if (!sbl_flash_wait_ready()) {
+  if (!sbl_flash_wait_ready(0x0FFFFFFFUL)) {
     return 0U;
   }
 
@@ -108,7 +179,7 @@ SBL_CODE uint8_t SBL_FlashEraseSectorIndex(uint32_t sector_index) {
   FLASH->CR |= ((sector_index << FLASH_CR_SNB_Pos) & FLASH_CR_SNB);
   FLASH->CR |= FLASH_CR_STRT;
 
-  if (!sbl_flash_wait_ready()) {
+  if (!sbl_flash_wait_ready(0xFFFFFFFFUL)) {
     FLASH->CR &= ~(FLASH_CR_SER | FLASH_CR_SNB);
     return 0U;
   }
@@ -118,5 +189,6 @@ SBL_CODE uint8_t SBL_FlashEraseSectorIndex(uint32_t sector_index) {
     SBL_FlashClearStatus();
     return 0U;
   }
+  SBL_FlashFlushCaches();
   return 1U;
 }

@@ -27,6 +27,7 @@ SBL_CODE void SBL_GpioReset(GPIO_TypeDef *port, uint32_t pin);
 SBL_CODE uint8_t SBL_FlashUnlock(void);
 SBL_CODE void SBL_FlashLock(void);
 SBL_CODE void SBL_FlashClearStatus(void);
+SBL_CODE void SBL_FlashFlushCaches(void);
 SBL_CODE uint8_t SBL_FlashProgramWord(uint32_t addr, uint32_t word);
 SBL_CODE uint8_t SBL_FlashEraseSectorIndex(uint32_t sector_index);
 
