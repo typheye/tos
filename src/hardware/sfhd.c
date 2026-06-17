@@ -152,9 +152,11 @@ Flash_Status_t Flash_BL_SetBootTarget(uint32_t target) {
 bool Flash_BL_RecoveryAvailable(void) {
   uint32_t msp = *(const uint32_t *)FLASH_BL_REC_ADDR;
   uint32_t reset = *(const uint32_t *)(FLASH_BL_REC_ADDR + 4U);
-  return msp >= 0x20000000UL && msp < 0x20020000UL &&
-         (reset & 1U) != 0U && reset >= FLASH_BL_REC_ADDR &&
-         reset < FLASH_BL_REC_ADDR + TOS_PART_REC_SIZE;
+  uint32_t reset_addr = reset & ~1UL;
+  return msp >= 0x20000000UL && msp <= 0x20020000UL &&
+         (msp & 7U) == 0U && (reset & 1U) != 0U &&
+         reset_addr >= FLASH_BL_REC_ADDR &&
+         reset_addr < FLASH_BL_REC_ADDR + TOS_PART_REC_SIZE;
 }
 
 static Flash_Status_t erase_data_sector_preserve_bl(void) {
@@ -257,6 +259,7 @@ bool Flash_Check_Backup(void) {
 
 
 
+#if 0
 static bool rolling_record_valid(uint32_t addr, Flash_Record_Header_t **out_hdr) {
   if (addr > FLASH_DATA_ADDR + FLASH_DATA_SIZE - FLASH_HDR_SIZE) {
     return false;
@@ -312,8 +315,18 @@ static uint32_t rolling_find_last(void) {
   }
   return found ? last : FLASH_DATA_ADDR;
 }
+#endif
 
 Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
+  (void)pData;
+  (void)dataSize;
+  /* USERDATA is now exposed as the complete /data volume. The legacy rolling
+   * settings journal used the beginning of USERDATA and would corrupt that
+   * volume's filesystem/block view. Keep settings volatile until a dedicated
+   * settings partition or NVM area is assigned.
+   */
+  return FLASH_ERR_SIZE;
+#if 0
   Flash_Status_t st = check_align(pData, dataSize);
   if (st != FLASH_OK) return st;
 
@@ -360,9 +373,15 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
   LOG_I("FLASH", "Rolling write @0x%08lX %lu bytes: %s",
         next, (unsigned long)dataSize, st == FLASH_OK ? "OK" : "FAIL");
   return st;
+#endif
 }
 
 Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *outSize) {
+  (void)pData;
+  (void)maxSize;
+  if (outSize) *outSize = 0U;
+  return FLASH_ERR_SIZE;
+#if 0
   if (maxSize > FLASH_RECORD_MAX) maxSize = FLASH_RECORD_MAX;
   uint32_t last = rolling_find_last();
   Flash_Record_Header_t *hdr = (Flash_Record_Header_t *)last;
@@ -397,6 +416,7 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
   if (outSize) *outSize = copySize;
   LOG_I("FLASH", "Rolling read @0x%08lX %lu bytes OK", last, (unsigned long)copySize);
   return FLASH_OK;
+#endif
 }
 
 

@@ -90,6 +90,10 @@ SBL_CODE uint8_t SBL_StateUnlocked(void) {
 }
 
 SBL_CODE uint8_t SBL_StateSetUnlocked(uint8_t unlocked) {
+  /* Locking or unlocking the bootloader must force a data wipe before the
+   * normal boot path resumes. REC may currently compile the wipe as a
+   * development fake, but the RECOVERY_FORMAT transition itself is intentional
+   * security behavior and must not be removed as a cosmetic side effect. */
   return sbl_state_append(unlocked, SBL_BOOT_TARGET_RECOVERY_FORMAT,
                           TOS_UPDATE_NONE, 0xFFFFFFFFUL, 0xFFFFFFFFUL,
                           0U, 0xFFFFFFFFUL, SBL_BOOT_TARGET_NONE);

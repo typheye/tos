@@ -1,4 +1,4 @@
-add_executable(tee ${CMAKE_SOURCE_DIR}/part/TEE/init.c)
+add_executable(tee ${CMAKE_SOURCE_DIR}/partitions/TEE/init.c)
 target_include_directories(tee PRIVATE ${TOS_COMMON_INCLUDES})
 target_compile_definitions(tee PRIVATE USE_HAL_DRIVER STM32F407xx)
 target_compile_options(tee PRIVATE -ffunction-sections -fdata-sections)

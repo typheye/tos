@@ -18,7 +18,7 @@ include(cmake/platform/PartitionTargets.cmake)
 # not copied into the boot partitions and are left untouched.
 add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(cmake/stm32cubemx)
-target_include_directories(stm32cubemx INTERFACE ${CMAKE_SOURCE_DIR}/part/common/include)
+target_include_directories(stm32cubemx INTERFACE ${CMAKE_SOURCE_DIR}/partitions/common/include)
 add_subdirectory(cmake/user)
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME system)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

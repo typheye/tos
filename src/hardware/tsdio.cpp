@@ -17,6 +17,14 @@
 
 #include "include/tsdio.hpp"
 #include "library/include/libdly.h"
+#include "core/sys/include/syswatchdog.h"
+
+/* Keep boot-time SDIO conservative. Some cards hang inside the HAL 4-bit bus
+ * switch long enough for IWDG to reset the board. Enable this only after
+ * card init and REC init are proven stable on the target hardware. */
+#ifndef TSDIO_ENABLE_WIDE_BUS
+#define TSDIO_ENABLE_WIDE_BUS 0
+#endif
 
 
 
@@ -47,6 +55,7 @@ bool TSDIO::waitForReady(uint32_t timeout_ms) {
     if (card_state == HAL_SD_CARD_ERROR) {
       return false;
     }
+    SysWatchdog_Tick();
     JPDelay(1);
   }
   return false;
@@ -72,6 +81,9 @@ void TSDIO::updateCardInfo(void) {
 SDCard_Status_t TSDIO::init(void) {
   HAL_SD_CardInfoTypeDef hal_card_info;
 
+  memset(&hal_card_info, 0, sizeof(hal_card_info));
+  SysWatchdog_FeedNow();
+
   LOG_I("SDIO", "Starting init...");
 
   
@@ -79,13 +91,15 @@ SDCard_Status_t TSDIO::init(void) {
   if (HAL_SD_Init(&hsd) != HAL_OK) {
     LOG_E("SDIO", "HAL_SD_Init FAILED");
     _hard_disabled = true;
-    LOG_F("SDIO", "SD card HARD DISABLED â€?init failed");
+    LOG_E("SDIO", "SD card HARD DISABLED â€?init failed");
     return SD_CARD_ERROR;
   }
   LOG_I("SDIO", "HAL_SD_Init OK");
 
   
+  SysWatchdog_FeedNow();
   JPDelay(200);
+  SysWatchdog_FeedNow();
 
   
   LOG_I("SDIO", "Checking card presence...");
@@ -103,6 +117,7 @@ SDCard_Status_t TSDIO::init(void) {
       }
     }
     LOG_W("SDIO", "Retrying get card info...");
+    SysWatchdog_FeedNow();
     JPDelay(100);
   }
 
@@ -112,7 +127,7 @@ SDCard_Status_t TSDIO::init(void) {
             (unsigned long)hal_card_info.BlockNbr);
     LOG_E("SDIO", "Failed to get valid card info!");
     _hard_disabled = true;
-    LOG_F("SDIO", "SD card HARD DISABLED â€?invalid card info");
+    LOG_E("SDIO", "SD card HARD DISABLED â€?invalid card info");
     return SD_CARD_ERROR;
   }
 
@@ -127,13 +142,17 @@ SDCard_Status_t TSDIO::init(void) {
   card_info.bus_width = 1;
 
 
-#ifdef SDIO_BUS_WIDE_4B
+#if TSDIO_ENABLE_WIDE_BUS && defined(SDIO_BUS_WIDE_4B)
+  SysWatchdog_FeedNow();
   if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) == HAL_OK) {
     card_info.bus_width = 4;
     LOG_I("SDIO", "4-bit mode enabled");
   } else {
     LOG_W("SDIO", "4-bit mode failed, using 1-bit");
   }
+  SysWatchdog_FeedNow();
+#else
+  LOG_I("SDIO", "4-bit mode disabled at boot, using 1-bit");
 #endif
 
   
@@ -145,11 +164,12 @@ SDCard_Status_t TSDIO::init(void) {
   card_info.card_type = hal_card_info.CardType;
 
   
+  SysWatchdog_FeedNow();
   LOG_I("SDIO", "Waiting for card ready...");
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Card ready timeout");
     _hard_disabled = true;
-    LOG_F("SDIO", "SD card HARD DISABLED â€?not ready");
+    LOG_E("SDIO", "SD card HARD DISABLED â€?not ready");
     return SD_CARD_NOT_READY;
   }
 
@@ -397,6 +417,7 @@ bool TSDIO::directWriteTest(void) {
     if (state == HAL_SD_CARD_READY || state == HAL_SD_CARD_TRANSFER) {
       break;
     }
+    SysWatchdog_Tick();
     JPDelay(1);
   }
   LOG_I("SDIO", "Direct Test: Card state: %ld", (long)state);

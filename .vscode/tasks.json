@@ -2,10 +2,10 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build factory images",
+      "label": "build factory",
       "type": "shell",
       "icon": {
-        "id": "play",
+        "id": "build",
         "tooltip": "Tips"
       },
       "command": "cmake",
@@ -33,7 +33,7 @@
       "label": "build system",
       "type": "shell",
       "icon": {
-        "id": "play",
+        "id": "build",
         "tooltip": "Tips"
       },
       "command": "cmake",
@@ -47,23 +47,6 @@
       ],
       "problemMatcher": [
         "$gcc"
-      ],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "export partitions",
-      "type": "shell",
-      "icon": {
-        "id": "play",
-        "tooltip": "Tips"
-      },
-      "command": "${workspaceFolder}/scripts/export_partitions.bat",
-      "args": [
-        "-BuildDir",
-        "${workspaceFolder}/build/Release"
       ],
       "presentation": {
         "reveal": "always",
@@ -122,7 +105,7 @@
       "label": "clean",
       "type": "shell",
       "icon": {
-        "id": "play",
+        "id": "trash",
         "tooltip": "Tips"
       },
       "command": "cmake",

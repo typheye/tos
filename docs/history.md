@@ -321,9 +321,9 @@ slave-board/STM32F407XX_FLASH.ld
 - FatFs 核心函数放入 REC 分区，避免调用 SYSTEM 中的 FatFs。
 - 挂载路径使用：
   - `0:/init`
-  - `0:/data/upgrade/partitions.csv`
-  - `0:/data/upgrade/firmware/sah.bin`
-  - `0:/data/upgrade/firmware/system.bin`
+  - `0:/storage/tos/upgrade/partitions.csv`
+  - `0:/storage/tos/upgrade/firmware/sah.bin`
+  - `0:/storage/tos/upgrade/firmware/system.bin`
 
 - 尝试参考 TOS 的稳定流程：
   - `HAL_SD_Init`

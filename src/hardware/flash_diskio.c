@@ -5,7 +5,7 @@
 #include "stm32f4xx_hal.h"
 #include <string.h>
 
-#define FLASHDISK_SECTOR_SIZE 512U
+#define FLASHDISK_SECTOR_SIZE TOS_FLASH_FS_BLOCK_SIZE
 #define FLASHDISK_META_SECTORS 4U
 #define FLASHDISK_TMP_LUN  0U
 #define FLASHDISK_DATA_LUN 1U
@@ -16,16 +16,14 @@ FATFS TMPFatFS;
 FATFS DataFatFS;
 
 static uint8_t g_linked;
-static uint8_t g_settings_copy[FLASH_RECORD_MAX] __attribute__((aligned(4)));
-
 static uint32_t volume_base(BYTE lun) {
   return lun == FLASHDISK_TMP_LUN ? TOS_PART_TMP_ADDRESS
-                                  : TOS_USERDATA_FS_ADDRESS;
+                                  : TOS_PART_USERDATA_ADDRESS;
 }
 
 static uint32_t volume_size(BYTE lun) {
   return lun == FLASHDISK_TMP_LUN ? TOS_PART_TMP_SIZE
-                                  : TOS_USERDATA_FS_SIZE;
+                                  : TOS_PART_USERDATA_SIZE;
 }
 
 static uint32_t volume_sector_count(BYTE lun) {
@@ -36,7 +34,9 @@ static uint8_t volume_valid(BYTE lun) {
   const uint8_t *b = (const uint8_t *)volume_base(lun);
   uint32_t sectors = volume_sector_count(lun);
   if (b[0] != 0xEBU || b[1] != 0x3CU || b[2] != 0x90U) return 0U;
-  if (b[11] != 0x00U || b[12] != 0x02U || b[13] != 0x01U) return 0U;
+  if (b[11] != (uint8_t)(FLASHDISK_SECTOR_SIZE & 0xFFU) ||
+      b[12] != (uint8_t)((FLASHDISK_SECTOR_SIZE >> 8) & 0xFFU) ||
+      b[13] != 0x01U) return 0U;
   if (b[14] != 0x01U || b[16] != 0x01U) return 0U;
   if (b[19] != (uint8_t)(sectors & 0xFFU) ||
       b[20] != (uint8_t)((sectors >> 8) & 0xFFU)) return 0U;
@@ -50,7 +50,8 @@ static void make_fat12_metadata(uint8_t *image, uint32_t sectors,
   memset(image, 0, FLASHDISK_META_SECTORS * FLASHDISK_SECTOR_SIZE);
   boot[0] = 0xEBU; boot[1] = 0x3CU; boot[2] = 0x90U;
   memcpy(&boot[3], "TOSFAT  ", 8U);
-  boot[11] = 0x00U; boot[12] = 0x02U; /* 512 bytes/sector */
+  boot[11] = (uint8_t)(FLASHDISK_SECTOR_SIZE & 0xFFU);
+  boot[12] = (uint8_t)((FLASHDISK_SECTOR_SIZE >> 8) & 0xFFU);
   boot[13] = 0x01U;                  /* one sector/cluster */
   boot[14] = 0x01U; boot[15] = 0x00U;
   boot[16] = 0x01U;                  /* one FAT */
@@ -105,7 +106,7 @@ static uint8_t erase_sector(uint32_t sector) {
 }
 
 static uint8_t build_volume(BYTE lun) {
-  uint8_t metadata[FLASHDISK_META_SECTORS * FLASHDISK_SECTOR_SIZE]
+  static uint8_t metadata[FLASHDISK_META_SECTORS * FLASHDISK_SECTOR_SIZE]
       __attribute__((aligned(4)));
   static const char tmp_label[11] = {'T','O','S',' ','T','M','P',' ',' ',' ',' '};
   static const char data_label[11] = {'T','O','S',' ','D','A','T','A',' ',' ',' '};
@@ -136,9 +137,6 @@ uint8_t FlashDiskIO_LinkVolumes(void) {
 }
 
 uint8_t FlashDiskIO_EnsureVolumes(void) {
-  uint32_t settings_size = 0U;
-  uint8_t have_settings = 0U;
-
   if (!volume_valid(FLASHDISK_TMP_LUN)) {
     if (!erase_sector(FLASH_SECTOR_10) || !FlashDiskIO_RebuildTmpAfterErase()) {
       return 0U;
@@ -146,18 +144,8 @@ uint8_t FlashDiskIO_EnsureVolumes(void) {
   }
 
   if (!volume_valid(FLASHDISK_DATA_LUN)) {
-    if (Flash_Rolling_Read((uint32_t *)g_settings_copy,
-                           sizeof(g_settings_copy), &settings_size) == FLASH_OK &&
-        settings_size > 0U) {
-      have_settings = 1U;
-    }
     if (!erase_sector(FLASH_SECTOR_11) ||
         !FlashDiskIO_RebuildUserdataAfterErase()) {
-      return 0U;
-    }
-    if (have_settings &&
-        Flash_Rolling_Write((const uint32_t *)g_settings_copy,
-                            settings_size) != FLASH_OK) {
       return 0U;
     }
   }

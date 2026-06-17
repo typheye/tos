@@ -9,15 +9,20 @@
 #include "tos_partitions.h"
 
 #define REC_SD_TIMEOUT_MS 5000U
-#define REC_FLASH_BUF_SZ  512U
+#define REC_FLASH_BUF_SZ  4096U
 #define REC_SD_IO_ATTEMPTS 2U
 
-/* Keep destructive userdata erase disabled during development. Set to 0 only
- * for production builds that should really erase Flash sector 11. */
+/* Development safety switch: keep the REC format flow and bootloader
+ * lock/unlock security semantics intact, but skip the destructive TMP and
+ * USERDATA erase while this board is still being debugged. Set this to 0 for
+ * production so lock/unlock performs the real data wipe required by policy. */
 #ifndef REC_FORMAT_FAKE
 #define REC_FORMAT_FAKE 1U
 #endif
 
+#define REC_TMP_SECTOR_INDEX 10U
+#define REC_TMP_START        0x080C0000UL
+#define REC_TMP_END          0x080E0000UL
 #define REC_USERDATA_SECTOR_INDEX 11U
 #define REC_USERDATA_START        0x080E0000UL
 #define REC_USERDATA_END          0x08100000UL
@@ -64,16 +69,19 @@ static const char rec_err_sync[] REC_CONST = "SD sync failed";
 static const char rec_path_init[] REC_CONST = "0:/init";
 static const char rec_path_manifest[] REC_CONST =
     "0:/storage/tos/upgrade/partitions.csv";
+static const char rec_path_sbl[] REC_CONST =
+    "0:/storage/tos/upgrade/firmware/sbl.bin";
+static const char rec_path_tee[] REC_CONST =
+    "0:/storage/tos/upgrade/firmware/tee.bin";
+static const char rec_path_rec[] REC_CONST =
+    "0:/storage/tos/upgrade/firmware/rec.bin";
 static const char rec_path_sah[] REC_CONST =
     "0:/storage/tos/upgrade/firmware/sah.bin";
 static const char rec_path_system[] REC_CONST =
     "0:/storage/tos/upgrade/firmware/system.bin";
-static const char rec_path_manifest_legacy[] REC_CONST =
-    "0:/data/upgrade/partitions.csv";
-static const char rec_path_sah_legacy[] REC_CONST =
-    "0:/data/upgrade/firmware/sah.bin";
-static const char rec_path_system_legacy[] REC_CONST =
-    "0:/data/upgrade/firmware/system.bin";
+static const char rec_status_sbl[] REC_CONST = "Flashing SBL...";
+static const char rec_status_tee[] REC_CONST = "Flashing TEE...";
+static const char rec_status_rec[] REC_CONST = "Flashing REC...";
 static const char rec_status_sah[] REC_CONST = "Flashing SAH...";
 static const char rec_status_system[] REC_CONST = "Flashing SYSTEM...";
 static const char rec_log_started[] REC_CONST = "Recovery log started";
@@ -86,8 +94,7 @@ static const char rec_log_image_skipped[] REC_CONST = "Image not present, skippe
 static const char rec_log_upgrade_done[] REC_CONST = "Upgrade completed";
 static const char rec_log_init_done[] REC_CONST = "Storage initialized";
 static const char rec_err_no_images[] REC_CONST = "No upgrade images found";
-static const char *rec_active_sah = rec_path_sah;
-static const char *rec_active_system = rec_path_system;
+static const char rec_err_too_many_staged[] REC_CONST = "Only one SBL/REC image allowed";
 
 static REC_CODE void rec_copy_error(const char *msg) {
   uint32_t i = 0U;
@@ -465,9 +472,9 @@ static REC_CODE char *rec_append_u32_pad(char *p, uint32_t v,
 
 static REC_CODE void rec_make_log_path(char path[40], uint32_t index) {
   char *p = path;
-  p = rec_append_str(p, "0:/storage/tos/_/");
+  p = rec_append_str(p, "0:/storage/tos/rec/");
   p = rec_append_u32_pad(p, index, 8U, '0');
-  p = rec_append_str(p, ".log");
+  p = rec_append_str(p, ".rec");
   *p = 0;
 }
 
@@ -512,7 +519,7 @@ static REC_CODE void rec_open_log(void) {
   }
   (void)f_mkdir("0:/storage");
   (void)f_mkdir("0:/storage/tos");
-  (void)f_mkdir("0:/storage/tos/_");
+  (void)f_mkdir("0:/storage/tos/rec");
   for (uint32_t i = 1U; i < 99999999UL; ++i) {
     rec_make_log_path(path, i);
     if (f_stat(path, &info) == FR_NO_FILE) {
@@ -745,14 +752,6 @@ REC_CODE uint8_t REC_FatProbeInit(void) {
 REC_CODE uint8_t REC_FatHasUpgradeManifest(void) {
   FRESULT fr;
   uint8_t ok = rec_file_exists(rec_path_manifest, &fr);
-  rec_active_sah = rec_path_sah;
-  rec_active_system = rec_path_system;
-  if (!ok && (fr == FR_NO_FILE || fr == FR_NO_PATH) &&
-      rec_file_exists(rec_path_manifest_legacy, &fr)) {
-    ok = 1U;
-    rec_active_sah = rec_path_sah_legacy;
-    rec_active_system = rec_path_system_legacy;
-  }
   if (!ok) {
     if (fr == FR_NO_FILE || fr == FR_NO_PATH) {
       rec_copy_error(rec_err_manifest);
@@ -767,18 +766,43 @@ REC_CODE uint8_t REC_FatHasUpgradeManifest(void) {
 
 REC_CODE uint8_t REC_FatFlashUpgrade(void (*status)(const char *, uint16_t)) {
   uint8_t wrote = 0U;
+  uint8_t staged_count = 0U;
+  FRESULT fr;
 
   if (!rec_mounted) {
     rec_copy_error(rec_err_mount);
     return 0U;
   }
+  if (rec_file_exists(rec_path_sbl, &fr)) staged_count++;
+  if (rec_file_exists(rec_path_rec, &fr)) staged_count++;
+  if (staged_count > 1U) {
+    rec_copy_error(rec_err_too_many_staged);
+    rec_log_line("ERROR", "REC  ", rec_err_too_many_staged);
+    return 0U;
+  }
+
+  if (status) status(rec_status_tee, SBL_WHITE);
+  if (!rec_flash_file("tee", rec_path_tee, rec_status_tee, status, &wrote)) {
+    return 0U;
+  }
+
   if (status) status(rec_status_sah, SBL_WHITE);
-  if (!rec_flash_file("sah", rec_active_sah, rec_status_sah, status, &wrote)) {
+  if (!rec_flash_file("sah", rec_path_sah, rec_status_sah, status, &wrote)) {
     return 0U;
   }
 
   if (status) status(rec_status_system, SBL_WHITE);
-  if (!rec_flash_file("system", rec_active_system, rec_status_system, status, &wrote)) {
+  if (!rec_flash_file("system", rec_path_system, rec_status_system, status, &wrote)) {
+    return 0U;
+  }
+
+  if (status) status(rec_status_rec, SBL_WHITE);
+  if (!rec_flash_file("rec", rec_path_rec, rec_status_rec, status, &wrote)) {
+    return 0U;
+  }
+
+  if (status) status(rec_status_sbl, SBL_WHITE);
+  if (!rec_flash_file("sbl", rec_path_sbl, rec_status_sbl, status, &wrote)) {
     return 0U;
   }
 
@@ -840,7 +864,15 @@ static REC_CODE uint8_t rec_write_init_marker(void) {
 }
 
 static REC_CODE uint8_t rec_create_layout(void) {
-  static const char *const dirs[] REC_CONST = {"0:/storage"};
+  static const char *const dirs[] REC_CONST = {
+      "0:/storage",
+      "0:/storage/tos",
+      "0:/storage/tos/log",
+      "0:/storage/tos/dump",
+      "0:/storage/tos/rec",
+      "0:/storage/tos/upgrade",
+      "0:/storage/tos/upgrade/firmware",
+  };
 
   for (uint32_t i = 0U; i < (uint32_t)(sizeof(dirs) / sizeof(dirs[0])); ++i) {
     if (!rec_mkdir_ok(dirs[i])) {
@@ -927,6 +959,11 @@ REC_CODE uint8_t REC_FatFormat(void) {
     rec_copy_error(rec_err_userdata);
     return 0U;
   }
+  if (!SBL_FlashEraseSectorIndex(REC_TMP_SECTOR_INDEX)) {
+    SBL_FlashLock();
+    rec_copy_error(rec_err_userdata);
+    return 0U;
+  }
   if (!SBL_FlashEraseSectorIndex(REC_USERDATA_SECTOR_INDEX)) {
     SBL_FlashLock();
     rec_copy_error(rec_err_userdata);
@@ -935,6 +972,13 @@ REC_CODE uint8_t REC_FatFormat(void) {
   SBL_FlashLock();
   SBL_FlashFlushCaches();
 
+  for (uint32_t addr = REC_TMP_START; addr < REC_TMP_END;
+       addr += sizeof(uint32_t)) {
+    if (*(const volatile uint32_t *)addr != 0xFFFFFFFFUL) {
+      rec_copy_error(rec_err_userdata_verify);
+      return 0U;
+    }
+  }
   for (uint32_t addr = REC_USERDATA_START; addr < REC_USERDATA_END;
        addr += sizeof(uint32_t)) {
     if (*(const volatile uint32_t *)addr != 0xFFFFFFFFUL) {

@@ -1,7 +1,7 @@
-# 告诉CMake自定义头文件的搜索路径
+# User include directories
 set(USER_Include_Dirs
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../part/common/include/
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../part/SBL/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/common/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/SBL/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/
@@ -23,7 +23,7 @@ set(USER_Include_Dirs
 set(USER_Application_Src
     # 核心系统文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../part/SBL/dram.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/SBL/dram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/init.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/sysfonts.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syscalls_override.c
@@ -56,7 +56,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/flash_diskio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/thid.cpp
     
-    # 库文件
+    # Library files
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/lib3dox.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/lib3dgyro.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libfs.c
@@ -105,10 +105,10 @@ set(USER_Application_Src
 # ff_convert()/ff_wtoupper() from Middlewares/Third_Party/FatFs/src/option/ccsbcs.c.
 
 
-# 将头文件路径添加到全局包含目录中
+# Add user include directories.
 target_include_directories(stm32cubemx INTERFACE ${USER_Include_Dirs})
 
-# 将源文件添加到主项目目标中，让它们被编译和链接
+# Add user sources to the main target.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_Application_Src})
 
 # 编译器优化选项
@@ -119,8 +119,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fsingle-precision-const
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=hard -mfpu=fpv4-sp-d16")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=hard -mfpu=fpv4-sp-d16")
 
-# 可选：添加调试符号（开发时使用）
-# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+# 可选：添加调试符号（开发时使用�?# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 # 可选：启用更多警告

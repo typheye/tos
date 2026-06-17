@@ -1,15 +1,15 @@
 add_executable(rec
     ${CMAKE_SOURCE_DIR}/startup_stm32f407xx.s
-    ${CMAKE_SOURCE_DIR}/part/REC/boot.s
-    ${CMAKE_SOURCE_DIR}/part/REC/runtime.c
-    ${CMAKE_SOURCE_DIR}/part/REC/init.c
-    ${CMAKE_SOURCE_DIR}/part/REC/fat.c
-    ${CMAKE_SOURCE_DIR}/part/REC/msc.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/common.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/flash.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/hw.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/lcd.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/state.c
+    ${CMAKE_SOURCE_DIR}/partitions/REC/boot.s
+    ${CMAKE_SOURCE_DIR}/partitions/REC/runtime.c
+    ${CMAKE_SOURCE_DIR}/partitions/REC/init.c
+    ${CMAKE_SOURCE_DIR}/partitions/REC/fat.c
+    ${CMAKE_SOURCE_DIR}/partitions/REC/msc.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/common.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/flash.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/hw.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/lcd.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/state.c
     ${CMAKE_SOURCE_DIR}/Core/Src/sdio.c
     ${CMAKE_SOURCE_DIR}/Core/Src/dma.c
     ${CMAKE_SOURCE_DIR}/Core/Src/stm32f4xx_hal_msp.c

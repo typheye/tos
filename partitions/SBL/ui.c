@@ -231,6 +231,9 @@ static SBL_CODE void sbl_run_unlock_page(uint8_t *selected) {
       SBL_DelayMs(180U);
       if (yes_selected) {
         ok = SBL_StateSetUnlocked(1U);
+        if (ok && sbl_page_params) {
+          sbl_page_params->unlocked = 1U;
+        }
       }
       SBL_USB_SendUnlockResult(yes_selected, ok);
       SBL_DelayMs(220U);
@@ -256,6 +259,7 @@ static SBL_CODE void sbl_run_unlock_page(uint8_t *selected) {
 SBL_CODE void SBL_UiDrawFastboot(void) {
   SBL_LcdDisplayOff();
   SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
+  sbl_load_page_params();
   sbl_draw_center_title();
   SBL_LcdDrawText(SBL_LEFT_X, SBL_HELP_Y, sbl_txt_help, SBL_WHITE,
                   SBL_FONT_SMALL);

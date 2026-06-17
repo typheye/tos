@@ -176,8 +176,16 @@ REC_CODE void REC_Run(uint8_t mode) {
     ok = REC_FatInitStorage();
     error = ok ? 0 : REC_FatLastError();
     REC_FatRelease();
-    rec_reboot_after_result(ok ? rec_init_done : rec_init_fail,
-                            ok ? SBL_GREEN : SBL_RED, error);
+    if (ok) {
+      rec_reboot_after_result(rec_init_done, SBL_GREEN, 0);
+    }
+    rec_draw_status(rec_init_fail, SBL_RED);
+    rec_draw_detail(error, error ? SBL_RED : SBL_WHITE);
+    (void)REC_MSC_Start();
+    while (1) {
+      REC_MSC_Tick();
+      SBL_DelayMs(20U);
+    }
     return;
   }
 

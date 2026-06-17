@@ -20,7 +20,8 @@ static char g_boot_log_path[FMCORE_PATH_MAX];
 static bool g_boot_log_ready_seen;
 
 #define FMCORE_BOOT_LOG_TIMEOUT_MS 3500U
-#define FMCORE_LOG_DIR "0:/storage/tos/_"
+#define FMCORE_LOG_DIR  "0:/storage/tos/log"
+#define FMCORE_DUMP_DIR "0:/storage/tos/dump"
 
 typedef enum {
   FM_PATH_STORAGE = 0,
@@ -484,14 +485,14 @@ FRESULT FMCore_NextIndexedPath(const char *dir, const char *ext,
   return FR_DENIED;
 }
 
-static FRESULT ensure_log_dir(void) {
+static FRESULT ensure_tos_dir(const char *leaf_dir) {
   FRESULT res;
   if (!FMCore_IsInitialized()) return FR_NOT_READY;
   res = f_mkdir("0:/storage");
   if (res != FR_OK && res != FR_EXIST) return res;
   res = f_mkdir("0:/storage/tos");
   if (res != FR_OK && res != FR_EXIST) return res;
-  res = f_mkdir(FMCORE_LOG_DIR);
+  res = f_mkdir(leaf_dir);
   return res == FR_EXIST ? FR_OK : res;
 }
 
@@ -499,7 +500,7 @@ FRESULT FMCore_AppendBootLog(const char *line, uint32_t len) {
   FRESULT res;
   if (!line || len == 0U) return FR_INVALID_PARAMETER;
   if (!g_boot_log_ready_seen) {
-    res = ensure_log_dir();
+    res = ensure_tos_dir(FMCORE_LOG_DIR);
     if (res != FR_OK) return res;
     g_boot_log_ready_seen = true;
   }
@@ -519,9 +520,9 @@ FRESULT FMCore_WriteSystemDump(uint32_t code, const char *name,
   char path[FMCORE_PATH_MAX];
   char body[512];
   int n;
-  FRESULT res = ensure_log_dir();
+  FRESULT res = ensure_tos_dir(FMCORE_DUMP_DIR);
   if (res != FR_OK) return res;
-  res = FMCore_NextIndexedPath(FMCORE_LOG_DIR, "dump", path, sizeof(path));
+  res = FMCore_NextIndexedPath(FMCORE_DUMP_DIR, "dump", path, sizeof(path));
   if (res != FR_OK) return res;
   n = snprintf(body, sizeof(body),
                "TOS system dump\r\ncode=0x%08lX\r\ntype=%s\r\n%s%s",

@@ -1,5 +1,5 @@
 set(TOS_ROOT ${CMAKE_SOURCE_DIR})
-set(TOS_PART_ROOT ${TOS_ROOT}/part)
+set(TOS_PART_ROOT ${TOS_ROOT}/partitions)
 set(TOS_COMMON_INCLUDES
     ${TOS_PART_ROOT}/common/include
     ${TOS_ROOT}/Core/Inc

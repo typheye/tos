@@ -187,11 +187,8 @@ static void request_rec_init_if_needed(void) {
   bool needs_init = false;
 
   if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized()) {
-    return;
-  }
-
-  res = FMCore_MountStorage(NULL, false);
-  if (res == FR_NO_FILESYSTEM) {
+    needs_init = true;
+  } else if ((res = FMCore_MountStorage(NULL, false)) == FR_NO_FILESYSTEM) {
     needs_init = true;
   } else if (res != FR_OK) {
     sd_cleanup_disable_for_boot("mount init check", res);
@@ -319,11 +316,11 @@ void TOS::init() {
   }
 
   boardSDIO.init();
-  if (TSDIO_IsHardDisabled()) {
-    LOG_W("MAIN", "SD card is hard-disabled - SD features unavailable");
-  } else {
-    request_rec_init_if_needed();
+  request_rec_init_if_needed();
+  if (!TSDIO_IsHardDisabled()) {
     cleanup_sd_root_whitelist();
+  } else {
+    LOG_W("MAIN", "SD card is hard-disabled - SD features unavailable");
   }
   /* Defer the previous-IWDG error screen until SD/logging is available.
    * Otherwise the controlled reboot happens before a persistent dump can be

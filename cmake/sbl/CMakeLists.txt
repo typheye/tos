@@ -1,17 +1,17 @@
 add_executable(sbl
     ${CMAKE_SOURCE_DIR}/startup_stm32f407xx.s
-    ${CMAKE_SOURCE_DIR}/part/SBL/boot.s
-    ${CMAKE_SOURCE_DIR}/part/SBL/init.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/runtime.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/common.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/flash.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/hw.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/lcd.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/splash.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/state.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/trust.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/ui.c
-    ${CMAKE_SOURCE_DIR}/part/SBL/usb.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/boot.s
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/init.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/runtime.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/common.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/flash.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/hw.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/lcd.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/splash.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/state.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/trust.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/ui.c
+    ${CMAKE_SOURCE_DIR}/partitions/SBL/usb.c
     ${CMAKE_SOURCE_DIR}/USB_DEVICE/Target/usbd_conf.c
     ${CMAKE_SOURCE_DIR}/Core/Src/system_stm32f4xx.c
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c

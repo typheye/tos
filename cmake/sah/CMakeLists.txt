@@ -1,4 +1,4 @@
-add_executable(sah ${CMAKE_SOURCE_DIR}/part/SAH/logo.c)
+add_executable(sah ${CMAKE_SOURCE_DIR}/partitions/SAH/logo.c)
 target_include_directories(sah PRIVATE ${TOS_COMMON_INCLUDES})
 target_compile_definitions(sah PRIVATE USE_HAL_DRIVER STM32F407xx)
 target_compile_options(sah PRIVATE -ffunction-sections -fdata-sections)

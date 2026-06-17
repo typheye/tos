@@ -12,6 +12,7 @@ typedef struct {
 } SBL_SectorInfo;
 
 static const char part_sbl[] SBL_CONST = "sbl";
+static const char part_tee[] SBL_CONST = "tee";
 static const char part_rec[] SBL_CONST = "rec";
 static const char part_sah[] SBL_CONST = "sah";
 static const char part_system[] SBL_CONST = "system";
@@ -19,6 +20,8 @@ static const char part_system[] SBL_CONST = "system";
 static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
     {part_sbl, TOS_PART_SBL_OFFSET, TOS_PART_SBL_ADDRESS,
      TOS_TMP_STAGE_ADDRESS, TOS_PART_SBL_SIZE, 1U, 1U, 0U, 0U},
+    {part_tee, TOS_PART_TEE_OFFSET, TOS_PART_TEE_ADDRESS,
+     TOS_PART_TEE_ADDRESS, TOS_PART_TEE_SIZE, 0U, 1U, 0U, 0U},
     {part_rec, TOS_PART_REC_OFFSET, TOS_PART_REC_ADDRESS,
      TOS_TMP_STAGE_ADDRESS, TOS_PART_REC_SIZE, 1U, 1U, 0U, 0U},
     {part_sah, TOS_PART_SAH_OFFSET, TOS_PART_SAH_ADDRESS,
