@@ -47,6 +47,30 @@ USBD_HandleTypeDef hUsbDeviceFS;
  * -- Insert your variables declaration here --
  */
 /* USER CODE BEGIN 0 */
+static void TOS_USB_ForceHostReenumeration(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /*
+   * SBL may have just exposed the same physical port as a CDC fastboot device.
+   * Hold DP low briefly so the host sees a real detach before TOS starts HID.
+   */
+  HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
+  __HAL_RCC_USB_OTG_FS_CLK_DISABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
+
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_Delay(150);
+
+  HAL_GPIO_DeInit(GPIOA, GPIO_PIN_12);
+}
 
 /* USER CODE END 0 */
 
@@ -64,6 +88,7 @@ USBD_HandleTypeDef hUsbDeviceFS;
 void MX_USB_DEVICE_Init(void)
 {
   /* USER CODE BEGIN USB_DEVICE_Init_PreTreatment */
+  TOS_USB_ForceHostReenumeration();
 
   /* USER CODE END USB_DEVICE_Init_PreTreatment */
 
