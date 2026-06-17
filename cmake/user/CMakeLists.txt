@@ -1,5 +1,7 @@
 # 告诉CMake自定义头文件的搜索路径
 set(USER_Include_Dirs
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../part/common/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../part/SBL/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/
@@ -21,6 +23,7 @@ set(USER_Include_Dirs
 set(USER_Application_Src
     # 核心系统文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../part/SBL/dram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/init.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/sysfonts.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syscalls_override.c
@@ -50,6 +53,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sn74hc00n.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/pot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sfhd.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/flash_diskio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/thid.cpp
     
     # 库文件

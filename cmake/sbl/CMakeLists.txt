@@ -1,23 +1,30 @@
-set(SBL_Include_Dirs
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/include
-)
-
-set(SBL_Src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/boot.s
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/init.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/common.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/flash.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/hw.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/lcd.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/mem.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/splash.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/state.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/dram.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/trust.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/ui.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/usb.c
-)
-
-target_include_directories(stm32cubemx INTERFACE ${SBL_Include_Dirs})
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${SBL_Src})
+add_executable(sbl
+    ${CMAKE_SOURCE_DIR}/startup_stm32f407xx.s
+    ${CMAKE_SOURCE_DIR}/part/SBL/boot.s
+    ${CMAKE_SOURCE_DIR}/part/SBL/init.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/runtime.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/common.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/flash.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/hw.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/lcd.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/splash.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/state.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/trust.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/ui.c
+    ${CMAKE_SOURCE_DIR}/part/SBL/usb.c
+    ${CMAKE_SOURCE_DIR}/USB_DEVICE/Target/usbd_conf.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/system_stm32f4xx.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pcd.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pcd_ex.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_usb.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c)
+tos_partition_target(sbl ld/sbl.ld sbl)
+target_compile_definitions(sbl PRIVATE USER_VECT_TAB_ADDRESS VECT_TAB_OFFSET=0x00004000U)
+target_link_libraries(sbl PRIVATE stm32cubemx ${TOOLCHAIN_LINK_LIBRARIES})
+target_link_options(sbl PRIVATE -nostartfiles)

@@ -186,72 +186,6 @@ static void fm_unmount(void) {
   }
 }
 
-static void fm_draw_formatting(const char *line1, const char *line2) {
-  LCD_FLUSH({
-    UI_DrawFrameTitle("FILE");
-    PD_SetFont(FONT_ASCII_16);
-    PD_SetColor(TOS_TEXT);
-    PD_DrawString(22, 33, line1 ? line1 : "Working...");
-    if (line2) {
-      PD_SetFont(FONT_ASCII_12);
-      PD_SetColor(TOS_TEXT_SEC);
-      PD_DrawString(22, 53, line2);
-    }
-    PD_DrawFooterCenter("", NULL, "");
-  });
-}
-
-static void fm_format_progress(const char *step, FRESULT res, void *user) {
-  (void)user;
-
-  char line1[40];
-  char line2[48];
-  snprintf(line1, sizeof(line1), "%s", step ? step : "Working");
-  snprintf(line2, sizeof(line2), "%s (%d)", SFHD_FResultName(res), (int)res);
-  fm_draw_formatting(line1, line2);
-
-  /* Keep progress visible but do not slow the full format too much. */
-  JPDelay(45);
-}
-
-static FRESULT fm_format_and_init_sd(void) {
-  SFHD_SD_FormatOptions_t opt;
-  opt.progress = fm_format_progress;
-  opt.user = NULL;
-
-  fm_draw_formatting("Formatting SD card", "Please do not power off");
-
-  FRESULT res = SFHD_SD_FormatAndInit(&opt);
-  if (res != FR_OK) {
-    char line1[40];
-    char line2[48];
-    snprintf(line1, sizeof(line1), "Format failed");
-    snprintf(line2, sizeof(line2), "%s (%d)", SFHD_FResultName(res), (int)res);
-    fm_draw_formatting(line1, line2);
-    JPDelay(1200);
-    return res;
-  }
-
-  fm_mounted = true;
-  fm_draw_formatting("Format complete", "Opening file manager");
-  JPDelay(600);
-  return FR_OK;
-}
-
-static bool fm_has_init_marker(void) {
-  FILINFO info;
-  FRESULT res = FMCore_Stat("0:/init", &info, false);
-  if (res == FR_OK) {
-    return true;
-  }
-  if (res == FR_NO_FILE || res == FR_NO_PATH || res == FR_NO_FILESYSTEM) {
-    return false;
-  }
-
-  fm_fatal_if_storage_error(res, SYS_ERR_SD_BROWSER_FAILED);
-  return false;
-}
-
 static void fm_wait_keys_released(uint32_t timeout_ms) {
   uint32_t start = HAL_GetTick();
   while ((HAL_GetTick() - start) < timeout_ms) {
@@ -268,37 +202,13 @@ static void fm_wait_keys_released(uint32_t timeout_ms) {
 }
 
 static bool fm_prepare_storage(void) {
-  SFHD_SD_DebugProbe("file-manager-entry");
-
   FRESULT res = fm_mount_result();
   LOG_I("FILE", "mount result: %s(%d)", SFHD_FResultName(res), (int)res);
-  if (res == FR_NO_FILESYSTEM) {
-    fm_mounted = false;
-  } else if (res != FR_OK) {
+  if (res != FR_OK) {
     fm_fatal_if_storage_error(res, SYS_ERR_SD_BROWSER_FAILED);
     return false;
   }
-
-  if (fm_mounted && fm_has_init_marker()) {
-    return true;
-  }
-
-  fm_wait_keys_released(800);
-  bool do_format = confirm_show("FILE", "Format SD card?");
-  if (!do_format) {
-    fm_unmount();
-    return false;
-  }
-
-  res = fm_format_and_init_sd();
-  LOG_I("FILE", "format result: %s(%d)", SFHD_FResultName(res), (int)res);
-  if (res == FR_OK && fm_has_init_marker()) {
-    return true;
-  }
-
-  fm_fatal_if_storage_error(res, SYS_ERR_SD_FORMAT_FAILED);
-  SysHandle_Exception(SFHD_FResultToSysError(res));
-  return false;
+  return true;
 }
 
 static void fm_build_full_path(const char *name, char *out, size_t out_sz) {
@@ -369,13 +279,13 @@ static int fm_pop_parent_selection(void) {
 }
 
 static void fm_trim_to_parent(void) {
-  if (strcmp(fm_cur_path, "0:") == 0) {
+  if (strcmp(fm_cur_path, "/") == 0) {
     return;
   }
 
   char *p = strrchr(fm_cur_path, '/');
-  if (p == NULL || p <= fm_cur_path + 1) {
-    strcpy(fm_cur_path, "0:");
+  if (p == NULL || p == fm_cur_path) {
+    strcpy(fm_cur_path, "/");
   } else {
     *p = '\0';
   }
@@ -445,7 +355,7 @@ static bool fm_enter(int idx, int *sel_io) {
   }
 
   if (strcmp(fm_items[idx], "..") == 0) {
-    if (strcmp(fm_cur_path, "0:") == 0) {
+    if (strcmp(fm_cur_path, "/") == 0) {
       fm_unmount();
       return true; /* signal exit */
     }
@@ -486,11 +396,6 @@ static bool fm_enter(int idx, int *sel_io) {
 }
 
 void file_manager_run(void) {
-  /* If SD card is hard-disabled, alert and return immediately. */
-  if (TSDIO_IsHardDisabled()) {
-    alert_show("SYS", "SD card is disable!");
-    return;
-  }
   if (!fm_alloc_context()) {
     alert_show("FILE", "Memory failed");
     return;
@@ -501,7 +406,7 @@ void file_manager_run(void) {
     return;
   }
 
-  strcpy(fm_cur_path, "0:");
+  strcpy(fm_cur_path, "/");
   fm_stack_depth = 0;
   fm_load_dir();
 
@@ -530,10 +435,11 @@ void file_manager_run(void) {
       JPDelay(45);
     }
 
-    if ((HAL_GetTick() - last_probe) > 1200U && fm_mounted) {
+    if ((HAL_GetTick() - last_probe) > 1200U && fm_mounted &&
+        FMCore_IsInitialized()) {
       last_probe = HAL_GetTick();
       FILINFO ping;
-      FRESULT pr = FMCore_Stat("0:/init", &ping, false);
+      FRESULT pr = FMCore_Stat("/init", &ping, false);
       if (SysHandle_IsStorageFatal(pr)) {
         SysHandle_FatalFResult(pr, SYS_ERR_SD_LOST);
       }

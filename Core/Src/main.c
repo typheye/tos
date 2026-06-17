@@ -40,6 +40,7 @@
 #include <stdio.h>                      // 添加这个头文件 for printf
 #include "core/sys/include/syswatchdog.h"
 #include "init.h"
+#include "tos_partitions.h"
 
 /* USER CODE END Includes */
 
@@ -101,6 +102,14 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+
+  /* system_stm32f4xx.c is shared by the independently linked images, so its
+   * CubeMX vector-offset macro cannot safely be image-specific. Relocate the
+   * SYSTEM vector table before HAL_Init enables SysTick. */
+  SCB->VTOR = TOS_PART_SYSTEM_ADDRESS;
+  __DSB();
+  __ISB();
+  __enable_irq();
 
   /* USER CODE END 1 */
 

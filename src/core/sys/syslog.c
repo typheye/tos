@@ -18,7 +18,6 @@
 #include "include/syslog.h"
 
 extern FRESULT FMCore_AppendBootLog(const char *line, uint32_t len);
-extern bool FMCore_IsBootLogFaultFatal(void);
 extern FRESULT FMCore_WriteSystemDump(uint32_t code, const char *name,
                                       const char *extra);
 extern int ESP8266_GetState(void);
@@ -33,11 +32,6 @@ extern RTC_HandleTypeDef hrtc;
 
 static uint8_t g_syslog_file_guard = 0;
 static uint8_t g_syslog_file_disabled = 0;
-static uint8_t g_syslog_storage_faulting = 0;
-
-#ifndef SYS_ERR_SD_LOG_FAILED
-#define SYS_ERR_SD_LOG_FAILED 0x0000100BUL
-#endif
 
 static const char *syslog_level_name(SysLog_Level_t level) {
   switch (level) {
@@ -104,19 +98,10 @@ bool SysLog_IsFileOutputDisabled(void) {
 }
 
 static void syslog_handle_file_result(FRESULT res) {
-  uint32_t code;
-
   if (res == FR_OK) return;
-  if (!FMCore_IsBootLogFaultFatal()) return;
-
   g_syslog_file_disabled = 1U;
-  if (g_syslog_storage_faulting || SysHandle_IsInException()) return;
-  g_syslog_storage_faulting = 1U;
-
-  code = SysHandle_CodeFromFResult(res, SYS_ERR_SD_LOG_FAILED);
-  printf("%s [ERROR] [SYS  ] SD log write failed: %d, entering syshandle without dump\r\n",
+  printf("%s [WARN ] [SYS  ] SD log write failed: %d; file logging disabled\r\n",
          syslog_ts(), (int)res);
-  SysHandle_ExceptionNoDump(code);
 }
 
 static void syslog_emit_v(SysLog_Level_t level, const char *mod,

@@ -43,7 +43,10 @@ typedef struct {
 } FMCore_Entry;
 
 FRESULT FMCore_Mount(FATFS *fs, bool fatal_on_storage_error);
+FRESULT FMCore_MountInternal(void);
+FRESULT FMCore_MountStorage(FATFS *fs, bool log_result);
 void FMCore_Unmount(void);
+bool FMCore_IsStorageMounted(void);
 FRESULT FMCore_Stat(const char *path, FILINFO *info, bool fatal_on_storage_error);
 FRESULT FMCore_ListDir(const char *path, FMCore_Entry *entries, uint16_t max_entries,
                        uint16_t *out_count, bool fatal_on_storage_error);
@@ -58,7 +61,6 @@ FRESULT FMCore_AppendFile(const char *path, const void *data, uint32_t len,
                           bool fatal_on_storage_error);
 FRESULT FMCore_Delete(const char *path, bool recursive, bool fatal_on_storage_error);
 FRESULT FMCore_CopyFile(const char *src, const char *dst, bool fatal_on_storage_error);
-FRESULT FMCore_InitLayout(bool fatal_on_storage_error);
 bool FMCore_IsInitialized(void);
 FRESULT FMCore_NextIndexedPath(const char *dir, const char *ext,
                                char *out, size_t out_sz);

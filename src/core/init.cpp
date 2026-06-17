@@ -18,6 +18,8 @@
 #include "include/init.hpp"
 #include "library/include/libdly.h"
 #include "core/manager/include/file_manager.h"
+#include "hardware/include/sfhd.h"
+#include "tos_partitions.h"
 
 
 extern "C" {
@@ -65,8 +67,7 @@ static bool sd_root_entry_allowed(const FMCore_Entry *entry) {
     return entry->is_dir == 0U;
   }
 
-  static const char *kAllowedDirs[] = {
-      "data", "oem", "dev", "storage", "system"};
+  static const char *kAllowedDirs[] = {"storage"};
   for (unsigned i = 0; i < sizeof(kAllowedDirs) / sizeof(kAllowedDirs[0]); ++i) {
     if (sd_root_name_eq(entry->name, kAllowedDirs[i])) {
       return entry->is_dir != 0U;
@@ -177,6 +178,85 @@ static void sd_cleanup_disable_for_boot(const char *reason, FRESULT res) {
   TSDIO_MarkHardDisabled();
 }
 
+static void request_rec_init_if_needed(void) {
+  FILINFO info;
+  FIL marker;
+  uint8_t marker_buf[512];
+  UINT br = 0U;
+  FRESULT res;
+  bool needs_init = false;
+
+  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized()) {
+    return;
+  }
+
+  res = FMCore_MountStorage(NULL, false);
+  if (res == FR_NO_FILESYSTEM) {
+    needs_init = true;
+  } else if (res != FR_OK) {
+    sd_cleanup_disable_for_boot("mount init check", res);
+    return;
+  } else {
+    res = f_stat("0:/init", &info);
+    if (res == FR_OK) {
+      needs_init = (info.fattrib & AM_DIR) != 0U ||
+                   info.fsize != TOS_SD_INIT_FILE_SIZE;
+      if (!needs_init) {
+        res = f_open(&marker, "0:/init", FA_READ);
+        if (res != FR_OK) {
+          needs_init = true;
+        } else {
+          uint32_t checked = 0U;
+          while (checked < TOS_SD_INIT_FILE_SIZE && !needs_init) {
+            res = f_read(&marker, marker_buf, sizeof(marker_buf), &br);
+            if (res != FR_OK || br != sizeof(marker_buf)) {
+              needs_init = true;
+              break;
+            }
+            for (uint32_t i = 0U; i < br; ++i) {
+              if (marker_buf[i] != 0xFFU) {
+                needs_init = true;
+                break;
+              }
+            }
+            checked += br;
+            SysWatchdog_Tick();
+          }
+          (void)f_close(&marker);
+        }
+      }
+    } else if (res == FR_NO_FILE || res == FR_NO_PATH) {
+      needs_init = true;
+    } else {
+      sd_cleanup_disable_for_boot("stat /init", res);
+      return;
+    }
+  }
+
+  if (!needs_init) {
+    return;
+  }
+
+  LOG_W("MAIN", "SD storage is not initialized; entering REC INIT");
+  FMCore_Unmount();
+  if (!Flash_BL_RecoveryAvailable()) {
+    sd_cleanup_disable_for_boot("REC unavailable for init", FR_NOT_READY);
+    return;
+  }
+  SysWatchdog_FeedNow();
+  if (Flash_BL_SetBootTarget(FLASH_BL_BOOT_RECOVERY_INIT) != FLASH_OK) {
+    sd_cleanup_disable_for_boot("set REC INIT target", FR_INT_ERR);
+    return;
+  }
+
+  __DSB();
+  __ISB();
+  NVIC_SystemReset();
+  while (1) {
+    __NOP();
+  }
+}
+
 static void cleanup_sd_root_whitelist(void) {
   if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized() ||
       !FMCore_IsInitialized()) {
@@ -189,7 +269,7 @@ static void cleanup_sd_root_whitelist(void) {
     return;
   }
 
-  for (uint16_t pass = 0; pass < 128U; ++pass) {
+  while (true) {
     char path[FMCORE_PATH_MAX];
     bool found = false;
     FRESULT list_res = sd_root_find_extra(path, sizeof(path), &found);
@@ -209,8 +289,6 @@ static void cleanup_sd_root_whitelist(void) {
 
     LOG_I("MAIN", "Removed SD root extra: %s", path);
   }
-
-  LOG_W("MAIN", "SD root cleanup pass limit reached");
 }
 
 void TOS::init() {
@@ -232,14 +310,19 @@ void TOS::init() {
 
   PD_ShowSplashFadeStart(300);
 
-  
-  
-  boardTRTC.init(); 
+  boardTRTC.init();
+
+  FRESULT internal_mount = FMCore_MountInternal();
+  if (internal_mount != FR_OK) {
+    LOG_W("MAIN", "Internal /data and /tmp unavailable: %s(%d)",
+          FMCore_FResultName(internal_mount), (int)internal_mount);
+  }
 
   boardSDIO.init();
   if (TSDIO_IsHardDisabled()) {
     LOG_W("MAIN", "SD card is hard-disabled - SD features unavailable");
   } else {
+    request_rec_init_if_needed();
     cleanup_sd_root_whitelist();
   }
   /* Defer the previous-IWDG error screen until SD/logging is available.
@@ -378,6 +461,6 @@ void TOS::init() {
   }
   SysUI_DebugOverlaySetEnabled(SM_Debug_Dashboard() ? 1U : 0U);
 
-  
+
   SysUI::setActivity(UI_PET);
 }

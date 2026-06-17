@@ -28,6 +28,7 @@
 #include "fatfs.h"
 #include "ff.h"
 #include "core/include/syshandle.h"
+#include "tos_partitions.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,19 +36,17 @@ extern "C" {
 
 
 #define FLASH_DATA_SECTOR    FLASH_SECTOR_11   
-#define FLASH_DATA_ADDR      0x080E0000u       
-#define FLASH_DATA_SIZE      0x1FC00u          
-#define FLASH_BL_STATE_ADDR  0x0800FC00u
-#define FLASH_BL_STATE_SIZE  0x400u
+#define FLASH_DATA_ADDR      TOS_PART_USERDATA_ADDRESS
+#define FLASH_DATA_SIZE      TOS_USERDATA_SETTINGS_SIZE
+#define FLASH_BL_STATE_ADDR  TOS_TEE_STATE_ADDRESS
+#define FLASH_BL_STATE_SIZE  TOS_TEE_STATE_SIZE
 
-#define FLASH_BL_BOOT_NONE     0xFFFFFFFFu
-#define FLASH_BL_BOOT_FASTBOOT 0x46424F54u
-#define FLASH_BL_BOOT_RECOVERY 0x52454356u
-#define FLASH_BL_BOOT_RECOVERY_UPGRADE 0x52555047u
-
-#define FLASH_BACKUP_SECTOR  FLASH_SECTOR_10   
-#define FLASH_BACKUP_ADDR    0x080C0000u       
-#define FLASH_BACKUP_SIZE    0x20000u          
+#define FLASH_BL_BOOT_NONE             TOS_BOOT_TARGET_NONE
+#define FLASH_BL_BOOT_FASTBOOT         TOS_BOOT_TARGET_FASTBOOT
+#define FLASH_BL_BOOT_RECOVERY         TOS_BOOT_TARGET_RECOVERY
+#define FLASH_BL_BOOT_RECOVERY_FORMAT  TOS_BOOT_TARGET_RECOVERY_FORMAT
+#define FLASH_BL_BOOT_RECOVERY_UPGRADE TOS_BOOT_TARGET_RECOVERY_UPGRADE
+#define FLASH_BL_BOOT_RECOVERY_INIT    TOS_BOOT_TARGET_RECOVERY_INIT
 
 #define FLASH_RECORD_MAX     4096u             
 #define FLASH_ROLLING_COUNT  32u               
@@ -105,6 +104,7 @@ uint32_t Flash_CRC32(const uint32_t *pData, uint32_t size);
 void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize);
 
 Flash_Status_t Flash_BL_SetBootTarget(uint32_t target);
+bool Flash_BL_RecoveryAvailable(void);
 
 
 
@@ -113,24 +113,6 @@ Flash_Status_t Flash_BL_SetBootTarget(uint32_t target);
  * ================================================================== */
 
 #include "ff.h"
-
-typedef void (*SFHD_SD_ProgressCallback)(const char *step, FRESULT result,
-                                         void *user);
-
-typedef struct {
-  SFHD_SD_ProgressCallback progress;
-  void *user;
-} SFHD_SD_FormatOptions_t;
-
-/**
- * @brief  Format SD card and create the TOS root filesystem layout.
- * @note   This helper uses FatFs f_mkfs() with explicit FM_FAT/FM_FAT32
- *         options. It first tries partitioned FAT, then retries SFD
- *         super-floppy layout. It also emits detailed logs through syslog.
- * @param  options Optional progress callback. Can be NULL.
- * @retval FatFs FRESULT.
- */
-FRESULT SFHD_SD_FormatAndInit(const SFHD_SD_FormatOptions_t *options);
 
 /**
  * @brief  Convert FatFs result to readable text for UI/logs.

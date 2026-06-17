@@ -1,89 +1,141 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "debug code",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build",
-                "${workspaceFolder}/build/Release",
-                "--",
-                "-j24"
-            ],
-            "group": "build",
-            "problemMatcher": [],
-            "detail": "调试代码"
-        },
-        {
-            "label": "编译",
-            "type": "shell",
-            "icon": {
-                "id": "build",
-                "tooltip": "编译Release版本"
-            },
-            "command": "cmake",
-            "args": [
-                "--build",
-                "${workspaceFolder}/build/release",
-                "--target",
-                "tos",
-                "-j",
-                "24"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
-        },
-        {
-            "label": "固件",
-            "type": "shell",
-            "icon": {
-                "id": "tag",
-                "tooltip": "生成可刷写固件"
-            },
-            "command": "scripts/export_partitions.ps1",
-            "presentation": {
-                "reveal": "always",
-            }
-        },
-        {
-            "label": "运行",
-            "type": "shell",
-            "icon": {
-                "id": "play",
-                "tooltip": "使用DAPLink烧录固件"
-            },
-            "command": "${workspaceFolder}\\scripts\\upload.bat",
-            "presentation": {
-                "reveal": "always"
-            }
-        },
-        {
-            "label": "清理",
-            "type": "shell",
-            "icon": {
-                "id": "trash",
-                "tooltip": "清理编译文件"
-            },
-            "command": "cmake",
-            "args": [
-                "--build",
-                "${workspaceFolder}/build/release",
-                "--target",
-                "clean"
-            ],
-            "presentation": {
-                "reveal": "always"
-            }
-        }
-    ]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build factory images",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/build/Release",
+        "--target",
+        "factory_images",
+        "-j",
+        "24"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build system",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/build/Release",
+        "--target",
+        "system",
+        "-j",
+        "24"
+      ],
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "export partitions",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "${workspaceFolder}/scripts/export_partitions.bat",
+      "args": [
+        "-BuildDir",
+        "${workspaceFolder}/build/Release"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "flash system",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "${workspaceFolder}/scripts/upload.bat",
+      "args": [
+        "system"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "flash runtime",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "${workspaceFolder}/scripts/upload.bat",
+      "args": [
+        "runtime"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "flash factory",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "${workspaceFolder}/scripts/upload.bat",
+      "args": [
+        "factory"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "clean",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Tips"
+      },
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/build/Release",
+        "--target",
+        "clean"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
 }

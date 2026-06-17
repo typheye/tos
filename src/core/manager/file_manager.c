@@ -4,66 +4,100 @@
  * @author  Typheye
  * @brief   File Manager implementation.
  ******************************************************************************
- * @attention
- *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- ******************************************************************************
  */
 
 #include "include/file_manager.h"
+#include "hardware/include/flash_diskio.h"
+#include "tos_partitions.h"
 
-
-/* C-compatible SD hard-disabled check (defined in hardware/tsdio.cpp) */
 extern bool TSDIO_IsHardDisabled(void);
 extern bool TSDIO_IsInitialized(void);
 
-static bool g_fmcore_mounted = false;
-static FATFS g_fmcore_fs;
+static bool g_storage_mounted;
+static bool g_internal_mounted;
+static FATFS g_storage_fs;
 static char g_boot_log_path[FMCORE_PATH_MAX];
-static uint8_t g_boot_log_fail_count = 0;
-static bool g_boot_log_ready_seen = false;
-static bool g_boot_log_fatal_fault = false;
+static bool g_boot_log_ready_seen;
 
 #define FMCORE_BOOT_LOG_TIMEOUT_MS 3500U
+#define FMCORE_LOG_DIR "0:/storage/tos/_"
 
-static FRESULT fmcore_mount_impl(FATFS *fs, bool log_result) {
-  FRESULT res = FR_OK;
+typedef enum {
+  FM_PATH_STORAGE = 0,
+  FM_PATH_TMP,
+  FM_PATH_DATA,
+  FM_PATH_INIT,
+  FM_PATH_VIRTUAL_ROOT,
+  FM_PATH_RAW
+} FMPathKind;
 
-  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized()) {
-    if (log_result) LOG_W("FMCR", "mount blocked: SD card is not ready");
-    return FR_NOT_READY;
+static bool path_prefix(const char *path, const char *prefix) {
+  size_t n = strlen(prefix);
+  return strncmp(path, prefix, n) == 0 &&
+         (path[n] == '\0' || path[n] == '/');
+}
+
+static FRESULT translate_path(const char *path, char *out, size_t out_sz,
+                              FMPathKind *kind) {
+  const char *suffix = "";
+  const char *base = NULL;
+  if (!path || !out || out_sz == 0U) return FR_INVALID_PARAMETER;
+
+  if (strcmp(path, "/") == 0 || path[0] == '\0') {
+    if (kind) *kind = FM_PATH_VIRTUAL_ROOT;
+    out[0] = '\0';
+    return FR_OK;
+  }
+  if (path[0] >= '0' && path[0] <= '9' && path[1] == ':') {
+    if (strlen(path) + 1U > out_sz) return FR_INVALID_NAME;
+    strcpy(out, path);
+    if (kind) *kind = FM_PATH_RAW;
+    return FR_OK;
+  }
+  if (path_prefix(path, "/storage")) {
+    base = "0:/storage";
+    suffix = path + strlen("/storage");
+    if (kind) *kind = FM_PATH_STORAGE;
+  } else if (path_prefix(path, "/tmp")) {
+    base = TMPPath;
+    suffix = path + strlen("/tmp");
+    if (kind) *kind = FM_PATH_TMP;
+  } else if (path_prefix(path, "/data")) {
+    base = DataPath;
+    suffix = path + strlen("/data");
+    if (kind) *kind = FM_PATH_DATA;
+  } else if (strcmp(path, "/init") == 0) {
+    base = "0:/init";
+    if (kind) *kind = FM_PATH_INIT;
+  } else {
+    return FR_INVALID_NAME;
   }
 
-  if (!g_fmcore_mounted) {
-    res = f_mount(fs ? fs : &g_fmcore_fs, "0:", 1);
-    if (res == FR_OK) g_fmcore_mounted = true;
-    if (log_result) {
-      LOG_I("FMCR", "mount => %s(%d)", FMCore_FResultName(res), (int)res);
-    }
+  while (*suffix == '/') suffix++;
+  size_t base_len = strlen(base);
+  size_t suffix_len = strlen(suffix);
+  bool base_has_slash = base_len > 0U && base[base_len - 1U] == '/';
+  size_t need = base_len + (suffix_len && !base_has_slash ? 1U : 0U) +
+                suffix_len + 1U;
+  if (need > out_sz) return FR_INVALID_NAME;
+  strcpy(out, base);
+  if (suffix_len) {
+    if (!base_has_slash) strcat(out, "/");
+    strcat(out, suffix);
   }
-  return res;
+  return FR_OK;
 }
 
-static FRESULT fmcore_mount_quiet(void) {
-  return fmcore_mount_impl(&g_fmcore_fs, false);
+static bool virtual_write_protected(FMPathKind kind) {
+  return kind == FM_PATH_TMP || kind == FM_PATH_DATA ||
+         kind == FM_PATH_VIRTUAL_ROOT || kind == FM_PATH_INIT;
 }
 
-static FRESULT fmcore_ensure_dir_quiet(const char *path) {
-  FRESULT res = f_mkdir(path);
-  if (res == FR_EXIST) res = FR_OK;
-  return res;
-}
-
-static bool fmcore_has_init_marker_quiet(void) {
-  FILINFO info;
-  if (fmcore_mount_quiet() != FR_OK) return false;
-  if (f_stat("0:/init", &info) != FR_OK) return false;
-  return (info.fattrib & AM_DIR) == 0U;
+static void fatal_if_needed(FRESULT res, bool fatal_on_storage_error,
+                            uint32_t fallback) {
+  if (fatal_on_storage_error && res != FR_OK) {
+    SysHandle_FatalFResult(res, fallback);
+  }
 }
 
 const char *FMCore_FResultName(FRESULT res) {
@@ -92,113 +126,189 @@ const char *FMCore_FResultName(FRESULT res) {
   }
 }
 
-static void fatal_if_needed(FRESULT res, bool fatal_on_storage_error,
-                            uint32_t fallback) {
-  if (fatal_on_storage_error) {
-    SysHandle_FatalFResult(res, fallback);
+FRESULT FMCore_MountInternal(void) {
+  FRESULT res;
+  if (g_internal_mounted) return FR_OK;
+  if (!FlashDiskIO_EnsureVolumes()) return FR_DISK_ERR;
+  res = f_mount(&TMPFatFS, TMPPath, 1U);
+  if (res != FR_OK) return res;
+  res = f_mount(&DataFatFS, DataPath, 1U);
+  if (res != FR_OK) {
+    (void)f_mount(NULL, TMPPath, 0U);
+    return res;
   }
+  g_internal_mounted = true;
+  return FR_OK;
 }
 
-FRESULT FMCore_Mount(FATFS *fs, bool fatal_on_storage_error) {
-  FRESULT res = fmcore_mount_impl(fs, true);
-  fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_BROWSER_FAILED);
+FRESULT FMCore_MountStorage(FATFS *fs, bool log_result) {
+  FRESULT res;
+  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized()) return FR_NOT_READY;
+  if (g_storage_mounted) return FR_OK;
+  res = f_mount(fs ? fs : &g_storage_fs, "0:", 1U);
+  if (res == FR_OK) g_storage_mounted = true;
+  if (log_result) {
+    LOG_I("FMCR", "storage mount => %s(%d)", FMCore_FResultName(res), (int)res);
+  }
   return res;
 }
 
+FRESULT FMCore_Mount(FATFS *fs, bool fatal_on_storage_error) {
+  FRESULT internal = FMCore_MountInternal();
+  FRESULT storage = FMCore_MountStorage(fs, true);
+  if (internal != FR_OK) {
+    fatal_if_needed(internal, fatal_on_storage_error, SYS_ERR_SD_BROWSER_FAILED);
+    return internal;
+  }
+  /* An absent SD leaves /storage empty; it must not make /data or /tmp fail. */
+  if (storage != FR_OK && storage != FR_NOT_READY) {
+    LOG_W("FMCR", "external storage unavailable: %s(%d)",
+          FMCore_FResultName(storage), (int)storage);
+  }
+  return FR_OK;
+}
+
 void FMCore_Unmount(void) {
-  if (g_fmcore_mounted) {
-    (void)f_mount(NULL, "0:", 0);
-    g_fmcore_mounted = false;
-    LOG_I("FMCR", "unmount");
+  if (g_storage_mounted) {
+    (void)f_mount(NULL, "0:", 0U);
+    g_storage_mounted = false;
   }
 }
 
+bool FMCore_IsStorageMounted(void) { return g_storage_mounted; }
+
+static void fill_virtual_entry(FMCore_Entry *entry, const char *name,
+                               uint8_t is_dir, uint32_t size) {
+  strncpy(entry->name, name, FMCORE_NAME_MAX - 1U);
+  entry->name[FMCORE_NAME_MAX - 1U] = '\0';
+  entry->is_dir = is_dir;
+  entry->size = size;
+  entry->attr = is_dir ? AM_DIR : AM_RDO;
+}
+
 FRESULT FMCore_Stat(const char *path, FILINFO *info, bool fatal_on_storage_error) {
-  FRESULT res = f_stat(path, info);
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
+  FRESULT res = translate_path(path, physical, sizeof(physical), &kind);
+  if (res != FR_OK) return res;
+  if (!info) return FR_INVALID_PARAMETER;
+  if (kind == FM_PATH_VIRTUAL_ROOT ||
+      (kind == FM_PATH_STORAGE && strcmp(path, "/storage") == 0) ||
+      (kind == FM_PATH_TMP && strcmp(path, "/tmp") == 0) ||
+      (kind == FM_PATH_DATA && strcmp(path, "/data") == 0)) {
+    memset(info, 0, sizeof(*info));
+    info->fattrib = AM_DIR | (kind == FM_PATH_TMP || kind == FM_PATH_DATA ? AM_RDO : 0U);
+    return FR_OK;
+  }
+  if ((kind == FM_PATH_STORAGE || kind == FM_PATH_INIT) && !g_storage_mounted) {
+    return FR_NO_PATH;
+  }
+  res = f_stat(physical, info);
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
 
 bool FMCore_JoinPath(const char *base, const char *name, char *out, size_t out_sz) {
+  size_t base_len;
+  size_t name_len;
+  bool slash;
   if (!base || !name || !out || out_sz == 0U) return false;
-  const char *sep = "/";
-  size_t need = strlen(base) + strlen(sep) + strlen(name) + 1U;
-  if (need > out_sz) return false;
+  base_len = strlen(base);
+  name_len = strlen(name);
+  slash = base_len > 0U && base[base_len - 1U] != '/';
+  if (base_len + (slash ? 1U : 0U) + name_len + 1U > out_sz) return false;
   strcpy(out, base);
-  strcat(out, sep);
+  if (slash) strcat(out, "/");
   strcat(out, name);
   return true;
 }
 
 FRESULT FMCore_ListDir(const char *path, FMCore_Entry *entries, uint16_t max_entries,
                        uint16_t *out_count, bool fatal_on_storage_error) {
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
   DIR dir;
   FILINFO fno;
+  uint16_t count = 0U;
   FRESULT res;
-  uint16_t count = 0;
-
-  if (out_count) *out_count = 0;
+  if (out_count) *out_count = 0U;
   if (!path || !entries || max_entries == 0U) return FR_INVALID_PARAMETER;
+  res = translate_path(path, physical, sizeof(physical), &kind);
+  if (res != FR_OK) return res;
 
-  res = f_opendir(&dir, path);
+  if (kind == FM_PATH_VIRTUAL_ROOT) {
+    static const char *const names[] = {"data", "storage", "tmp", "init"};
+    for (uint16_t i = 0U; i < 4U && count < max_entries; ++i) {
+      if (i == 3U && !FMCore_IsInitialized()) continue;
+      fill_virtual_entry(&entries[count++], names[i], i == 3U ? 0U : 1U,
+                         i == 3U ? TOS_SD_INIT_FILE_SIZE : 0U);
+    }
+    if (out_count) *out_count = count;
+    return FR_OK;
+  }
+  if (kind == FM_PATH_STORAGE && !g_storage_mounted) {
+    if (out_count) *out_count = 0U;
+    return FR_OK;
+  }
+  if (kind == FM_PATH_INIT) return FR_INVALID_OBJECT;
+
+  res = f_opendir(&dir, physical);
   if (res != FR_OK) {
-    LOG_E("FMCR", "opendir %s => %s(%d)", path, FMCore_FResultName(res), (int)res);
     fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_BROWSER_FAILED);
     return res;
   }
-
   while (count < max_entries) {
     res = f_readdir(&dir, &fno);
-    if (res != FR_OK) {
-      (void)f_closedir(&dir);
-      LOG_E("FMCR", "readdir %s => %s(%d)", path, FMCore_FResultName(res), (int)res);
-      fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_BROWSER_FAILED);
-      return res;
-    }
-    if (fno.fname[0] == '\0') break;
-
-    strncpy(entries[count].name, fno.fname, FMCORE_NAME_MAX - 1U);
-    entries[count].name[FMCORE_NAME_MAX - 1U] = '\0';
-    entries[count].is_dir = (fno.fattrib & AM_DIR) ? 1U : 0U;
-    entries[count].size = fno.fsize;
+    if (res != FR_OK || fno.fname[0] == '\0') break;
+    fill_virtual_entry(&entries[count], fno.fname,
+                       (fno.fattrib & AM_DIR) ? 1U : 0U, fno.fsize);
     entries[count].attr = fno.fattrib;
     ++count;
   }
   (void)f_closedir(&dir);
   if (out_count) *out_count = count;
-  return FR_OK;
+  fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_BROWSER_FAILED);
+  return res;
+}
+
+static FRESULT translate_writable(const char *path, char *physical,
+                                  FMPathKind *kind) {
+  FRESULT res = translate_path(path, physical, FMCORE_PATH_MAX, kind);
+  if (res != FR_OK) return res;
+  return virtual_write_protected(*kind) ? FR_WRITE_PROTECTED : FR_OK;
 }
 
 FRESULT FMCore_CreateDir(const char *path, bool fatal_on_storage_error) {
-  FRESULT res = f_mkdir(path);
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
+  FRESULT res = translate_writable(path, physical, &kind);
+  if (res == FR_OK) res = f_mkdir(physical);
   if (res == FR_EXIST) res = FR_OK;
-  LOG_I("FMCR", "mkdir %s => %s(%d)", path, FMCore_FResultName(res), (int)res);
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
 
 FRESULT FMCore_CreateFile(const char *path, const void *data, uint32_t len,
                           bool fatal_on_storage_error) {
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
   FIL fp;
-  UINT bw = 0;
-  FRESULT res = f_open(&fp, path, FA_CREATE_ALWAYS | FA_WRITE);
-  if (res != FR_OK) {
-    fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
-    return res;
-  }
-  if (len > 0U && data != NULL) {
+  UINT bw = 0U;
+  FRESULT res = translate_writable(path, physical, &kind);
+  if (res != FR_OK) goto done;
+  res = f_open(&fp, physical, FA_CREATE_ALWAYS | FA_WRITE);
+  if (res != FR_OK) goto done;
+  if (len > 0U && data) {
     SysWatchdog_Tick();
     res = f_write(&fp, data, (UINT)len, &bw);
     if (res == FR_OK && bw != len) res = FR_DISK_ERR;
   }
-  if (res == FR_OK) {
-    SysWatchdog_Tick();
-    res = f_sync(&fp);
+  if (res == FR_OK) res = f_sync(&fp);
+  {
+    FRESULT close_res = f_close(&fp);
+    if (res == FR_OK) res = close_res;
   }
-  SysWatchdog_Tick();
-  FRESULT close_res = f_close(&fp);
-  if (res == FR_OK) res = close_res;
-  LOG_I("FMCR", "create %s => %s(%d)", path, FMCore_FResultName(res), (int)res);
+done:
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
@@ -210,212 +320,159 @@ FRESULT FMCore_WriteFile(const char *path, const void *data, uint32_t len,
 
 FRESULT FMCore_ReadFile(const char *path, void *buf, uint32_t max_len,
                         uint32_t *out_len, bool fatal_on_storage_error) {
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
   FIL fp;
-  UINT br = 0;
+  UINT br = 0U;
   FRESULT res;
-
   if (out_len) *out_len = 0U;
-  if (!path || !buf || max_len == 0U) return FR_INVALID_PARAMETER;
-
-  res = f_open(&fp, path, FA_READ);
-  if (res != FR_OK) {
-    fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
-    return res;
-  }
-
-  res = f_read(&fp, buf, (UINT)max_len, &br);
-  if (out_len) *out_len = (uint32_t)br;
-  {
+  if (!buf || max_len == 0U) return FR_INVALID_PARAMETER;
+  res = translate_path(path, physical, sizeof(physical), &kind);
+  if (res != FR_OK || kind == FM_PATH_VIRTUAL_ROOT) return FR_INVALID_OBJECT;
+  res = f_open(&fp, physical, FA_READ);
+  if (res == FR_OK) {
+    res = f_read(&fp, buf, (UINT)max_len, &br);
     FRESULT close_res = f_close(&fp);
     if (res == FR_OK) res = close_res;
   }
+  if (out_len) *out_len = br;
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
 
 FRESULT FMCore_AppendFile(const char *path, const void *data, uint32_t len,
                           bool fatal_on_storage_error) {
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
   FIL fp;
-  UINT bw = 0;
-  FRESULT res;
-
-  if (!path || (len > 0U && !data)) return FR_INVALID_PARAMETER;
-  res = fmcore_mount_quiet();
-  if (res != FR_OK) {
-    fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
-    return res;
-  }
-
-  res = f_open(&fp, path, FA_OPEN_APPEND | FA_WRITE);
-  if (res != FR_OK) {
-    fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
-    return res;
-  }
-
+  UINT bw = 0U;
+  FRESULT res = translate_writable(path, physical, &kind);
+  if (res != FR_OK) goto done;
+  res = f_open(&fp, physical, FA_OPEN_APPEND | FA_WRITE);
+  if (res != FR_OK) goto done;
   if (len > 0U) {
-    SysWatchdog_Tick();
     res = f_write(&fp, data, (UINT)len, &bw);
     if (res == FR_OK && bw != len) res = FR_DISK_ERR;
   }
-  if (res == FR_OK) {
-    SysWatchdog_Tick();
-    res = f_sync(&fp);
-  }
-  SysWatchdog_Tick();
+  if (res == FR_OK) res = f_sync(&fp);
   {
     FRESULT close_res = f_close(&fp);
     if (res == FR_OK) res = close_res;
   }
+done:
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
 
-static bool fmcore_op_timed_out(uint32_t start, uint32_t timeout_ms) {
-  return timeout_ms > 0U && (uint32_t)(HAL_GetTick() - start) > timeout_ms;
+static bool op_timed_out(uint32_t start, uint32_t timeout_ms) {
+  return timeout_ms && (uint32_t)(HAL_GetTick() - start) > timeout_ms;
 }
 
-static FRESULT fmcore_append_file_timed(const char *path, const void *data,
-                                        uint32_t len, uint32_t timeout_ms) {
+static FRESULT append_physical_timed(const char *path, const void *data,
+                                     uint32_t len, uint32_t timeout_ms) {
   FIL fp;
-  UINT bw = 0;
+  UINT bw = 0U;
   FRESULT res;
   uint32_t start = HAL_GetTick();
-
-  if (!path || (len > 0U && !data)) return FR_INVALID_PARAMETER;
-
-  SysWatchdog_FeedNow();
-  res = fmcore_mount_quiet();
-  if (res != FR_OK) return res;
-  if (fmcore_op_timed_out(start, timeout_ms)) return FR_TIMEOUT;
-
-  SysWatchdog_FeedNow();
+  if (!path || !data || len == 0U) return FR_INVALID_PARAMETER;
+  if (!g_storage_mounted) return FR_NOT_READY;
   res = f_open(&fp, path, FA_OPEN_APPEND | FA_WRITE);
   if (res != FR_OK) return res;
-  if (fmcore_op_timed_out(start, timeout_ms)) {
-    (void)f_close(&fp);
-    return FR_TIMEOUT;
-  }
-
-  if (len > 0U) {
-    SysWatchdog_FeedNow();
-    res = f_write(&fp, data, (UINT)len, &bw);
-    if (res == FR_OK && bw != len) res = FR_DISK_ERR;
-    if (res == FR_OK && fmcore_op_timed_out(start, timeout_ms)) res = FR_TIMEOUT;
-  }
-
-  if (res == FR_OK) {
-    SysWatchdog_FeedNow();
-    res = f_sync(&fp);
-    if (res == FR_OK && fmcore_op_timed_out(start, timeout_ms)) res = FR_TIMEOUT;
-  }
-
-  SysWatchdog_FeedNow();
+  res = f_write(&fp, data, (UINT)len, &bw);
+  if (res == FR_OK && bw != len) res = FR_DISK_ERR;
+  if (res == FR_OK && !op_timed_out(start, timeout_ms)) res = f_sync(&fp);
+  if (res == FR_OK && op_timed_out(start, timeout_ms)) res = FR_TIMEOUT;
   {
     FRESULT close_res = f_close(&fp);
     if (res == FR_OK) res = close_res;
   }
-  if (res == FR_OK && fmcore_op_timed_out(start, timeout_ms)) res = FR_TIMEOUT;
   SysWatchdog_FeedNow();
   return res;
 }
 
-static FRESULT delete_dir_recursive(const char *path, bool fatal_on_storage_error) {
-  FMCore_Entry entries[8];
-  uint16_t count = 0;
-  FRESULT res = FMCore_ListDir(path, entries, 8, &count, fatal_on_storage_error);
+static FRESULT delete_physical_recursive(const char *path) {
+  FILINFO info;
+  FRESULT res = f_stat(path, &info);
   if (res != FR_OK) return res;
-
-  while (count > 0) {
-    for (uint16_t i = 0; i < count; ++i) {
-      char child[FMCORE_PATH_MAX];
-      SysWatchdog_Tick();
-      if (!FMCore_JoinPath(path, entries[i].name, child, sizeof(child))) {
-        return FR_INVALID_NAME;
-      }
-#if _USE_CHMOD
-      (void)f_chmod(child, 0, AM_RDO);
-#endif
-      if (entries[i].is_dir) res = delete_dir_recursive(child, fatal_on_storage_error);
-      else res = f_unlink(child);
-      if (res != FR_OK) {
-        fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
-        return res;
-      }
-      SysWatchdog_Tick();
-    }
-    res = FMCore_ListDir(path, entries, 8, &count, fatal_on_storage_error);
+  if ((info.fattrib & AM_DIR) == 0U) return f_unlink(path);
+  for (;;) {
+    DIR dir;
+    FILINFO child;
+    char full[FMCORE_PATH_MAX];
+    bool found = false;
+    res = f_opendir(&dir, path);
     if (res != FR_OK) return res;
+    while ((res = f_readdir(&dir, &child)) == FR_OK && child.fname[0]) {
+      if (!strcmp(child.fname, ".") || !strcmp(child.fname, "..")) continue;
+      if (!FMCore_JoinPath(path, child.fname, full, sizeof(full))) res = FR_INVALID_NAME;
+      else found = true;
+      break;
+    }
+    (void)f_closedir(&dir);
+    if (res != FR_OK) return res;
+    if (!found) break;
+    res = delete_physical_recursive(full);
+    if (res != FR_OK) return res;
+    SysWatchdog_Tick();
   }
-#if _USE_CHMOD
-  (void)f_chmod(path, 0, AM_RDO);
-#endif
   return f_unlink(path);
 }
 
 FRESULT FMCore_Delete(const char *path, bool recursive, bool fatal_on_storage_error) {
+  char physical[FMCORE_PATH_MAX];
+  FMPathKind kind;
   FILINFO info;
-  FRESULT res = f_stat(path, &info);
-  if (res != FR_OK) {
-    fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
-    return res;
-  }
-#if _USE_CHMOD
-  (void)f_chmod(path, 0, AM_RDO);
-#endif
-  if ((info.fattrib & AM_DIR) && recursive) res = delete_dir_recursive(path, fatal_on_storage_error);
-  else res = f_unlink(path);
-  LOG_I("FMCR", "delete %s => %s(%d)", path, FMCore_FResultName(res), (int)res);
+  FRESULT res = translate_writable(path, physical, &kind);
+  if (res != FR_OK) goto done;
+  res = f_stat(physical, &info);
+  if (res != FR_OK) goto done;
+  if ((info.fattrib & AM_DIR) && recursive) res = delete_physical_recursive(physical);
+  else res = f_unlink(physical);
+done:
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
 
 FRESULT FMCore_CopyFile(const char *src, const char *dst, bool fatal_on_storage_error) {
-  FIL in;
-  FIL out;
+  char src_physical[FMCORE_PATH_MAX];
+  char dst_physical[FMCORE_PATH_MAX];
+  FMPathKind src_kind, dst_kind;
+  FIL in, out;
   uint8_t buf[256];
-  UINT br = 0;
-  UINT bw = 0;
-  FRESULT res = f_open(&in, src, FA_READ);
-  if (res != FR_OK) goto done_no_in;
-  res = f_open(&out, dst, FA_CREATE_ALWAYS | FA_WRITE);
-  if (res != FR_OK) goto done_in;
+  UINT br = 0U, bw = 0U;
+  FRESULT res = translate_path(src, src_physical, sizeof(src_physical), &src_kind);
+  if (res != FR_OK) goto done;
+  res = translate_writable(dst, dst_physical, &dst_kind);
+  if (res != FR_OK) goto done;
+  res = f_open(&in, src_physical, FA_READ);
+  if (res != FR_OK) goto done;
+  res = f_open(&out, dst_physical, FA_CREATE_ALWAYS | FA_WRITE);
+  if (res != FR_OK) { (void)f_close(&in); goto done; }
   do {
     res = f_read(&in, buf, sizeof(buf), &br);
     if (res != FR_OK || br == 0U) break;
     res = f_write(&out, buf, br, &bw);
-    if (res != FR_OK || bw != br) {
-      if (res == FR_OK) res = FR_DISK_ERR;
-      break;
-    }
-  } while (br == sizeof(buf));
+    if (res == FR_OK && bw != br) res = FR_DISK_ERR;
+  } while (res == FR_OK && br == sizeof(buf));
   if (res == FR_OK) res = f_sync(&out);
-  {
-    FRESULT close_out = f_close(&out);
-    if (res == FR_OK) res = close_out;
-  }
-
-done_in:
-  {
-    FRESULT close_in = f_close(&in);
-    if (res == FR_OK) res = close_in;
-  }
-
-done_no_in:
-  LOG_I("FMCR", "copy %s -> %s => %s(%d)", src, dst, FMCore_FResultName(res), (int)res);
+  (void)f_close(&out);
+  (void)f_close(&in);
+done:
   fatal_if_needed(res, fatal_on_storage_error, SYS_ERR_SD_FILE_OP_FAILED);
   return res;
 }
 
 bool FMCore_IsInitialized(void) {
-  return !TSDIO_IsHardDisabled() && TSDIO_IsInitialized() &&
-         fmcore_has_init_marker_quiet();
+  FILINFO info;
+  if (!g_storage_mounted) return false;
+  if (f_stat("0:/init", &info) != FR_OK || (info.fattrib & AM_DIR) != 0U) return false;
+  return info.fsize == TOS_SD_INIT_FILE_SIZE;
 }
 
 FRESULT FMCore_NextIndexedPath(const char *dir, const char *ext,
                                char *out, size_t out_sz) {
   FILINFO info;
   if (!dir || !ext || !out || out_sz == 0U) return FR_INVALID_PARAMETER;
-
   for (uint32_t idx = 1U; idx <= 99999999UL; ++idx) {
     int n = snprintf(out, out_sz, "%s/%08lu.%s", dir,
                      (unsigned long)idx, ext);
@@ -427,93 +484,50 @@ FRESULT FMCore_NextIndexedPath(const char *dir, const char *ext,
   return FR_DENIED;
 }
 
-static FRESULT fmcore_prepare_system_dir(const char *subdir) {
+static FRESULT ensure_log_dir(void) {
   FRESULT res;
-
   if (!FMCore_IsInitialized()) return FR_NOT_READY;
-  res = fmcore_ensure_dir_quiet("0:/system");
-  if (res != FR_OK) return res;
-  return fmcore_ensure_dir_quiet(subdir);
+  res = f_mkdir("0:/storage");
+  if (res != FR_OK && res != FR_EXIST) return res;
+  res = f_mkdir("0:/storage/tos");
+  if (res != FR_OK && res != FR_EXIST) return res;
+  res = f_mkdir(FMCORE_LOG_DIR);
+  return res == FR_EXIST ? FR_OK : res;
 }
 
 FRESULT FMCore_AppendBootLog(const char *line, uint32_t len) {
   FRESULT res;
-
   if (!line || len == 0U) return FR_INVALID_PARAMETER;
-  if (g_boot_log_fatal_fault) return FR_NOT_READY;
-
   if (!g_boot_log_ready_seen) {
-    res = fmcore_prepare_system_dir("0:/system/log");
-    if (res != FR_OK) {
-      if (res != FR_NOT_READY) {
-        g_boot_log_fatal_fault = true;
-        if (g_boot_log_fail_count < 255U) g_boot_log_fail_count++;
-      }
-      return res;
-    }
+    res = ensure_log_dir();
+    if (res != FR_OK) return res;
     g_boot_log_ready_seen = true;
   }
-
   if (g_boot_log_path[0] == '\0') {
-    res = FMCore_NextIndexedPath("0:/system/log", "log",
-                                 g_boot_log_path, sizeof(g_boot_log_path));
-    if (res != FR_OK) {
-      g_boot_log_fatal_fault = true;
-      if (g_boot_log_fail_count < 255U) g_boot_log_fail_count++;
-      return res;
-    }
+    res = FMCore_NextIndexedPath(FMCORE_LOG_DIR, "log", g_boot_log_path,
+                                 sizeof(g_boot_log_path));
+    if (res != FR_OK) return res;
   }
-
-  res = fmcore_append_file_timed(g_boot_log_path, line, len,
-                                 FMCORE_BOOT_LOG_TIMEOUT_MS);
-  if (res != FR_OK) {
-    g_boot_log_fatal_fault = true;
-    if (g_boot_log_fail_count < 255U) g_boot_log_fail_count++;
-  }
-  return res;
+  return append_physical_timed(g_boot_log_path, line, len,
+                               FMCORE_BOOT_LOG_TIMEOUT_MS);
 }
 
-bool FMCore_IsBootLogFaultFatal(void) {
-  return g_boot_log_fatal_fault;
-}
+bool FMCore_IsBootLogFaultFatal(void) { return false; }
 
 FRESULT FMCore_WriteSystemDump(uint32_t code, const char *name,
                                const char *extra) {
   char path[FMCORE_PATH_MAX];
   char body[512];
-  FRESULT res;
   int n;
-
-  res = fmcore_prepare_system_dir("0:/system/dump");
+  FRESULT res = ensure_log_dir();
   if (res != FR_OK) return res;
-  res = FMCore_NextIndexedPath("0:/system/dump", "dump", path, sizeof(path));
+  res = FMCore_NextIndexedPath(FMCORE_LOG_DIR, "dump", path, sizeof(path));
   if (res != FR_OK) return res;
-
   n = snprintf(body, sizeof(body),
-               "TOS system dump\r\n"
-               "code=0x%08lX\r\n"
-               "type=%s\r\n"
-               "%s%s",
-               (unsigned long)code,
-               name ? name : "UNKNOWN",
-               extra ? extra : "",
-               (extra && extra[0]) ? "" : "\r\n");
+               "TOS system dump\r\ncode=0x%08lX\r\ntype=%s\r\n%s%s",
+               (unsigned long)code, name ? name : "UNKNOWN",
+               extra ? extra : "", (extra && extra[0]) ? "" : "\r\n");
   if (n <= 0) return FR_INVALID_PARAMETER;
   if (n >= (int)sizeof(body)) n = (int)sizeof(body) - 1;
-
   return FMCore_CreateFile(path, body, (uint32_t)n, false);
-}
-
-FRESULT FMCore_InitLayout(bool fatal_on_storage_error) {
-  static const char *dirs[] = {
-      "0:/data", "0:/oem", "0:/dev", "0:/storage", "0:/system",
-      "0:/system/log", "0:/system/dump"};
-  FRESULT res = FR_OK;
-  for (unsigned i = 0; i < sizeof(dirs) / sizeof(dirs[0]); ++i) {
-    res = FMCore_CreateDir(dirs[i], fatal_on_storage_error);
-    if (res != FR_OK) return res;
-  }
-  res = FMCore_CreateFile("0:/init", "TOS filesystem ready\r\n", 22U,
-                          fatal_on_storage_error);
-  return res;
 }

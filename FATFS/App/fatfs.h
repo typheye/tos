@@ -29,6 +29,8 @@
 
 /* USER CODE BEGIN Includes */
 
+#include "hardware/include/flash_diskio.h"
+
 /* USER CODE END Includes */
 
 extern uint8_t retSD; /* Return value for SD */
