@@ -16,6 +16,7 @@
  */
 
 #include "include/about_activity.hpp"
+#include "hardware/include/sfhd.h"
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
@@ -43,7 +44,8 @@ static void debug_page(void) {
     JPDelay(5);
   }
 
-  const char *items[3] = {"00 Return", "01 Dashboard", "02 Logd on COM"};
+  const char *items[5] = {"00 Return", "01 Dashboard", "02 Logd on COM",
+                          "03 Enter FASTBOOT", "   Enter Recovery"};
   int sel = 0;
   bool editing = false;
   bool pending_dashboard = SM_Debug_Dashboard();
@@ -62,7 +64,7 @@ static void debug_page(void) {
       } else if (editing && sel == 2) {
         pending_log_com = !pending_log_com;
       } else {
-        sel = (sel + 1) % 3;
+        sel = (sel + 1) % 5;
       }
       JPDelay(45);
     }
@@ -72,7 +74,7 @@ static void debug_page(void) {
       } else if (editing && sel == 2) {
         pending_log_com = !pending_log_com;
       } else {
-        sel = (sel - 1 + 3) % 3;
+        sel = (sel - 1 + 5) % 5;
       }
       JPDelay(45);
     }
@@ -82,6 +84,22 @@ static void debug_page(void) {
       if (sel == 0) {
         return;
       }
+      if (sel == 3 || sel == 4) {
+        const bool to_fastboot = (sel == 3);
+        if (confirm_show(to_fastboot ? "FB" : "REC",
+                         to_fastboot ? "Enter FASTBOOT now?"
+                                     : "Enter Recovery now?")) {
+          uint32_t target = to_fastboot ? FLASH_BL_BOOT_FASTBOOT
+                                        : FLASH_BL_BOOT_RECOVERY;
+          if (Flash_BL_SetBootTarget(target) == FLASH_OK) {
+            NVIC_SystemReset();
+          } else {
+            alert_show("BOOT", "Failed to set boot target.");
+          }
+        }
+        lu = 0;
+        editing = false;
+      } else
       if (!editing) {
         pending_dashboard = SM_Debug_Dashboard();
         pending_log_com = SM_Debug_LogCom();
@@ -104,7 +122,7 @@ static void debug_page(void) {
       LCD_FLUSH({
         UI_DrawFrameTitle("DEBUG");
         PD_SetFont(FONT_ASCII_16);
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 5; i++) {
           int cy = 33 + i * 25;
           if (i == 1) {
             UI_DrawMenuValue(i, sel, cy, items[i],

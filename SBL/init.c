@@ -6,8 +6,10 @@
 #include "sbl_lcd.h"
 #include "sbl_common.h"
 #include "sbl_splash.h"
+#include "sbl_state.h"
 #include "sbl_ui.h"
 #include "sbl_usb.h"
+#include "sre.h"
 #include "stm32f4xx_hal.h"
 
 extern uint32_t _estack;
@@ -121,9 +123,16 @@ SBL_CODE uint8_t SBL_AppLooksValid(void) {
 SBL_CODE void SBL_Run(void) {
   uint8_t fastboot_requested;
   uint8_t app_valid;
+  uint32_t boot_target;
 
   SBL_SplashRun();
-  fastboot_requested = SBL_IsFastbootRequested();
+  boot_target = SBL_StateConsumeBootTarget();
+  if (boot_target == SBL_BOOT_TARGET_RECOVERY ||
+      boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT) {
+    SRE_Run(boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT);
+  }
+  fastboot_requested = (boot_target == SBL_BOOT_TARGET_FASTBOOT) ? 1U
+                                                               : SBL_IsFastbootRequested();
   app_valid = SBL_AppLooksValid();
 
   if (!fastboot_requested && app_valid) {

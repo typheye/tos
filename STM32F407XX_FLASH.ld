@@ -122,11 +122,29 @@ SECTIONS
     __sbl_end__ = .;
   } >FLASH :flash
 
-  __sbl_reserved_end__ = ORIGIN(FLASH) + 128K;
-  __sbl_state_start__ = ORIGIN(FLASH) + LENGTH(FLASH) - 1K;
-  __sbl_state_end__ = ORIGIN(FLASH) + LENGTH(FLASH);
-  ASSERT(__sbl_end__ <= __sbl_reserved_end__,
-         "SBL code exceeds reserved 128KB partition")
+  __sbl_reserved_end__ = ORIGIN(FLASH) + 64K;
+  __sbl_state_start__ = ORIGIN(FLASH) + 63K;
+  __sbl_state_end__ = ORIGIN(FLASH) + 64K;
+  ASSERT(__sbl_end__ <= (ORIGIN(FLASH) + 48K),
+         "SBL code must stay below sector 3 reserved for state")
+
+  __sre_start__ = ORIGIN(FLASH) + 64K;
+
+  .sre __sre_start__ :
+  {
+    . = ALIGN(4);
+    __sre_image_start__ = .;
+    KEEP(*(.sre.text))
+    KEEP(*(.sre.text*))
+    KEEP(*(.sre.rodata))
+    KEEP(*(.sre.rodata*))
+    . = ALIGN(4);
+    __sre_image_end__ = .;
+  } >FLASH :flash
+
+  __sre_reserved_end__ = ORIGIN(FLASH) + 128K;
+  ASSERT(__sre_image_end__ <= __sre_reserved_end__,
+         "SRE code exceeds reserved 64KB partition")
 
   __sah_data_start__ = ORIGIN(FLASH) + 128K;
 

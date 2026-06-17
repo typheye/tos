@@ -7,7 +7,7 @@
 #include "sbl_state.h"
 #include "sbl_usb.h"
 
-#define SBL_MENU_COUNT          2U
+#define SBL_MENU_COUNT          3U
 #define SBL_PRESS_LONG_MS     800U
 #define SBL_PRESS_DEBOUNCE_MS  30U
 #define SBL_IDLE_REBOOT_MS 300000UL
@@ -42,6 +42,7 @@ static const char sbl_txt_title[] SBL_CONST = "FASTBOOT MENU";
 static const char sbl_txt_help[] SBL_CONST =
     "select:\nshort press the button\ncontinue:\nlong press the button";
 static const char sbl_txt_reboot[] SBL_CONST = "Reboot";
+static const char sbl_txt_recovery[] SBL_CONST = "Reboot to recovery";
 static const char sbl_txt_bootloader[] SBL_CONST = "Reboot to bootloader";
 static const char sbl_txt_product[] SBL_CONST =
     "product_name:" SBL_BUILD_PRODUCT_NAME;
@@ -72,6 +73,7 @@ static const char sbl_damage_body[] SBL_CONST =
 
 static const char *const sbl_menus[SBL_MENU_COUNT] SBL_CONST = {
     sbl_txt_reboot,
+    sbl_txt_recovery,
     sbl_txt_bootloader,
 };
 
@@ -164,20 +166,6 @@ static SBL_CODE void sbl_redraw_fastboot_hidden(uint8_t *selected) {
   SBL_UiDrawFastboot();
 }
 
-static SBL_CODE void sbl_reload_fastboot(uint8_t *selected) {
-  SBL_LcdDisplayOff();
-  SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
-  SBL_USB_DeInit();
-  SBL_LcdBacklightOff();
-  SBL_DelayMs(2000U);
-  SBL_LcdInitDark();
-  SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
-  (void)SBL_USB_Init();
-  sbl_redraw_fastboot_hidden(selected);
-  SBL_LcdBacklightFull();
-  SBL_WaitButtonRelease(120U);
-}
-
 static SBL_CODE void sbl_return_fastboot_quick(uint8_t *selected) {
   SBL_LcdDisplayOff();
   SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
@@ -249,6 +237,9 @@ static SBL_CODE void sbl_run_unlock_page(uint8_t *selected) {
       }
       SBL_USB_SendUnlockResult(yes_selected, ok);
       SBL_DelayMs(220U);
+      if (yes_selected && ok) {
+        SBL_SystemReboot();
+      }
       sbl_return_fastboot_quick(selected);
       return;
     } else if (!down && was_down) {
@@ -357,7 +348,13 @@ SBL_CODE void SBL_UiRunFastboot(void) {
       if (selected == 0U) {
         SBL_SystemReboot();
       } else if (selected == 1U) {
-        sbl_reload_fastboot(&selected);
+        if (SBL_StateSetBootTarget(SBL_BOOT_TARGET_RECOVERY)) {
+          SBL_SystemReboot();
+        }
+      } else if (selected == 2U) {
+        if (SBL_StateSetBootTarget(SBL_BOOT_TARGET_FASTBOOT)) {
+          SBL_SystemReboot();
+        }
       }
     } else if (!down && was_down) {
       last_action = now;

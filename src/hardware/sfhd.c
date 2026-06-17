@@ -22,12 +22,14 @@
 #define FLASH_TIMEOUT    500u   
 #define ALIGN4(x)        (((uint32_t)(x) + 3u) & ~3u)
 #define FLASH_BL_STATE_MAGIC   0x53424C55u
-#define FLASH_BL_STATE_VERSION 1u
+#define FLASH_BL_STATE_VERSION 2u
+#define FLASH_BL_STATE_SECTOR  FLASH_SECTOR_3
 
 typedef struct __attribute__((packed)) {
   uint32_t magic;
   uint32_t version;
   uint32_t unlocked;
+  uint32_t boot_target;
   uint32_t crc;
 } Flash_BlStateRecord_t;
 
@@ -84,7 +86,7 @@ static Flash_Status_t program_words(uint32_t addr, const uint32_t *data, uint32_
 }
 
 static uint32_t flash_bl_state_crc(const Flash_BlStateRecord_t *r) {
-  return r->magic ^ r->version ^ r->unlocked ^ 0xA5A55A5Au;
+  return r->magic ^ r->version ^ r->unlocked ^ r->boot_target ^ 0xA5A55A5Au;
 }
 
 static bool flash_bl_state_valid(const Flash_BlStateRecord_t *r) {
@@ -120,22 +122,64 @@ static bool flash_bl_state_latest(Flash_BlStateRecord_t *out) {
   return found;
 }
 
-static Flash_Status_t flash_bl_state_restore(const Flash_BlStateRecord_t *r) {
-  if (!flash_bl_state_valid(r)) {
+static Flash_Status_t flash_bl_state_append(uint32_t unlocked,
+                                            uint32_t boot_target) {
+  Flash_BlStateRecord_t r;
+  uint32_t addr = 0;
+
+  r.magic = FLASH_BL_STATE_MAGIC;
+  r.version = FLASH_BL_STATE_VERSION;
+  r.unlocked = unlocked ? 1u : 0u;
+  r.boot_target = boot_target;
+  r.crc = flash_bl_state_crc(&r);
+
+  for (uint32_t off = 0; off + sizeof(Flash_BlStateRecord_t) <= FLASH_BL_STATE_SIZE;
+       off += sizeof(Flash_BlStateRecord_t)) {
+    const Flash_BlStateRecord_t *slot =
+        (const Flash_BlStateRecord_t *)(FLASH_BL_STATE_ADDR + off);
+    if (flash_bl_state_erased(slot)) {
+      addr = FLASH_BL_STATE_ADDR + off;
+      break;
+    }
+  }
+  if (addr == 0) {
+    Flash_Status_t est = erase_sector(FLASH_BL_STATE_SECTOR, FLASH_BL_STATE_ADDR);
+    if (est != FLASH_OK) {
+      return est;
+    }
+    addr = FLASH_BL_STATE_ADDR;
+  }
+  Flash_Status_t st = program_words(addr, (const uint32_t *)&r,
+                                    sizeof(r) / sizeof(uint32_t));
+  if (st == FLASH_OK) {
     return FLASH_OK;
   }
-  return program_words(FLASH_BL_STATE_ADDR, (const uint32_t *)r,
-                       sizeof(*r) / sizeof(uint32_t));
+
+  st = erase_sector(FLASH_BL_STATE_SECTOR, FLASH_BL_STATE_ADDR);
+  if (st != FLASH_OK) {
+    return st;
+  }
+  return program_words(FLASH_BL_STATE_ADDR, (const uint32_t *)&r,
+                       sizeof(r) / sizeof(uint32_t));
+}
+
+Flash_Status_t Flash_BL_SetBootTarget(uint32_t target) {
+  Flash_BlStateRecord_t latest;
+  uint32_t unlocked = 0;
+
+  if (target != FLASH_BL_BOOT_FASTBOOT &&
+      target != FLASH_BL_BOOT_RECOVERY &&
+      target != FLASH_BL_BOOT_NONE) {
+    return FLASH_ERR_SIZE;
+  }
+  if (flash_bl_state_latest(&latest)) {
+    unlocked = latest.unlocked ? 1u : 0u;
+  }
+  return flash_bl_state_append(unlocked, target);
 }
 
 static Flash_Status_t erase_data_sector_preserve_bl(void) {
-  Flash_BlStateRecord_t bl;
-  bool have_bl = flash_bl_state_latest(&bl);
-  Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
-  if (st == FLASH_OK && have_bl) {
-    st = flash_bl_state_restore(&bl);
-  }
-  return st;
+  return erase_sector(FLASH_DATA_SECTOR, FLASH_DATA_ADDR);
 }
 
 

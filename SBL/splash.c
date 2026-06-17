@@ -20,8 +20,8 @@
 #define SPLASH_UNLOCK_ICON_COLOR 0x4208U
 
 #define SPLASH_SBL_STATE_MAGIC    0x53424C55UL
-#define SPLASH_SBL_STATE_VERSION  1UL
-#define SPLASH_SBL_STATE_OLD_ADDR 0x08007C00UL
+#define SPLASH_SBL_STATE_VERSION  2UL
+#define SPLASH_SBL_STATE_OLD_ADDR 0x0800FC00UL
 #define SPLASH_SBL_STATE_AREA_SIZE 1024UL
 
 extern const uint32_t __sbl_state_start__[];
@@ -30,6 +30,7 @@ typedef struct {
   uint32_t magic;
   uint32_t version;
   uint32_t unlocked;
+  uint32_t boot_target;
   uint32_t crc;
 } SplashSblStateRecord;
 
@@ -141,7 +142,8 @@ static SBL_CODE void splash_lcd_fill(uint16_t color) {
 }
 
 static SBL_CODE uint32_t splash_state_crc(const SplashSblStateRecord *r) {
-  return r->magic ^ r->version ^ r->unlocked ^ 0xA5A55A5AUL;
+  return r->magic ^ r->version ^ r->unlocked ^ r->boot_target ^
+         0xA5A55A5AUL;
 }
 
 static SBL_CODE uint8_t splash_state_valid(const SplashSblStateRecord *r) {

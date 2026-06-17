@@ -118,6 +118,14 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /* USER CODE BEGIN TIM4_MspPostInit 1 */
+    /*
+     * Keep the LCD backlight alive immediately after PD13 switches to TIM4_CH2.
+     * Otherwise the later USB re-enumeration delay leaves a visible dark gap
+     * between SAH and TOS.
+     */
+    TIM4->CCR2 = 1000U;
+    TIM4->CCER |= TIM_CCER_CC2E;
+    TIM4->CR1 |= TIM_CR1_CEN;
 
   /* USER CODE END TIM4_MspPostInit 1 */
   }

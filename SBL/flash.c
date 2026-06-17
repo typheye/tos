@@ -8,7 +8,9 @@
 #define SBL_FLASH_CHUNK_SIZE  (16UL * 1024UL)
 
 #define SBL_PART_SBL_OFFSET    0x00000000UL
-#define SBL_PART_SBL_SIZE      0x00020000UL
+#define SBL_PART_SBL_SIZE      0x00010000UL
+#define SBL_PART_SRE_OFFSET    0x00010000UL
+#define SBL_PART_SRE_SIZE      0x00010000UL
 #define SBL_PART_SAH_OFFSET    0x00020000UL
 #define SBL_PART_SAH_SIZE      0x00020000UL
 #define SBL_PART_SYSTEM_OFFSET 0x00040000UL
@@ -21,11 +23,13 @@ typedef struct {
 } SBL_SectorInfo;
 
 static const char sbl_part_name_sbl[] SBL_CONST = "sbl";
+static const char sbl_part_name_sre[] SBL_CONST = "sre";
 static const char sbl_part_name_sah[] SBL_CONST = "sah";
 static const char sbl_part_name_system[] SBL_CONST = "system";
 
 static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
     {sbl_part_name_sbl,    SBL_PART_SBL_OFFSET,    SBL_FLASH_BASE + SBL_PART_SBL_OFFSET,    SBL_PART_SBL_SIZE,    1U, 1U, 0U, 0U},
+    {sbl_part_name_sre,    SBL_PART_SRE_OFFSET,    SBL_FLASH_BASE + SBL_PART_SRE_OFFSET,    SBL_PART_SRE_SIZE,    0U, 0U, 1U, 1U},
     {sbl_part_name_sah,    SBL_PART_SAH_OFFSET,    SBL_FLASH_BASE + SBL_PART_SAH_OFFSET,    SBL_PART_SAH_SIZE,    0U, 0U, 1U, 1U},
     {sbl_part_name_system, SBL_PART_SYSTEM_OFFSET, SBL_FLASH_BASE + SBL_PART_SYSTEM_OFFSET, SBL_PART_SYSTEM_SIZE, 0U, 0U, 1U, 1U},
 };

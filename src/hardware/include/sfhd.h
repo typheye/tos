@@ -37,8 +37,12 @@ extern "C" {
 #define FLASH_DATA_SECTOR    FLASH_SECTOR_11   
 #define FLASH_DATA_ADDR      0x080E0000u       
 #define FLASH_DATA_SIZE      0x1FC00u          
-#define FLASH_BL_STATE_ADDR  0x080FFC00u
+#define FLASH_BL_STATE_ADDR  0x0800FC00u
 #define FLASH_BL_STATE_SIZE  0x400u
+
+#define FLASH_BL_BOOT_NONE     0xFFFFFFFFu
+#define FLASH_BL_BOOT_FASTBOOT 0x46424F54u
+#define FLASH_BL_BOOT_RECOVERY 0x53524543u
 
 #define FLASH_BACKUP_SECTOR  FLASH_SECTOR_10   
 #define FLASH_BACKUP_ADDR    0x080C0000u       
@@ -98,6 +102,8 @@ uint32_t Flash_CRC32(const uint32_t *pData, uint32_t size);
 
 
 void Flash_Print_Data(const uint32_t *pData, uint32_t dataSize);
+
+Flash_Status_t Flash_BL_SetBootTarget(uint32_t target);
 
 
 

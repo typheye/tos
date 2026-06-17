@@ -14,6 +14,7 @@ set(SBL_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/splash.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/state.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/dram.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/trust.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/ui.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../SBL/usb.c
 )

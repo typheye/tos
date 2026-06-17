@@ -15,7 +15,9 @@ $tmpHex = Join-Path $firmwareDir "flash.hex"
 $flashBase = 0x08000000
 $flashSize = 0x00100000
 $sblOffset = 0x00000000
-$sblSize = 0x00020000
+$sblSize = 0x00010000
+$sreOffset = 0x00010000
+$sreSize = 0x00010000
 $sahOffset = 0x00020000
 $sahSize = 0x00020000
 $systemOffset = 0x00040000
@@ -54,6 +56,8 @@ if (-not $objcopyPath) {
 }
 
 New-Item -ItemType Directory -Force -Path $firmwareDir | Out-Null
+Get-ChildItem -LiteralPath $firmwareDir -Filter "*.bin" -ErrorAction SilentlyContinue |
+  Remove-Item -Force
 
 & $objcopyPath -O ihex $elfPath $tmpHex
 if ($LASTEXITCODE -ne 0) {
@@ -105,11 +109,13 @@ function Write-Slice {
 }
 
 $sblPath = Join-Path $firmwareDir "sbl.bin"
+$srePath = Join-Path $firmwareDir "sre.bin"
 $sahPath = Join-Path $firmwareDir "sah.bin"
 $systemPath = Join-Path $firmwareDir "system.bin"
 $csvPath = Join-Path $distDir "partitions.csv"
 
 Write-Slice -Source $full -Offset $sblOffset -Length $sblSize -Path $sblPath
+Write-Slice -Source $full -Offset $sreOffset -Length $sreSize -Path $srePath
 Write-Slice -Source $full -Offset $sahOffset -Length $sahSize -Path $sahPath
 Write-Slice -Source $full -Offset $systemOffset -Length $systemSize -Path $systemPath
 
@@ -118,6 +124,7 @@ Remove-Item -LiteralPath $tmpHex -Force
 $csv = @(
   "Name,Offset,Size"
   ('sbl,0x{0:X8},0x{1:X8}' -f $sblOffset, $sblSize)
+  ('sre,0x{0:X8},0x{1:X8}' -f $sreOffset, $sreSize)
   ('sah,0x{0:X8},0x{1:X8}' -f $sahOffset, $sahSize)
   ('system,0x{0:X8},0x{1:X8}' -f $systemOffset, $systemSize)
 )
@@ -125,6 +132,7 @@ Set-Content -LiteralPath $csvPath -Value $csv -Encoding ASCII
 
 Write-Host "Export complete:"
 Write-Host "  sbl.bin    $(('{0} bytes @ 0x{1:X8}' -f $sblSize, ($flashBase + $sblOffset)))"
+Write-Host "  sre.bin    $(('{0} bytes @ 0x{1:X8}' -f $sreSize, ($flashBase + $sreOffset)))"
 Write-Host "  sah.bin    $(('{0} bytes @ 0x{1:X8}' -f $sahSize, ($flashBase + $sahOffset)))"
 Write-Host "  system.bin $(('{0} bytes @ 0x{1:X8}' -f $systemSize, ($flashBase + $systemOffset)))"
 Write-Host "  partitions.csv"

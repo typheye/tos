@@ -846,7 +846,8 @@ static SBL_CODE void sbl_handle_command(const uint8_t *line) {
       SBL_USB_WriteText("OKAY already locked\r\n");
     } else if (SBL_StateSetUnlocked(0U)) {
       SBL_USB_WriteTextWait("OKAY bootloader locked\r\n");
-      sbl_usb_reload_pending = 1U;
+      SBL_DelayMs(120U);
+      SBL_SystemReboot();
     } else {
       SBL_USB_WriteTextWait("FAIL flash write failed\r\n");
     }
