@@ -27,7 +27,7 @@ SBL_CONST const SBL_TrustManifest sbl_trust_manifest = {
     0xFFFFFFFFUL,
     {
         {"sbl",    0x00000000UL, 0x00010000UL, 0xFFFFFFFFUL},
-        {"sre",    0x00010000UL, 0x00010000UL, 0xFFFFFFFFUL},
+        {"rec",    0x00010000UL, 0x00010000UL, 0xFFFFFFFFUL},
         {"sah",    0x00020000UL, 0x00020000UL, 0xFFFFFFFFUL},
         {"system", 0x00040000UL, 0x00080000UL, 0xFFFFFFFFUL},
     },

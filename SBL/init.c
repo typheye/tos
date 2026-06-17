@@ -9,7 +9,7 @@
 #include "sbl_state.h"
 #include "sbl_ui.h"
 #include "sbl_usb.h"
-#include "sre.h"
+#include "rec.h"
 #include "stm32f4xx_hal.h"
 
 extern uint32_t _estack;
@@ -17,6 +17,7 @@ extern uint32_t SystemCoreClock;
 
 #define SBL_SYSTEM_START 0x08040000UL
 #define SBL_SYSTEM_END   0x080C0000UL
+#define SBL_REC_START    0x08010000UL
 
 static volatile uint8_t sbl_usb_ready;
 
@@ -120,6 +121,27 @@ SBL_CODE uint8_t SBL_AppLooksValid(void) {
   return 1U;
 }
 
+static SBL_CODE uint8_t SBL_RecLooksValid(void) {
+  const uint32_t *words = (const uint32_t *)SBL_REC_START;
+  uint32_t non_blank = 0U;
+  uint32_t changed = 0U;
+  uint32_t prev;
+
+  SBL_FlashFlushCaches();
+  prev = words[0];
+  for (uint32_t i = 0U; i < 32U; ++i) {
+    uint32_t word = words[i];
+    if (word != 0xFFFFFFFFUL && word != 0x00000000UL) {
+      non_blank++;
+    }
+    if (word != prev) {
+      changed++;
+      prev = word;
+    }
+  }
+  return (non_blank >= 4U && changed >= 2U) ? 1U : 0U;
+}
+
 SBL_CODE void SBL_Run(void) {
   uint8_t fastboot_requested;
   uint8_t app_valid;
@@ -128,8 +150,14 @@ SBL_CODE void SBL_Run(void) {
   SBL_SplashRun();
   boot_target = SBL_StateConsumeBootTarget();
   if (boot_target == SBL_BOOT_TARGET_RECOVERY ||
-      boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT) {
-    SRE_Run(boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT);
+      boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT ||
+      boot_target == SBL_BOOT_TARGET_RECOVERY_UPGRADE) {
+    if (!SBL_RecLooksValid()) {
+      SBL_UiRunRecoveryException();
+    }
+    SRE_Run(boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT ? REC_MODE_FORMAT :
+            boot_target == SBL_BOOT_TARGET_RECOVERY_UPGRADE ? REC_MODE_UPGRADE :
+            REC_MODE_WAIT);
   }
   fastboot_requested = (boot_target == SBL_BOOT_TARGET_FASTBOOT) ? 1U
                                                                : SBL_IsFastbootRequested();

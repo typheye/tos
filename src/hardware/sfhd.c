@@ -169,6 +169,7 @@ Flash_Status_t Flash_BL_SetBootTarget(uint32_t target) {
 
   if (target != FLASH_BL_BOOT_FASTBOOT &&
       target != FLASH_BL_BOOT_RECOVERY &&
+      target != FLASH_BL_BOOT_RECOVERY_UPGRADE &&
       target != FLASH_BL_BOOT_NONE) {
     return FLASH_ERR_SIZE;
   }

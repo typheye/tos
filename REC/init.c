@@ -1,4 +1,4 @@
-#include "sre.h"
+#include "rec.h"
 
 #include "sbl_common.h"
 #include "sbl_flash.h"
@@ -10,6 +10,9 @@
 #define SRE_CMD_MAGIC      0x53524531UL /* SRE1 */
 #define SRE_FORMAT_FAKE    1
 #define SRE_IDLE_REBOOT_MS 60000UL
+#define SRE_TITLE_Y        96U
+#define SRE_STATUS_Y       120U
+#define SRE_STATUS_H       16U
 
 extern uint32_t HAL_GetTick(void);
 
@@ -40,11 +43,17 @@ static SRE_CODE void sre_center(uint16_t y, const char *text, uint16_t color) {
   SBL_LcdDrawText(x, y, text, color, 1U);
 }
 
-static SRE_CODE void sre_draw(const char *status, uint16_t color) {
+static SRE_CODE void sre_draw_status(const char *status, uint16_t color) {
+  SBL_LcdRect(0U, (uint16_t)(SRE_STATUS_Y - 2U), SBL_LCD_W,
+              SRE_STATUS_H, SBL_BLACK);
+  sre_center(SRE_STATUS_Y, status, color);
+}
+
+static SRE_CODE void sre_draw_full(const char *status, uint16_t color) {
   SBL_LcdDisplayOff();
   SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
-  sre_center(96U, sre_title, SBL_WHITE);
-  sre_center(120U, status, color);
+  sre_center(SRE_TITLE_Y, sre_title, SBL_WHITE);
+  sre_center(SRE_STATUS_Y, status, color);
   SBL_LcdDisplayOn();
 }
 
@@ -69,35 +78,49 @@ static SRE_CODE void sre_erase_command(void) {
 }
 
 static SRE_CODE void sre_format_userdata(void) {
-  sre_draw(sre_format, SBL_RED);
+  sre_draw_status(sre_format, SBL_RED);
   SBL_DelayMs(800U);
 #if SRE_FORMAT_FAKE
-  sre_draw(sre_done, SBL_GREEN);
+  sre_draw_status(sre_done, SBL_GREEN);
   SBL_DelayMs(700U);
 #endif
 }
 
 static SRE_CODE void sre_upgrade_from_sd(void) {
-  /*
-   * SD/FatFs is intentionally not linked into this first 64KB recovery pass.
-   * The command path and flash primitives are ready; full SDIO/FatFs migration
-   * can be added here without touching SBL USB.
-   */
-  sre_draw(sre_upgrade_fail, SBL_RED);
+  sre_draw_status("Mounting SD...", SBL_WHITE);
+  if (!SRE_FatProbeInit()) {
+    sre_draw_status(sre_upgrade_fail, SBL_RED);
+    SBL_DelayMs(1500U);
+    return;
+  }
+  if (!SRE_FatHasUpgradeManifest()) {
+    sre_draw_status("Upgrade failed: manifest missing", SBL_RED);
+    SBL_DelayMs(1500U);
+    return;
+  }
+  if (!SRE_FatFlashUpgrade(sre_draw_status)) {
+    sre_draw_status("Upgrade failed", SBL_RED);
+    SBL_DelayMs(1500U);
+    return;
+  }
+  sre_draw_status("Upgrade done. Rebooting...", SBL_GREEN);
   SBL_DelayMs(1500U);
+  SBL_SystemReboot();
 }
 
-SRE_CODE void SRE_Run(uint8_t auto_format) {
+SRE_CODE void SRE_Run(uint8_t mode) {
   SRE_Command cmd;
   uint32_t start_ms;
 
   SBL_LedsOff();
   SBL_LcdBacklightFull();
-  sre_draw(sre_wait, SBL_WHITE);
+  sre_draw_full(sre_wait, SBL_WHITE);
 
-  if (auto_format) {
+  if (mode == REC_MODE_FORMAT) {
     sre_format_userdata();
     SBL_SystemReboot();
+  } else if (mode == REC_MODE_UPGRADE) {
+    sre_upgrade_from_sd();
   } else if (sre_read_command(&cmd)) {
     sre_erase_command();
     if (cmd.command == 1U) {
@@ -110,7 +133,8 @@ SRE_CODE void SRE_Run(uint8_t auto_format) {
 
   start_ms = HAL_GetTick();
   while (1) {
-    if (!auto_format && (uint32_t)(HAL_GetTick() - start_ms) >= SRE_IDLE_REBOOT_MS) {
+    if (mode == REC_MODE_WAIT &&
+        (uint32_t)(HAL_GetTick() - start_ms) >= SRE_IDLE_REBOOT_MS) {
       SBL_SystemReboot();
     }
     SBL_DelayMs(20U);

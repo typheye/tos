@@ -16,8 +16,8 @@ $flashBase = 0x08000000
 $flashSize = 0x00100000
 $sblOffset = 0x00000000
 $sblSize = 0x00010000
-$sreOffset = 0x00010000
-$sreSize = 0x00010000
+$recOffset = 0x00010000
+$recSize = 0x00010000
 $sahOffset = 0x00020000
 $sahSize = 0x00020000
 $systemOffset = 0x00040000
@@ -109,13 +109,13 @@ function Write-Slice {
 }
 
 $sblPath = Join-Path $firmwareDir "sbl.bin"
-$srePath = Join-Path $firmwareDir "sre.bin"
+$recPath = Join-Path $firmwareDir "rec.bin"
 $sahPath = Join-Path $firmwareDir "sah.bin"
 $systemPath = Join-Path $firmwareDir "system.bin"
 $csvPath = Join-Path $distDir "partitions.csv"
 
 Write-Slice -Source $full -Offset $sblOffset -Length $sblSize -Path $sblPath
-Write-Slice -Source $full -Offset $sreOffset -Length $sreSize -Path $srePath
+Write-Slice -Source $full -Offset $recOffset -Length $recSize -Path $recPath
 Write-Slice -Source $full -Offset $sahOffset -Length $sahSize -Path $sahPath
 Write-Slice -Source $full -Offset $systemOffset -Length $systemSize -Path $systemPath
 
@@ -124,7 +124,7 @@ Remove-Item -LiteralPath $tmpHex -Force
 $csv = @(
   "Name,Offset,Size"
   ('sbl,0x{0:X8},0x{1:X8}' -f $sblOffset, $sblSize)
-  ('sre,0x{0:X8},0x{1:X8}' -f $sreOffset, $sreSize)
+  ('rec,0x{0:X8},0x{1:X8}' -f $recOffset, $recSize)
   ('sah,0x{0:X8},0x{1:X8}' -f $sahOffset, $sahSize)
   ('system,0x{0:X8},0x{1:X8}' -f $systemOffset, $systemSize)
 )
@@ -132,7 +132,7 @@ Set-Content -LiteralPath $csvPath -Value $csv -Encoding ASCII
 
 Write-Host "Export complete:"
 Write-Host "  sbl.bin    $(('{0} bytes @ 0x{1:X8}' -f $sblSize, ($flashBase + $sblOffset)))"
-Write-Host "  sre.bin    $(('{0} bytes @ 0x{1:X8}' -f $sreSize, ($flashBase + $sreOffset)))"
+Write-Host "  rec.bin    $(('{0} bytes @ 0x{1:X8}' -f $recSize, ($flashBase + $recOffset)))"
 Write-Host "  sah.bin    $(('{0} bytes @ 0x{1:X8}' -f $sahSize, ($flashBase + $sahOffset)))"
 Write-Host "  system.bin $(('{0} bytes @ 0x{1:X8}' -f $systemSize, ($flashBase + $systemOffset)))"
 Write-Host "  partitions.csv"

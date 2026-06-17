@@ -138,6 +138,15 @@ SECTIONS
     KEEP(*(.sre.text*))
     KEEP(*(.sre.rodata))
     KEEP(*(.sre.rodata*))
+    *sdio.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_hal_sd.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_ll_sdmmc.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_hal_dma.c.obj(.text .text.* .rodata .rodata*)
+    *stm32f4xx_hal_dma_ex.c.obj(.text .text.* .rodata .rodata*)
+    *fatfs.c.obj(.text .text.* .rodata .rodata*)
+    *diskio.c.obj(.text .text.* .rodata .rodata*)
+    *ff.c.obj(.text .text.* .rodata .rodata*)
+    *ff_gen_drv.c.obj(.text .text.* .rodata .rodata*)
     . = ALIGN(4);
     __sre_image_end__ = .;
   } >FLASH :flash

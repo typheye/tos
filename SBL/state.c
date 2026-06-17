@@ -154,7 +154,8 @@ SBL_CODE uint32_t SBL_StateConsumeBootTarget(void) {
   target = r->boot_target;
   if (target == SBL_BOOT_TARGET_FASTBOOT ||
       target == SBL_BOOT_TARGET_RECOVERY ||
-      target == SBL_BOOT_TARGET_RECOVERY_FORMAT) {
+      target == SBL_BOOT_TARGET_RECOVERY_FORMAT ||
+      target == SBL_BOOT_TARGET_RECOVERY_UPGRADE) {
     (void)sbl_state_write(r->unlocked ? 1U : 0U, SBL_BOOT_TARGET_NONE);
     return target;
   }

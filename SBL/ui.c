@@ -58,7 +58,7 @@ static const char sbl_txt_no[] SBL_CONST = "no";
 static const char sbl_unlock_title[] SBL_CONST = "Unlock bootloader";
 static const char sbl_unlock_body[] SBL_CONST =
     "This operation will delete all\n"
-    "personal data on your watch to prevant\n"
+    "personal data on your device to prevant\n"
     "unauthorized access,then you can\n"
     "install new openrating system software\n"
     "on the device.";
@@ -70,6 +70,7 @@ static const char sbl_unlock_no[] SBL_CONST = "NO";
 static const char sbl_damage_title[] SBL_CONST = "SYSTEM DAMAGE";
 static const char sbl_damage_body[] SBL_CONST =
     "The system has some errors.";
+static const char sbl_rec_exception_title[] SBL_CONST = "RECOVERY EXCEPTION";
 
 static const char *const sbl_menus[SBL_MENU_COUNT] SBL_CONST = {
     sbl_txt_reboot,
@@ -380,4 +381,27 @@ SBL_CODE void SBL_UiRunSystemDamage(void) {
     SBL_USB_Tick();
     SBL_DelayMs(10U);
   }
+}
+
+SBL_CODE void SBL_UiRunRecoveryException(void) {
+  char line[] = "Restart the system after 5 s...";
+  uint16_t x;
+  uint16_t digit_x;
+  uint16_t w;
+  SBL_LcdDisplayOff();
+  SBL_LcdRect(0U, 0U, SBL_LCD_W, SBL_LCD_H, SBL_BLACK);
+  sbl_draw_text_center_line(96U, sbl_rec_exception_title, SBL_RED,
+                            SBL_FONT_SMALL);
+  w = sbl_text_width(line, SBL_FONT_SMALL);
+  x = (w >= SBL_LCD_W) ? 0U : (uint16_t)((SBL_LCD_W - w) / 2U);
+  digit_x = (uint16_t)(x + 25U * 6U);
+  SBL_LcdDrawText(x, 120U, line, SBL_WHITE, SBL_FONT_SMALL);
+  SBL_LcdDisplayOn();
+  for (uint8_t sec = 5U; sec > 0U; --sec) {
+    char digit[2] = {(char)('0' + sec), 0};
+    SBL_LcdRect(digit_x, 120U, 6U, 8U, SBL_BLACK);
+    SBL_LcdDrawText(digit_x, 120U, digit, SBL_WHITE, SBL_FONT_SMALL);
+    SBL_DelayMs(1000U);
+  }
+  SBL_SystemReboot();
 }

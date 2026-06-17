@@ -6,5 +6,6 @@
 SBL_CODE void SBL_UiDrawFastboot(void);
 SBL_CODE void SBL_UiRunFastboot(void);
 SBL_CODE void SBL_UiRunSystemDamage(void);
+SBL_CODE void SBL_UiRunRecoveryException(void);
 
 #endif /* SBL_UI_H */
