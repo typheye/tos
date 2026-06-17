@@ -10,6 +10,7 @@
 
 #define REC_SD_TIMEOUT_MS 5000U
 #define REC_FLASH_BUF_SZ  512U
+#define REC_SD_IO_ATTEMPTS 2U
 
 static FATFS rec_fs;
 static char rec_path[4];
@@ -19,17 +20,130 @@ static uint8_t rec_mounted;
 static uint8_t rec_log_opened;
 static uint32_t rec_card_blocks;
 static uint32_t rec_card_block_size;
+static char rec_last_error[64];
 
-static uint8_t rec_flash_buf[REC_FLASH_BUF_SZ];
-static uint32_t rec_scratch_words[128];
+static uint8_t *rec_flash_buf;
+static uint8_t *rec_scratch_buf;
 
-static SRE_CODE void rec_memcpy(uint8_t *dst, const uint8_t *src, uint32_t n) {
+static const char rec_err_none[] REC_CONST = "No error";
+static const char rec_err_memory[] REC_CONST = "REC memory failed";
+static const char rec_err_sdio[] REC_CONST = "SDIO init failed";
+static const char rec_err_card_info[] REC_CONST = "Card info failed";
+static const char rec_err_card_ready[] REC_CONST = "Card not ready";
+static const char rec_err_sd_read[] REC_CONST = "SD read failed";
+static const char rec_err_sd_write[] REC_CONST = "SD write failed";
+static const char rec_err_link[] REC_CONST = "Disk driver link failed";
+static const char rec_err_mount[] REC_CONST = "f_mount failed";
+static const char rec_err_init_stat[] REC_CONST = "f_stat /init failed";
+static const char rec_err_manifest[] REC_CONST = "partitions.csv missing";
+static const char rec_err_image_open[] REC_CONST = "Image open failed";
+static const char rec_err_image_read[] REC_CONST = "Image read failed";
+static const char rec_err_bad_size[] REC_CONST = "Bad image size";
+static const char rec_err_flash_begin[] REC_CONST = "Flash begin failed";
+static const char rec_err_flash_write[] REC_CONST = "Flash write failed";
+static const char rec_err_flash_verify[] REC_CONST = "Flash verify failed";
+static const char rec_err_format[] REC_CONST = "Format failed";
+static const char rec_err_format_verify[] REC_CONST = "Format verify failed";
+static const char rec_err_sync[] REC_CONST = "SD sync failed";
+static const char rec_path_init[] REC_CONST = "0:/init";
+static const char rec_path_manifest[] REC_CONST =
+    "0:/data/upgrade/partitions.csv";
+static const char rec_path_sah[] REC_CONST =
+    "0:/data/upgrade/firmware/sah.bin";
+static const char rec_path_system[] REC_CONST =
+    "0:/data/upgrade/firmware/system.bin";
+static const char rec_status_sah[] REC_CONST = "Flashing SAH...";
+static const char rec_status_system[] REC_CONST = "Flashing SYSTEM...";
+static const char rec_log_started[] REC_CONST = "Recovery log started";
+static const char rec_log_mounted[] REC_CONST = "FatFs mounted";
+static const char rec_log_init_found[] REC_CONST = "/init found";
+static const char rec_log_manifest_found[] REC_CONST = "Upgrade manifest found";
+static const char rec_log_crc[] REC_CONST = "Calculating image CRC";
+static const char rec_log_image_flashed[] REC_CONST = "Image flashed";
+static const char rec_log_image_skipped[] REC_CONST = "Image not present, skipped";
+static const char rec_log_upgrade_done[] REC_CONST = "Upgrade completed";
+static const char rec_err_no_images[] REC_CONST = "No upgrade images found";
+
+static REC_CODE void rec_copy_error(const char *msg) {
+  uint32_t i = 0U;
+  if (!msg) {
+    msg = rec_err_none;
+  }
+  while (msg[i] && i < (uint32_t)(sizeof(rec_last_error) - 1U)) {
+    rec_last_error[i] = msg[i];
+    i++;
+  }
+  rec_last_error[i] = 0;
+}
+
+static REC_CODE const char *rec_fresult_name(FRESULT fr) {
+  switch (fr) {
+    case FR_OK: return "FR_OK";
+    case FR_DISK_ERR: return "FR_DISK_ERR";
+    case FR_INT_ERR: return "FR_INT_ERR";
+    case FR_NOT_READY: return "FR_NOT_READY";
+    case FR_NO_FILE: return "FR_NO_FILE";
+    case FR_NO_PATH: return "FR_NO_PATH";
+    case FR_INVALID_NAME: return "FR_INVALID_NAME";
+    case FR_DENIED: return "FR_DENIED";
+    case FR_EXIST: return "FR_EXIST";
+    case FR_INVALID_OBJECT: return "FR_INVALID_OBJECT";
+    case FR_WRITE_PROTECTED: return "FR_WRITE_PROTECTED";
+    case FR_INVALID_DRIVE: return "FR_INVALID_DRIVE";
+    case FR_NOT_ENABLED: return "FR_NOT_ENABLED";
+    case FR_NO_FILESYSTEM: return "FR_NO_FILESYSTEM";
+    case FR_MKFS_ABORTED: return "FR_MKFS_ABORTED";
+    case FR_TIMEOUT: return "FR_TIMEOUT";
+    case FR_LOCKED: return "FR_LOCKED";
+    case FR_NOT_ENOUGH_CORE: return "FR_NOT_ENOUGH_CORE";
+    case FR_TOO_MANY_OPEN_FILES: return "FR_TOO_MANY_OPEN_FILES";
+    case FR_INVALID_PARAMETER: return "FR_INVALID_PARAMETER";
+    default: return "FR_UNKNOWN";
+  }
+}
+
+static REC_CODE void rec_set_error_fresult(const char *prefix, FRESULT fr) {
+  char *p = rec_last_error;
+  const char *name = rec_fresult_name(fr);
+  uint32_t left = (uint32_t)(sizeof(rec_last_error) - 1U);
+
+  while (prefix && *prefix && left) {
+    *p++ = *prefix++;
+    left--;
+  }
+  if (left >= 2U) {
+    *p++ = ':';
+    *p++ = ' ';
+    left -= 2U;
+  }
+  while (*name && left) {
+    *p++ = *name++;
+    left--;
+  }
+  *p = 0;
+}
+
+static REC_CODE uint8_t rec_buffers_init(void) {
+  if (!rec_flash_buf) {
+    rec_flash_buf = (uint8_t *)SBL_MemAllocDma(REC_FLASH_BUF_SZ);
+  }
+  if (!rec_scratch_buf) {
+    rec_scratch_buf = (uint8_t *)SBL_MemAllocDma(512U);
+  }
+  if (!rec_flash_buf || !rec_scratch_buf) {
+    rec_copy_error(rec_err_memory);
+    return 0U;
+  }
+  return 1U;
+}
+
+static REC_CODE void rec_memcpy(uint8_t *dst, const uint8_t *src, uint32_t n) {
   while (n--) {
     *dst++ = *src++;
   }
 }
 
-static SRE_CODE uint8_t rec_wait_ready(uint32_t timeout_ms) {
+static REC_CODE uint8_t rec_wait_ready(uint32_t timeout_ms) {
   uint32_t start = HAL_GetTick();
   while ((uint32_t)(HAL_GetTick() - start) < timeout_ms) {
     HAL_SD_CardStateTypeDef state = HAL_SD_GetCardState(&hsd);
@@ -44,15 +158,32 @@ static SRE_CODE uint8_t rec_wait_ready(uint32_t timeout_ms) {
   return 0U;
 }
 
-static SRE_CODE DSTATUS rec_disk_initialize(BYTE lun) {
+static REC_CODE void rec_sd_drop(void) {
+  if (hsd.Instance == SDIO) {
+    /* REC uses polling I/O only.  Once a polling call returned, no DMA
+     * transfer remains to abort; going straight to DeInit avoids issuing an
+     * extra CMD13 to an already failing/removed card. */
+    (void)HAL_SD_DeInit(&hsd);
+  }
+  rec_card_blocks = 0U;
+  rec_card_block_size = 0U;
+}
+
+static REC_CODE DSTATUS rec_disk_initialize(BYTE lun) {
   HAL_SD_CardInfoTypeDef info;
   (void)lun;
 
   rec_card_blocks = 0U;
   rec_card_block_size = 512U;
+  SBL_WatchdogFeed();
 
   MX_SDIO_SD_Init();
+  (void)HAL_SD_DeInit(&hsd);
+  SBL_DelayMs(20U);
+  MX_SDIO_SD_Init();
+  __HAL_RCC_DMA2_CLK_ENABLE();
   if (HAL_SD_Init(&hsd) != HAL_OK) {
+    rec_copy_error(rec_err_sdio);
     return STA_NOINIT;
   }
   SBL_DelayMs(200U);
@@ -66,6 +197,7 @@ static SRE_CODE DSTATUS rec_disk_initialize(BYTE lun) {
     SBL_DelayMs(100U);
   }
   if (rec_card_blocks == 0U) {
+    rec_copy_error(rec_err_card_info);
     return STA_NOINIT;
   }
 
@@ -74,34 +206,73 @@ static SRE_CODE DSTATUS rec_disk_initialize(BYTE lun) {
 #endif
 
   if (!rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+    rec_copy_error(rec_err_card_ready);
     return STA_NOINIT;
   }
   return 0U;
 }
 
-static SRE_CODE DSTATUS rec_disk_status(BYTE lun) {
+static REC_CODE DSTATUS rec_disk_status(BYTE lun) {
   (void)lun;
-  return rec_wait_ready(100U) ? 0U : STA_NOINIT;
+  if (rec_card_blocks == 0U) {
+    return STA_NOINIT;
+  }
+  if (rec_wait_ready(100U)) {
+    return 0U;
+  }
+  rec_sd_drop();
+  return STA_NOINIT;
 }
 
-static SRE_CODE DRESULT rec_disk_read(BYTE lun, BYTE *buff, DWORD sector,
+static REC_CODE DRESULT rec_disk_read(BYTE lun, BYTE *buff, DWORD sector,
                                       UINT count) {
-  uint8_t *scratch = (uint8_t *)rec_scratch_words;
+  uint8_t *scratch = rec_scratch_buf;
   (void)lun;
-  if (!buff || count == 0U) {
+  SBL_WatchdogFeed();
+  if (!buff || !scratch || count == 0U) {
+    return RES_PARERR;
+  }
+  if (rec_card_blocks == 0U || sector >= rec_card_blocks ||
+      count > (rec_card_blocks - sector)) {
     return RES_PARERR;
   }
   if (((uint32_t)buff & 3U) == 0U) {
-    if (HAL_SD_ReadBlocks(&hsd, buff, sector, count, REC_SD_TIMEOUT_MS) != HAL_OK) {
-      return RES_ERROR;
+    for (uint8_t attempt = 0U; attempt < REC_SD_IO_ATTEMPTS; ++attempt) {
+      if (HAL_SD_ReadBlocks(&hsd, buff, sector, count,
+                            REC_SD_TIMEOUT_MS) == HAL_OK &&
+          rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+        SBL_WatchdogFeed();
+        return RES_OK;
+      }
+      rec_sd_drop();
+      rec_copy_error(rec_err_sd_read);
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
+          rec_disk_initialize(0U) == 0U) {
+        continue;
+      }
+      break;
     }
-    return rec_wait_ready(REC_SD_TIMEOUT_MS) ? RES_OK : RES_ERROR;
+    return RES_ERROR;
   }
   for (UINT i = 0U; i < count; ++i) {
-    if (HAL_SD_ReadBlocks(&hsd, scratch, sector + i, 1U, REC_SD_TIMEOUT_MS) != HAL_OK) {
-      return RES_ERROR;
+    uint8_t ok = 0U;
+    for (uint8_t attempt = 0U; attempt < REC_SD_IO_ATTEMPTS; ++attempt) {
+      if (HAL_SD_ReadBlocks(&hsd, scratch, sector + i, 1U,
+                            REC_SD_TIMEOUT_MS) == HAL_OK &&
+          rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+        SBL_WatchdogFeed();
+        ok = 1U;
+        break;
+      }
+      rec_sd_drop();
+      rec_copy_error(rec_err_sd_read);
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
+          rec_disk_initialize(0U) == 0U) {
+        continue;
+      }
+      break;
     }
-    if (!rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+    if (!ok) {
       return RES_ERROR;
     }
     rec_memcpy(&buff[i * 512U], scratch, 512U);
@@ -109,43 +280,77 @@ static SRE_CODE DRESULT rec_disk_read(BYTE lun, BYTE *buff, DWORD sector,
   return RES_OK;
 }
 
-static SRE_CODE DRESULT rec_disk_write(BYTE lun, const BYTE *buff, DWORD sector,
+static REC_CODE DRESULT rec_disk_write(BYTE lun, const BYTE *buff, DWORD sector,
                                        UINT count) {
-  uint8_t *scratch = (uint8_t *)rec_scratch_words;
+  uint8_t *scratch = rec_scratch_buf;
   (void)lun;
-  if (!buff || count == 0U) {
+  SBL_WatchdogFeed();
+  if (!buff || !scratch || count == 0U) {
+    return RES_PARERR;
+  }
+  if (rec_card_blocks == 0U || sector >= rec_card_blocks ||
+      count > (rec_card_blocks - sector)) {
     return RES_PARERR;
   }
   if (((uint32_t)buff & 3U) == 0U) {
-    if (HAL_SD_WriteBlocks(&hsd, (uint8_t *)buff, sector, count, REC_SD_TIMEOUT_MS) != HAL_OK) {
-      return RES_ERROR;
+    for (uint8_t attempt = 0U; attempt < REC_SD_IO_ATTEMPTS; ++attempt) {
+      if (HAL_SD_WriteBlocks(&hsd, (uint8_t *)buff, sector, count,
+                             REC_SD_TIMEOUT_MS) == HAL_OK &&
+          rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+        SBL_WatchdogFeed();
+        return RES_OK;
+      }
+      rec_sd_drop();
+      rec_copy_error(rec_err_sd_write);
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
+          rec_disk_initialize(0U) == 0U) {
+        continue;
+      }
+      break;
     }
-    return rec_wait_ready(REC_SD_TIMEOUT_MS) ? RES_OK : RES_ERROR;
+    return RES_ERROR;
   }
   for (UINT i = 0U; i < count; ++i) {
     rec_memcpy(scratch, &buff[i * 512U], 512U);
-    if (HAL_SD_WriteBlocks(&hsd, scratch, sector + i, 1U, REC_SD_TIMEOUT_MS) != HAL_OK) {
-      return RES_ERROR;
+    uint8_t ok = 0U;
+    for (uint8_t attempt = 0U; attempt < REC_SD_IO_ATTEMPTS; ++attempt) {
+      if (HAL_SD_WriteBlocks(&hsd, scratch, sector + i, 1U,
+                             REC_SD_TIMEOUT_MS) == HAL_OK &&
+          rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+        SBL_WatchdogFeed();
+        ok = 1U;
+        break;
+      }
+      rec_sd_drop();
+      rec_copy_error(rec_err_sd_write);
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
+          rec_disk_initialize(0U) == 0U) {
+        continue;
+      }
+      break;
     }
-    if (!rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+    if (!ok) {
       return RES_ERROR;
     }
   }
   return RES_OK;
 }
 
-static SRE_CODE DRESULT rec_disk_ioctl(BYTE lun, BYTE cmd, void *buff) {
+static REC_CODE DRESULT rec_disk_ioctl(BYTE lun, BYTE cmd, void *buff) {
   (void)lun;
   switch (cmd) {
     case CTRL_SYNC:
       return rec_wait_ready(REC_SD_TIMEOUT_MS) ? RES_OK : RES_ERROR;
     case GET_SECTOR_COUNT:
+      if (!buff || rec_card_blocks == 0U) return RES_ERROR;
       *(DWORD *)buff = rec_card_blocks;
       return RES_OK;
     case GET_SECTOR_SIZE:
+      if (!buff) return RES_PARERR;
       *(WORD *)buff = 512U;
       return RES_OK;
     case GET_BLOCK_SIZE:
+      if (!buff) return RES_PARERR;
       *(DWORD *)buff = 1U;
       return RES_OK;
     default:
@@ -153,7 +358,7 @@ static SRE_CODE DRESULT rec_disk_ioctl(BYTE lun, BYTE cmd, void *buff) {
   }
 }
 
-static Diskio_drvTypeDef rec_sd_driver = {
+static const Diskio_drvTypeDef rec_sd_driver REC_CONST = {
     rec_disk_initialize,
     rec_disk_status,
     rec_disk_read,
@@ -161,19 +366,19 @@ static Diskio_drvTypeDef rec_sd_driver = {
     rec_disk_ioctl,
 };
 
-static SRE_CODE char *rec_append_char(char *p, char c) {
+static REC_CODE char *rec_append_char(char *p, char c) {
   *p++ = c;
   return p;
 }
 
-static SRE_CODE char *rec_append_str(char *p, const char *s) {
+static REC_CODE char *rec_append_str(char *p, const char *s) {
   while (*s) {
     *p++ = *s++;
   }
   return p;
 }
 
-static SRE_CODE char *rec_append_u32(char *p, uint32_t v) {
+static REC_CODE char *rec_append_u32(char *p, uint32_t v) {
   char tmp[10];
   uint8_t n = 0U;
   if (v == 0U) {
@@ -190,7 +395,7 @@ static SRE_CODE char *rec_append_u32(char *p, uint32_t v) {
   return p;
 }
 
-static SRE_CODE char *rec_append_u32_pad(char *p, uint32_t v,
+static REC_CODE char *rec_append_u32_pad(char *p, uint32_t v,
                                          uint8_t width, char pad) {
   char tmp[10];
   uint8_t n = 0U;
@@ -208,7 +413,7 @@ static SRE_CODE char *rec_append_u32_pad(char *p, uint32_t v,
   return p;
 }
 
-static SRE_CODE void rec_make_log_path(char path[26], uint32_t index) {
+static REC_CODE void rec_make_log_path(char path[26], uint32_t index) {
   char *p = path;
   p = rec_append_str(p, "0:/system/rec/");
   p = rec_append_u32_pad(p, index, 8U, '0');
@@ -216,7 +421,7 @@ static SRE_CODE void rec_make_log_path(char path[26], uint32_t index) {
   *p = 0;
 }
 
-static SRE_CODE void rec_log_line(const char *level, const char *tag,
+static REC_CODE void rec_log_line(const char *level, const char *tag,
                                   const char *msg) {
   char line[128];
   char *p;
@@ -243,12 +448,12 @@ static SRE_CODE void rec_log_line(const char *level, const char *tag,
   (void)f_sync(&rec_log_file);
 }
 
-static SRE_CODE void rec_log_status(const char *msg, uint16_t color) {
+static REC_CODE void rec_log_status(const char *msg, uint16_t color) {
   (void)color;
   rec_log_line("INFO ", "REC  ", msg);
 }
 
-static SRE_CODE void rec_open_log(void) {
+static REC_CODE void rec_open_log(void) {
   char path[26];
   FILINFO info;
 
@@ -262,14 +467,14 @@ static SRE_CODE void rec_open_log(void) {
     if (f_stat(path, &info) == FR_NO_FILE) {
       if (f_open(&rec_log_file, path, FA_CREATE_NEW | FA_WRITE) == FR_OK) {
         rec_log_opened = 1U;
-        rec_log_line("INFO ", "REC  ", "Recovery log started");
+        rec_log_line("INFO ", "REC  ", rec_log_started);
       }
       return;
     }
   }
 }
 
-static SRE_CODE uint8_t rec_mount(void) {
+static REC_CODE uint8_t rec_mount(void) {
   FRESULT fr;
 
   if (rec_mounted) {
@@ -277,38 +482,49 @@ static SRE_CODE uint8_t rec_mount(void) {
   }
   if (!rec_driver_linked) {
     if (FATFS_LinkDriver(&rec_sd_driver, rec_path) != 0U) {
+      rec_copy_error(rec_err_link);
       return 0U;
     }
     rec_driver_linked = 1U;
   }
   fr = f_mount(&rec_fs, rec_path, 1U);
   if (fr != FR_OK) {
+    rec_set_error_fresult(rec_err_mount, fr);
     return 0U;
   }
   rec_mounted = 1U;
   rec_open_log();
-  rec_log_line("INFO ", "SDIO ", "FatFs mounted");
+  rec_log_line("INFO ", "SDIO ", rec_log_mounted);
   return 1U;
 }
 
-static SRE_CODE uint8_t rec_file_exists(const char *path) {
+static REC_CODE uint8_t rec_file_exists(const char *path, FRESULT *out_fr) {
   FILINFO info;
-  return (f_stat(path, &info) == FR_OK) ? 1U : 0U;
+  FRESULT fr = f_stat(path, &info);
+  if (out_fr) {
+    *out_fr = fr;
+  }
+  return (fr == FR_OK) ? 1U : 0U;
 }
 
 typedef struct {
   uint32_t crc;
 } REC_CrcCtx;
 
-static SRE_CODE uint8_t rec_crc_file(FIL *file, uint32_t *crc_out) {
+static REC_CODE uint8_t rec_crc_file(FIL *file, uint32_t *crc_out) {
   UINT br;
+  FRESULT fr;
   REC_CrcCtx ctx;
   ctx.crc = SBL_FlashCrc32Seed();
-  if (f_lseek(file, 0U) != FR_OK) {
+  fr = f_lseek(file, 0U);
+  if (fr != FR_OK) {
+    rec_set_error_fresult(rec_err_image_read, fr);
     return 0U;
   }
   do {
-    if (f_read(file, rec_flash_buf, sizeof(rec_flash_buf), &br) != FR_OK) {
+    fr = f_read(file, rec_flash_buf, REC_FLASH_BUF_SZ, &br);
+    if (fr != FR_OK) {
+      rec_set_error_fresult(rec_err_image_read, fr);
       return 0U;
     }
     if (br > 0U) {
@@ -319,33 +535,43 @@ static SRE_CODE uint8_t rec_crc_file(FIL *file, uint32_t *crc_out) {
   return 1U;
 }
 
-static SRE_CODE uint8_t rec_flash_file(const char *part_name,
+static REC_CODE uint8_t rec_flash_file(const char *part_name,
                                        const char *path,
-                                       void (*status)(const char *, uint16_t)) {
+                                       const char *status_text,
+                                       void (*status)(const char *, uint16_t),
+                                       uint8_t *flashed) {
   FIL file;
   UINT br;
+  FRESULT fr;
   uint32_t offset = 0U;
   uint32_t image_crc = 0U;
   const SBL_FlashPartition *part;
   SBL_FlashSession session;
   uint32_t image_size;
 
-  if (f_open(&file, path, FA_READ) != FR_OK) {
-    rec_log_line("INFO ", "REC  ", "Image not present, skipped");
-    return 1U;
+  fr = f_open(&file, path, FA_READ);
+  if (fr != FR_OK) {
+    if (fr == FR_NO_FILE || fr == FR_NO_PATH) {
+      rec_log_line("INFO ", "REC  ", rec_log_image_skipped);
+      return 1U;
+    }
+    rec_set_error_fresult(rec_err_image_open, fr);
+    rec_log_line("ERROR", "REC  ", REC_FatLastError());
+    return 0U;
   }
 
   part = SBL_FlashFindPartition(part_name);
   image_size = (uint32_t)f_size(&file);
   if (!part || image_size != part->size) {
     (void)f_close(&file);
-    rec_log_line("ERROR", "REC  ", "Bad image size");
-    if (status) status("Bad image size", SBL_RED);
+    rec_copy_error(rec_err_bad_size);
+    rec_log_line("ERROR", "REC  ", rec_err_bad_size);
+    if (status) status(rec_err_bad_size, SBL_RED);
     return 0U;
   }
 
-  if (status) status(path, SBL_WHITE);
-  rec_log_line("INFO ", "REC  ", "Calculating image CRC");
+  if (status) status(status_text, SBL_WHITE);
+  rec_log_line("INFO ", "REC  ", rec_log_crc);
   if (!rec_crc_file(&file, &image_crc)) {
     (void)f_close(&file);
     return 0U;
@@ -353,20 +579,25 @@ static SRE_CODE uint8_t rec_flash_file(const char *part_name,
 
   if (!SBL_FlashBegin(&session, part, image_size, image_crc)) {
     (void)f_close(&file);
-    rec_log_line("ERROR", "FLASH", "Flash begin failed");
+    rec_copy_error(rec_err_flash_begin);
+    rec_log_line("ERROR", "FLASH", rec_err_flash_begin);
     return 0U;
   }
 
-  if (f_lseek(&file, 0U) != FR_OK) {
+  fr = f_lseek(&file, 0U);
+  if (fr != FR_OK) {
     (void)f_close(&file);
     SBL_FlashAbort(&session);
+    rec_set_error_fresult(rec_err_image_read, fr);
     return 0U;
   }
 
   do {
-    if (f_read(&file, rec_flash_buf, sizeof(rec_flash_buf), &br) != FR_OK) {
+    fr = f_read(&file, rec_flash_buf, REC_FLASH_BUF_SZ, &br);
+    if (fr != FR_OK) {
       (void)f_close(&file);
       SBL_FlashAbort(&session);
+      rec_set_error_fresult(rec_err_image_read, fr);
       return 0U;
     }
     if (br > 0U) {
@@ -376,64 +607,163 @@ static SRE_CODE uint8_t rec_flash_file(const char *part_name,
           !SBL_FlashWriteChunk(&session, offset, rec_flash_buf, br, chunk_crc)) {
         (void)f_close(&file);
         SBL_FlashAbort(&session);
-        rec_log_line("ERROR", "FLASH", "Flash chunk failed");
+        rec_copy_error(rec_err_flash_write);
+        rec_log_line("ERROR", "FLASH", rec_err_flash_write);
         return 0U;
       }
       offset += br;
       if (status && ((offset & 0x3FFFU) == 0U || offset == image_size)) {
-        status(path, SBL_WHITE);
+        status(status_text, SBL_WHITE);
       }
     }
   } while (br > 0U);
 
   (void)f_close(&file);
   if (!SBL_FlashFinalize(&session)) {
-    rec_log_line("ERROR", "FLASH", "Flash finalize failed");
+    rec_copy_error(rec_err_flash_verify);
+    rec_log_line("ERROR", "FLASH", rec_err_flash_verify);
     return 0U;
   }
-  rec_log_line("INFO ", "FLASH", "Image flashed");
+  rec_log_line("INFO ", "FLASH", rec_log_image_flashed);
+  if (flashed) {
+    *flashed = 1U;
+  }
   return 1U;
 }
 
-SRE_CODE uint8_t SRE_FatProbeInit(void) {
+REC_CODE uint8_t REC_FatProbeInit(void) {
+  FRESULT fr;
+  rec_copy_error(rec_err_none);
   rec_mounted = 0U;
   rec_log_opened = 0U;
+  if (!rec_buffers_init()) {
+    return 0U;
+  }
   if (!rec_mount()) {
     return 0U;
   }
-  if (!rec_file_exists("0:/init")) {
-    rec_log_line("ERROR", "REC  ", "/init missing");
+  if (!rec_file_exists(rec_path_init, &fr)) {
+    rec_set_error_fresult(rec_err_init_stat, fr);
+    rec_log_line("ERROR", "REC  ", REC_FatLastError());
     return 0U;
   }
-  rec_log_line("INFO ", "REC  ", "/init found");
+  rec_log_line("INFO ", "REC  ", rec_log_init_found);
   return 1U;
 }
 
-SRE_CODE uint8_t SRE_FatHasUpgradeManifest(void) {
-  uint8_t ok = rec_file_exists("0:/data/upgrade/firmware/partitions.csv");
+REC_CODE uint8_t REC_FatHasUpgradeManifest(void) {
+  FRESULT fr;
+  uint8_t ok = rec_file_exists(rec_path_manifest, &fr);
+  if (!ok) {
+    if (fr == FR_NO_FILE || fr == FR_NO_PATH) {
+      rec_copy_error(rec_err_manifest);
+    } else {
+      rec_set_error_fresult(rec_err_manifest, fr);
+    }
+  }
   rec_log_line(ok ? "INFO " : "ERROR", "REC  ",
-               ok ? "Upgrade manifest found" : "Upgrade manifest missing");
+               ok ? rec_log_manifest_found : REC_FatLastError());
   return ok;
 }
 
-SRE_CODE uint8_t SRE_FatFlashUpgrade(void (*status)(const char *, uint16_t)) {
+REC_CODE uint8_t REC_FatFlashUpgrade(void (*status)(const char *, uint16_t)) {
   uint8_t wrote = 0U;
 
   if (!rec_mounted) {
+    rec_copy_error(rec_err_mount);
     return 0U;
   }
-  if (status) status("Flashing SAH...", SBL_WHITE);
-  if (!rec_flash_file("sah", "0:/data/upgrade/firmware/sah.bin", status)) {
+  if (status) status(rec_status_sah, SBL_WHITE);
+  if (!rec_flash_file("sah", rec_path_sah, rec_status_sah, status, &wrote)) {
     return 0U;
   }
-  wrote = 1U;
 
-  if (status) status("Flashing SYSTEM...", SBL_WHITE);
-  if (!rec_flash_file("system", "0:/data/upgrade/firmware/system.bin", status)) {
+  if (status) status(rec_status_system, SBL_WHITE);
+  if (!rec_flash_file("system", rec_path_system, rec_status_system, status, &wrote)) {
     return 0U;
   }
-  wrote = 1U;
 
-  rec_log_line("INFO ", "REC  ", "Upgrade completed");
+  if (!wrote) {
+    rec_copy_error(rec_err_no_images);
+    rec_log_line("ERROR", "REC  ", rec_err_no_images);
+    return 0U;
+  }
+  rec_log_line("INFO ", "REC  ", rec_log_upgrade_done);
   return wrote;
+}
+
+REC_CODE uint8_t REC_FatFormat(void) {
+  FRESULT fr;
+
+  REC_FatRelease();
+  rec_copy_error(rec_err_none);
+  if (!rec_buffers_init()) {
+    return 0U;
+  }
+  if (FATFS_LinkDriver(&rec_sd_driver, rec_path) != 0U) {
+    rec_copy_error(rec_err_link);
+    return 0U;
+  }
+  rec_driver_linked = 1U;
+
+  if (rec_disk_initialize(0U) != 0U) {
+    return 0U;
+  }
+
+  SBL_WatchdogFeed();
+  fr = f_mkfs(rec_path, (BYTE)(FM_FAT | FM_FAT32), 0U,
+              rec_flash_buf, REC_FLASH_BUF_SZ);
+  if (fr != FR_OK) {
+    rec_sd_drop();
+    if (rec_disk_initialize(0U) != 0U) {
+      return 0U;
+    }
+    fr = f_mkfs(rec_path, (BYTE)(FM_FAT | FM_FAT32 | FM_SFD), 0U,
+                rec_flash_buf, REC_FLASH_BUF_SZ);
+  }
+  SBL_WatchdogFeed();
+  if (fr != FR_OK) {
+    rec_set_error_fresult(rec_err_format, fr);
+    return 0U;
+  }
+  if (rec_disk_ioctl(0U, CTRL_SYNC, 0) != RES_OK) {
+    rec_copy_error(rec_err_sync);
+    return 0U;
+  }
+
+  fr = f_mount(&rec_fs, rec_path, 1U);
+  if (fr != FR_OK) {
+    rec_set_error_fresult(rec_err_format_verify, fr);
+    return 0U;
+  }
+  rec_mounted = 1U;
+  return 1U;
+}
+
+REC_CODE void REC_FatRelease(void) {
+  if (rec_log_opened) {
+    (void)f_sync(&rec_log_file);
+    (void)f_close(&rec_log_file);
+    rec_log_opened = 0U;
+  }
+
+  if (rec_mounted) {
+    (void)f_mount(0, rec_path, 0U);
+    rec_mounted = 0U;
+  }
+
+  if (rec_driver_linked) {
+    (void)FATFS_UnLinkDriver(rec_path);
+    rec_driver_linked = 0U;
+  }
+
+  if (hsd.Instance == SDIO) {
+    (void)HAL_SD_DeInit(&hsd);
+  }
+  rec_card_blocks = 0U;
+  rec_card_block_size = 0U;
+}
+
+REC_CODE const char *REC_FatLastError(void) {
+  return rec_last_error[0] ? rec_last_error : rec_err_none;
 }

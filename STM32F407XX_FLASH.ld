@@ -16,7 +16,7 @@
 **
 **  Target      : STMicroelectronics STM32
 **
-**  Distribution: The file is distributed “as is,” without any warranty
+**  Distribution: The file is distributed "as is," without any warranty
 **                of any kind.
 **
 *****************************************************************************
@@ -111,6 +111,7 @@ SECTIONS
     *stm32f4xx_hal_rcc.c.obj(.text .text.* .rodata .rodata*)
     *stm32f4xx_hal_rcc_ex.c.obj(.text .text.* .rodata .rodata*)
     *stm32f4xx_it.c.obj(.text .text.* .rodata .rodata*)
+    *main.c.obj(.text.Error_Handler)
     *usbd_conf.c.obj(.text .text.* .rodata .rodata*)
     *usbd_core.c.obj(.text .text.* .rodata .rodata*)
     *usbd_ctlreq.c.obj(.text .text.* .rodata .rodata*)
@@ -128,16 +129,18 @@ SECTIONS
   ASSERT(__sbl_end__ <= (ORIGIN(FLASH) + 48K),
          "SBL code must stay below sector 3 reserved for state")
 
-  __sre_start__ = ORIGIN(FLASH) + 64K;
+  __rec_start__ = ORIGIN(FLASH) + 64K;
 
-  .sre __sre_start__ :
+  .rec __rec_start__ :
   {
     . = ALIGN(4);
-    __sre_image_start__ = .;
-    KEEP(*(.sre.text))
-    KEEP(*(.sre.text*))
-    KEEP(*(.sre.rodata))
-    KEEP(*(.sre.rodata*))
+    __rec_image_start__ = .;
+    KEEP(*(.rec.text))
+    KEEP(*(.rec.text*))
+    */REC/*.c.obj(.text .text*)
+    KEEP(*(.rec.rodata))
+    KEEP(*(.rec.rodata*))
+    */REC/*.c.obj(.rodata .rodata*)
     *sdio.c.obj(.text .text.* .rodata .rodata*)
     *stm32f4xx_hal_sd.c.obj(.text .text.* .rodata .rodata*)
     *stm32f4xx_ll_sdmmc.c.obj(.text .text.* .rodata .rodata*)
@@ -148,12 +151,12 @@ SECTIONS
     *ff.c.obj(.text .text.* .rodata .rodata*)
     *ff_gen_drv.c.obj(.text .text.* .rodata .rodata*)
     . = ALIGN(4);
-    __sre_image_end__ = .;
+    __rec_image_end__ = .;
   } >FLASH :flash
 
-  __sre_reserved_end__ = ORIGIN(FLASH) + 128K;
-  ASSERT(__sre_image_end__ <= __sre_reserved_end__,
-         "SRE code exceeds reserved 64KB partition")
+  __rec_reserved_end__ = ORIGIN(FLASH) + 128K;
+  ASSERT(__rec_image_end__ <= __rec_reserved_end__,
+         "REC code exceeds reserved 64KB partition")
 
   __sah_data_start__ = ORIGIN(FLASH) + 128K;
 

@@ -88,9 +88,23 @@ SBL_CODE void SBL_Delay(volatile uint32_t loops) {
   }
 }
 
+SBL_CODE void SBL_WatchdogFeed(void) {
+  /* The refresh key is ignored until IWDG has been started. */
+  IWDG->KR = 0xAAAAU;
+}
+
 SBL_CODE void SBL_DelayMs(uint32_t ms) {
   uint32_t start = HAL_GetTick();
+  uint32_t last_feed = start;
   while ((uint32_t)(HAL_GetTick() - start) < ms) {
+    uint32_t now = HAL_GetTick();
+    /* IWDG keeps running across a software/watchdog reset.  Refreshing it here
+     * is harmless before it has been started and prevents SBL/REC boot loops
+     * while drawing the splash, flashing, or waiting for USB enumeration. */
+    if ((uint32_t)(now - last_feed) >= 200U) {
+      SBL_WatchdogFeed();
+      last_feed = now;
+    }
     __NOP();
   }
 }

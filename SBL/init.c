@@ -23,6 +23,8 @@ static volatile uint8_t sbl_usb_ready;
 
 static SBL_CODE uint8_t SBL_ClockConfig(void) {
   uint32_t guard;
+  uint32_t pll_m = 8UL;
+  uint32_t pll_source = RCC_PLLCFGR_PLLSRC_HSE;
 
   RCC->APB1ENR |= RCC_APB1ENR_PWREN;
   (void)RCC->APB1ENR;
@@ -32,7 +34,20 @@ static SBL_CODE uint8_t SBL_ClockConfig(void) {
   guard = 0x00200000UL;
   while ((RCC->CR & RCC_CR_HSERDY) == 0U) {
     if (--guard == 0U) {
-      return 0U;
+      /* Keep REC/FASTBOOT recoverable even when the external crystal does not
+       * start.  HSI/16 MHz with PLLM=16 produces the same 168 MHz SYSCLK and
+       * 48 MHz PLLQ clock required by USB FS and SDIO. */
+      RCC->CR &= ~RCC_CR_HSEON;
+      RCC->CR |= RCC_CR_HSION;
+      guard = 0x00080000UL;
+      while ((RCC->CR & RCC_CR_HSIRDY) == 0U) {
+        if (--guard == 0U) {
+          return 0U;
+        }
+      }
+      pll_m = 16UL;
+      pll_source = 0UL;
+      break;
     }
   }
 
@@ -48,9 +63,9 @@ static SBL_CODE uint8_t SBL_ClockConfig(void) {
 
   FLASH->ACR = FLASH_ACR_ICEN | FLASH_ACR_DCEN |
                FLASH_ACR_PRFTEN | FLASH_ACR_LATENCY_5WS;
-  RCC->PLLCFGR = (8UL << RCC_PLLCFGR_PLLM_Pos) |
+  RCC->PLLCFGR = (pll_m << RCC_PLLCFGR_PLLM_Pos) |
                  (336UL << RCC_PLLCFGR_PLLN_Pos) |
-                 RCC_PLLCFGR_PLLSRC_HSE |
+                 pll_source |
                  (7UL << RCC_PLLCFGR_PLLQ_Pos);
 
   RCC->CR |= RCC_CR_PLLON;
@@ -155,7 +170,10 @@ SBL_CODE void SBL_Run(void) {
     if (!SBL_RecLooksValid()) {
       SBL_UiRunRecoveryException();
     }
-    SRE_Run(boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT ? REC_MODE_FORMAT :
+    if (!SBL_ClockConfig()) {
+      REC_Run(REC_MODE_CLOCK_ERROR);
+    }
+    REC_Run(boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT ? REC_MODE_FORMAT :
             boot_target == SBL_BOOT_TARGET_RECOVERY_UPGRADE ? REC_MODE_UPGRADE :
             REC_MODE_WAIT);
   }

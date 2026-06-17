@@ -22,6 +22,7 @@
 
 SBL_CODE void SBL_Delay(volatile uint32_t loops);
 SBL_CODE void SBL_DelayMs(uint32_t ms);
+SBL_CODE void SBL_WatchdogFeed(void);
 SBL_CODE void SBL_GpioSet(GPIO_TypeDef *port, uint32_t pin);
 SBL_CODE void SBL_GpioReset(GPIO_TypeDef *port, uint32_t pin);
 SBL_CODE uint8_t SBL_FlashUnlock(void);
