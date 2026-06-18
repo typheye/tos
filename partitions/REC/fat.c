@@ -9,11 +9,12 @@
 #include "tos_partitions.h"
 
 #define REC_SD_TIMEOUT_MS 5000U
+#define REC_SD_FAST_READY_MS 750U
 #define REC_BLOCK_IO_TIMEOUT_MS 300U
 #define REC_FLASH_BUF_SZ 512U
 #define REC_SD_IO_ATTEMPTS 2U
 #ifndef REC_ENABLE_WIDE_BUS
-#define REC_ENABLE_WIDE_BUS 0
+#define REC_ENABLE_WIDE_BUS 1
 #endif
 
 /* Keep destructive userdata erase disabled during development. Set to 0 only
@@ -223,37 +224,38 @@ static REC_CODE void rec_sd_drop(void) {
   rec_card_block_size = 0U;
 }
 
-static REC_CODE DSTATUS rec_disk_initialize(BYTE lun) {
+static REC_CODE DSTATUS rec_disk_initialize_profile(BYTE lun,
+                                                    uint32_t ready_timeout_ms) {
   HAL_SD_CardInfoTypeDef info;
   (void)lun;
 
   rec_card_blocks = 0U;
   rec_card_block_size = 512U;
 
-  MX_SDIO_SD_Init();
-  (void)HAL_SD_DeInit(&hsd);
-  SBL_DelayMs(20U);
+  /* On a fresh REC boot the SD handle is still RESET.  The old sequence
+   * called HAL_SD_DeInit() unconditionally before the first HAL_SD_Init(),
+   * then waited another 220 ms and repeatedly queried a cached CardInfo
+   * structure.  That made USB MSC startup visibly slow and did not add any
+   * real card readiness guarantee.  Only de-initialize an actually active
+   * handle, then let HAL_SD_Init() perform the complete card power-up and
+   * identification sequence once. */
+  if (hsd.Instance == SDIO && hsd.State != HAL_SD_STATE_RESET) {
+    (void)HAL_SD_DeInit(&hsd);
+  }
   MX_SDIO_SD_Init();
   __HAL_RCC_DMA2_CLK_ENABLE();
   if (HAL_SD_Init(&hsd) != HAL_OK) {
     rec_copy_error(rec_err_sdio);
     return STA_NOINIT;
   }
-  SBL_DelayMs(200U);
 
-  for (uint8_t i = 0U; i < 5U; ++i) {
-    if (HAL_SD_GetCardInfo(&hsd, &info) == HAL_OK &&
-        (info.LogBlockNbr > 0U || info.BlockNbr > 0U)) {
-      /* HAL_SD_ReadBlocks()/WriteBlocks() use logical block addressing.  Use
-       * the logical geometry reported by HAL (normally 512-byte sectors), and
-       * only fall back to the legacy fields for older HAL/card combinations. */
-      rec_card_blocks = info.LogBlockNbr ? info.LogBlockNbr : info.BlockNbr;
-      rec_card_block_size = info.LogBlockSize ? info.LogBlockSize
-                                              : (info.BlockSize ? info.BlockSize
-                                                                : 512U);
-      break;
-    }
-    SBL_DelayMs(100U);
+  if (HAL_SD_GetCardInfo(&hsd, &info) == HAL_OK) {
+    /* HAL_SD_GetCardInfo() copies geometry already populated by HAL_SD_Init();
+     * it does not need a retry delay. */
+    rec_card_blocks = info.LogBlockNbr ? info.LogBlockNbr : info.BlockNbr;
+    rec_card_block_size = info.LogBlockSize ? info.LogBlockSize
+                                            : (info.BlockSize ? info.BlockSize
+                                                              : 512U);
   }
   if (rec_card_blocks == 0U) {
     rec_copy_error(rec_err_card_info);
@@ -269,11 +271,19 @@ static REC_CODE DSTATUS rec_disk_initialize(BYTE lun) {
   (void)HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B);
 #endif
 
-  if (!rec_wait_ready(REC_SD_TIMEOUT_MS)) {
+  if (!rec_wait_ready(ready_timeout_ms)) {
     rec_copy_error(rec_err_card_ready);
     return STA_NOINIT;
   }
   return 0U;
+}
+
+static REC_CODE DSTATUS rec_disk_initialize(BYTE lun) {
+  return rec_disk_initialize_profile(lun, REC_SD_TIMEOUT_MS);
+}
+
+static REC_CODE DSTATUS rec_disk_initialize_fast(BYTE lun) {
+  return rec_disk_initialize_profile(lun, REC_SD_FAST_READY_MS);
 }
 
 static REC_CODE DSTATUS rec_disk_status(BYTE lun) {
@@ -1030,7 +1040,7 @@ REC_CODE uint8_t REC_BlockInit(uint32_t *block_count) {
     rec_copy_error(rec_err_memory);
     return 0U;
   }
-  if (rec_card_blocks == 0U && rec_disk_initialize(0U) != 0U) {
+  if (rec_card_blocks == 0U && rec_disk_initialize_fast(0U) != 0U) {
     return 0U;
   }
   if (rec_card_block_size != 512U || rec_card_blocks == 0U) {
@@ -1048,37 +1058,41 @@ REC_CODE uint8_t REC_BlockReady(void) {
   return rec_disk_status(0U) == 0U ? 1U : 0U;
 }
 
-REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer) {
-  if (!buffer) {
+REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer,
+                               uint32_t block_count) {
+  if (!buffer || block_count == 0U) {
     return 0U;
   }
   if (rec_card_blocks == 0U && !REC_BlockInit(0)) {
     return 0U;
   }
-  if (lba >= rec_card_blocks || ((uint32_t)buffer & 3U) != 0U) {
+  if (lba >= rec_card_blocks || block_count > (rec_card_blocks - lba) ||
+      ((uint32_t)buffer & 3U) != 0U) {
     return 0U;
   }
   /* MSC must never hold a BOT transaction in NAK for the multi-second retry
    * policy used by recovery flashing.  A raw block either completes promptly
    * or the MSC layer reports MEDIUM ERROR and re-probes from its main loop. */
-  if (HAL_SD_ReadBlocks(&hsd, buffer, lba, 1U,
+  if (HAL_SD_ReadBlocks(&hsd, buffer, lba, block_count,
                         REC_BLOCK_IO_TIMEOUT_MS) != HAL_OK) {
     return 0U;
   }
   return rec_wait_ready(REC_BLOCK_IO_TIMEOUT_MS);
 }
 
-REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer) {
-  if (!buffer) {
+REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer,
+                                uint32_t block_count) {
+  if (!buffer || block_count == 0U) {
     return 0U;
   }
   if (rec_card_blocks == 0U && !REC_BlockInit(0)) {
     return 0U;
   }
-  if (lba >= rec_card_blocks || ((uint32_t)buffer & 3U) != 0U) {
+  if (lba >= rec_card_blocks || block_count > (rec_card_blocks - lba) ||
+      ((uint32_t)buffer & 3U) != 0U) {
     return 0U;
   }
-  if (HAL_SD_WriteBlocks(&hsd, (uint8_t *)buffer, lba, 1U,
+  if (HAL_SD_WriteBlocks(&hsd, (uint8_t *)buffer, lba, block_count,
                          REC_BLOCK_IO_TIMEOUT_MS) != HAL_OK) {
     return 0U;
   }

@@ -135,7 +135,13 @@ FRESULT FMCore_MountStorage(FATFS *fs, bool log_result) {
   if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized()) return FR_NOT_READY;
   if (g_storage_mounted) return FR_OK;
   res = f_mount(fs ? fs : &g_storage_fs, "0:", 1U);
-  if (res == FR_OK) g_storage_mounted = true;
+  if (res == FR_OK) {
+    g_storage_mounted = true;
+    /* Create the persistent TOS directories as soon as a valid initialized
+     * SD volume is mounted.  This also makes file logging independent of the
+     * exact order of later TOS subsystem initialization. */
+    (void)FMCore_PrepareSystemStorage();
+  }
   if (log_result) {
     LOG_I("FMCR", "storage mount => %s(%d)", FMCore_FResultName(res), (int)res);
   }
@@ -485,6 +491,12 @@ static FRESULT ensure_tos_dir(const char *leaf_dir) {
   if (res != FR_OK && res != FR_EXIST) return res;
   res = f_mkdir(leaf_dir);
   return res == FR_EXIST ? FR_OK : res;
+}
+
+FRESULT FMCore_PrepareSystemStorage(void) {
+  FRESULT res = ensure_tos_dir(FMCORE_LOG_DIR);
+  if (res != FR_OK) return res;
+  return ensure_tos_dir(FMCORE_DUMP_DIR);
 }
 
 FRESULT FMCore_AppendBootLog(const char *line, uint32_t len) {

@@ -82,5 +82,8 @@ SBL_CODE void SBL_USB_DisconnectPulse(void) {
   GPIOA->OTYPER &= ~(1UL << 12U);
   GPIOA->PUPDR &= ~(3UL << (12U * 2U));
   GPIOA->BSRR = (1UL << (12U + 16U));
-  SBL_DelayMs(80U);
+  /* Full-speed hosts only need a brief D+ disconnect to force a clean new
+   * enumeration.  Twenty milliseconds is comfortably above the USB minimum
+   * while avoiding an unnecessary visible startup pause. */
+  SBL_DelayMs(20U);
 }

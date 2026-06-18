@@ -15,8 +15,10 @@
 #define REC_MSC_OUT_EP           0x01U
 #define REC_MSC_EP_MPS           64U
 #define REC_MSC_BLOCK_SIZE       512U
+#define REC_MSC_IO_BLOCKS        8U
+#define REC_MSC_IO_BUFFER_SIZE   (REC_MSC_BLOCK_SIZE * REC_MSC_IO_BLOCKS)
 #define REC_MSC_ENUM_GRACE_MS    6000U
-#define REC_MSC_RETRY_MS         1500U
+#define REC_MSC_RETRY_MS         500U
 
 #define MSC_REQ_BOT_RESET        0xFFU
 #define MSC_REQ_GET_MAX_LUN      0xFEU
@@ -41,8 +43,11 @@
 #define SCSI_SENSE_NOT_READY     0x02U
 #define SCSI_SENSE_MEDIUM_ERROR  0x03U
 #define SCSI_SENSE_ILLEGAL_REQ   0x05U
+#define SCSI_ASC_LUN_NOT_READY   0x04U
+#define SCSI_ASCQ_BECOMING_READY 0x01U
 #define SCSI_ASC_NO_MEDIUM       0x3AU
 #define SCSI_ASC_INVALID_CMD     0x20U
+#define SCSI_ASC_INVALID_FIELD   0x24U
 #define SCSI_ASC_LBA_RANGE       0x21U
 #define SCSI_ASC_WRITE_FAULT     0x03U
 #define SCSI_ASC_READ_ERROR      0x11U
@@ -65,9 +70,11 @@ typedef struct {
   uint8_t rx[REC_MSC_EP_MPS];
   volatile uint8_t sense_key;
   volatile uint8_t sense_asc;
+  volatile uint8_t sense_ascq;
   volatile uint8_t stage;
   volatile uint8_t started;
   volatile uint8_t storage_ready;
+  volatile uint8_t storage_initializing;
   volatile uint8_t csw_status;
   volatile uint8_t bot_generation;
   volatile uint8_t io_generation;
@@ -82,6 +89,7 @@ typedef struct {
   volatile uint32_t write_expected;
   volatile uint32_t write_received;
   volatile uint32_t sector_pos;
+  volatile uint32_t io_blocks;
   volatile uint32_t enum_deadline;
   volatile uint32_t retry_at;
   uint8_t * volatile tx_buf;
@@ -90,7 +98,8 @@ typedef struct {
 
 static USBD_HandleTypeDef rec_msc_dev;
 static REC_MSC_Context rec_msc;
-static uint8_t rec_msc_sector_storage[REC_MSC_BLOCK_SIZE] __attribute__((aligned(4)));
+static uint8_t rec_msc_sector_storage[REC_MSC_IO_BUFFER_SIZE]
+    __attribute__((aligned(4)));
 static uint8_t rec_msc_str_desc[64] __ALIGN_END;
 static uint8_t rec_msc_cfg_desc[REC_MSC_CFG_SIZE] __ALIGN_END;
 static uint8_t rec_msc_ep0_reply[2] __attribute__((aligned(4)));
@@ -164,7 +173,7 @@ __ALIGN_BEGIN static const uint8_t rec_msc_lang_desc[USB_LEN_LANGID_STR_DESC] RE
 __ALIGN_BEGIN static const uint8_t rec_msc_cfg_desc_template[REC_MSC_CFG_SIZE] REC_CONST __ALIGN_END = {
     0x09, USB_DESC_TYPE_CONFIGURATION,
     LOBYTE(REC_MSC_CFG_SIZE), HIBYTE(REC_MSC_CFG_SIZE),
-    0x01, 0x01, 0x00, 0xC0, 0x32,
+    0x01, 0x01, 0x00, 0x80, 0x32,
 
     0x09, USB_DESC_TYPE_INTERFACE,
     0x00, 0x00, 0x02, 0x08, 0x06, 0x50, 0x00,
@@ -302,12 +311,18 @@ static void rec_msc_copy(uint8_t *dst, const uint8_t *src, uint32_t n) {
   }
 }
 
-static void rec_msc_set_sense(uint8_t key, uint8_t asc) {
+static void rec_msc_set_sense_ex(uint8_t key, uint8_t asc, uint8_t ascq) {
   rec_msc.sense_key = key;
   rec_msc.sense_asc = asc;
+  rec_msc.sense_ascq = ascq;
+}
+
+static void rec_msc_set_sense(uint8_t key, uint8_t asc) {
+  rec_msc_set_sense_ex(key, asc, 0U);
 }
 
 static void rec_msc_storage_mark_offline(uint8_t key, uint8_t asc) {
+  rec_msc.storage_initializing = 0U;
   rec_msc.storage_ready = 0U;
   rec_msc.card_blocks = 0U;
   rec_msc_set_sense(key, asc);
@@ -318,24 +333,23 @@ static void rec_msc_storage_mark_offline(uint8_t key, uint8_t asc) {
 static uint8_t rec_msc_storage_init(void) {
   uint32_t blocks = 0U;
 
+  rec_msc.storage_initializing = 1U;
+  rec_msc.storage_ready = 0U;
+  rec_msc.card_blocks = 0U;
+  rec_msc_set_sense_ex(SCSI_SENSE_NOT_READY, SCSI_ASC_LUN_NOT_READY,
+                       SCSI_ASCQ_BECOMING_READY);
   REC_BlockRelease();
   if (!REC_BlockInit(&blocks) || blocks == 0U) {
     rec_msc_storage_mark_offline(SCSI_SENSE_NOT_READY,
                                  SCSI_ASC_NO_MEDIUM);
     return 0U;
   }
-  /* Prove that the raw path can read LBA0 before exposing capacity to the
-   * host.  Card identification alone is insufficient: a broken polling path
-   * otherwise enumerates as a disk but hangs Explorer on its first boot-sector
-   * read. */
-  if (!REC_BlockRead(0U, rec_msc.sector_buf)) {
-    REC_BlockRelease();
-    rec_msc_storage_mark_offline(SCSI_SENSE_MEDIUM_ERROR,
-                                 SCSI_ASC_READ_ERROR);
-    return 0U;
-  }
-
+  /* Do not pre-read LBA0 here.  READ10 is already bridged through the REC main
+   * loop with a bounded timeout and proper BOT error recovery, so probing the
+   * boot sector only delays drive availability and duplicates the host's first
+   * filesystem read. */
   rec_msc.card_blocks = blocks;
+  rec_msc.storage_initializing = 0U;
   rec_msc.storage_ready = 1U;
   rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
   return 1U;
@@ -404,8 +418,9 @@ static void rec_msc_send_data(USBD_HandleTypeDef *pdev, uint8_t *buf,
   rec_msc_send_next_in(pdev);
 }
 
-static void rec_msc_fail(USBD_HandleTypeDef *pdev, uint8_t key, uint8_t asc) {
-  rec_msc_set_sense(key, asc);
+static void rec_msc_fail_ex(USBD_HandleTypeDef *pdev, uint8_t key,
+                            uint8_t asc, uint8_t ascq) {
+  rec_msc_set_sense_ex(key, asc, ascq);
   rec_msc.csw_status = 1U;
   if (rec_msc.residue == 0U) {
     rec_msc_send_csw(pdev);
@@ -425,21 +440,82 @@ static void rec_msc_fail(USBD_HandleTypeDef *pdev, uint8_t key, uint8_t asc) {
   rec_msc.stage = REC_MSC_STAGE_STALL;
 }
 
-static void rec_msc_scsi_inquiry(USBD_HandleTypeDef *pdev) {
+static void rec_msc_fail(USBD_HandleTypeDef *pdev, uint8_t key, uint8_t asc) {
+  rec_msc_fail_ex(pdev, key, asc, 0U);
+}
+
+static void rec_msc_fail_media(USBD_HandleTypeDef *pdev) {
+  if (rec_msc.storage_initializing) {
+    rec_msc_fail_ex(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_LUN_NOT_READY,
+                    SCSI_ASCQ_BECOMING_READY);
+  } else {
+    rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+  }
+}
+
+static void rec_msc_scsi_inquiry(USBD_HandleTypeDef *pdev,
+                                 const uint8_t *cmd) {
   static const uint8_t vendor[] REC_CONST = "Typheye ";
   static const uint8_t product[] REC_CONST = "TOS REC SD      ";
   static const uint8_t rev[] REC_CONST = "0001";
+  static const uint8_t unit_serial[] REC_CONST = "TOSREC000001";
+  uint32_t len;
+
+  /* Match ST's official MSC SCSI implementation: Windows commonly asks for
+   * the supported VPD-page list and the unit serial number while creating the
+   * disk device.  Returning a standard INQUIRY payload for an EVPD request is
+   * protocol-invalid and can make the storage stack retry with long delays. */
+  if ((cmd[1] & 0x01U) != 0U) {
+    rec_msc_zero(rec_msc.sector_buf, 32U);
+    rec_msc.sector_buf[0] = 0x00U;
+    if (cmd[2] == 0x00U) {
+      rec_msc.sector_buf[1] = 0x00U;
+      rec_msc.sector_buf[3] = 2U;
+      rec_msc.sector_buf[4] = 0x00U;
+      rec_msc.sector_buf[5] = 0x80U;
+      len = 6U;
+    } else if (cmd[2] == 0x80U) {
+      rec_msc.sector_buf[1] = 0x80U;
+      rec_msc.sector_buf[3] = sizeof(unit_serial) - 1U;
+      rec_msc_copy(&rec_msc.sector_buf[4], unit_serial,
+                   sizeof(unit_serial) - 1U);
+      len = 4U + (sizeof(unit_serial) - 1U);
+    } else {
+      rec_msc_fail(pdev, SCSI_SENSE_ILLEGAL_REQ,
+                   SCSI_ASC_INVALID_FIELD);
+      return;
+    }
+    if (cmd[4] < len) {
+      len = cmd[4];
+    }
+    rec_msc_send_data(pdev, rec_msc.sector_buf, len);
+    return;
+  }
+
+  if (cmd[2] != 0U) {
+    rec_msc_fail(pdev, SCSI_SENSE_ILLEGAL_REQ, SCSI_ASC_INVALID_FIELD);
+    return;
+  }
 
   rec_msc_zero(rec_msc.sector_buf, 36U);
   rec_msc.sector_buf[0] = 0x00U;
-  rec_msc.sector_buf[1] = 0x80U;
+  /* REC presents the inserted card as a fixed USB disk for the duration of the
+   * recovery session.  Reporting RMB=0 keeps Windows on the normal disk path
+   * instead of creating the extra WPD/Portable Device layer and its removable
+   * media polling delay.  Physical removal is still detected by failed SDIO
+   * I/O and reported through REQUEST SENSE. */
+  rec_msc.sector_buf[1] = 0x00U;
   rec_msc.sector_buf[2] = 0x04U;
   rec_msc.sector_buf[3] = 0x02U;
   rec_msc.sector_buf[4] = 31U;
   rec_msc_copy(&rec_msc.sector_buf[8], vendor, 8U);
   rec_msc_copy(&rec_msc.sector_buf[16], product, 16U);
   rec_msc_copy(&rec_msc.sector_buf[32], rev, 4U);
-  rec_msc_send_data(pdev, rec_msc.sector_buf, 36U);
+  len = 36U;
+  if (cmd[4] < len) {
+    len = cmd[4];
+  }
+  rec_msc_send_data(pdev, rec_msc.sector_buf, len);
 }
 
 static void rec_msc_scsi_request_sense(USBD_HandleTypeDef *pdev) {
@@ -448,13 +524,14 @@ static void rec_msc_scsi_request_sense(USBD_HandleTypeDef *pdev) {
   rec_msc.sector_buf[2] = rec_msc.sense_key;
   rec_msc.sector_buf[7] = 10U;
   rec_msc.sector_buf[12] = rec_msc.sense_asc;
+  rec_msc.sector_buf[13] = rec_msc.sense_ascq;
   rec_msc_send_data(pdev, rec_msc.sector_buf, 18U);
   rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
 }
 
 static void rec_msc_scsi_read_capacity(USBD_HandleTypeDef *pdev) {
   if (!rec_msc_storage_online_cached()) {
-    rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+    rec_msc_fail_media(pdev);
     return;
   }
   rec_msc_put_be32(&rec_msc.sector_buf[0], rec_msc.card_blocks - 1U);
@@ -464,12 +541,13 @@ static void rec_msc_scsi_read_capacity(USBD_HandleTypeDef *pdev) {
 
 static void rec_msc_scsi_read_format_cap(USBD_HandleTypeDef *pdev) {
   if (!rec_msc_storage_online_cached()) {
-    rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+    rec_msc_fail_media(pdev);
     return;
   }
   rec_msc_zero(rec_msc.sector_buf, 12U);
   rec_msc.sector_buf[3] = 8U;
-  rec_msc_put_be32(&rec_msc.sector_buf[4], rec_msc.card_blocks);
+  /* Match ST's current MSC SCSI implementation. */
+  rec_msc_put_be32(&rec_msc.sector_buf[4], rec_msc.card_blocks - 1U);
   rec_msc.sector_buf[8] = 0x02U;
   rec_msc.sector_buf[9] = 0x00U;
   rec_msc.sector_buf[10] = 0x02U;
@@ -496,7 +574,7 @@ static void rec_msc_scsi_read10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
   uint32_t max_blocks = rec_msc.residue / REC_MSC_BLOCK_SIZE;
 
   if (!rec_msc_storage_online_cached()) {
-    rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+    rec_msc_fail_media(pdev);
     return;
   }
   if (blocks > max_blocks) {
@@ -525,7 +603,7 @@ static void rec_msc_scsi_write10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
   uint32_t max_bytes = blocks * REC_MSC_BLOCK_SIZE;
 
   if (!rec_msc_storage_online_cached()) {
-    rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+    rec_msc_fail_media(pdev);
     return;
   }
   if (blocks == 0U || rec_msc.residue == 0U) {
@@ -536,13 +614,15 @@ static void rec_msc_scsi_write10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
     rec_msc_fail(pdev, SCSI_SENSE_ILLEGAL_REQ, SCSI_ASC_LBA_RANGE);
     return;
   }
-  if (rec_msc.residue < max_bytes) {
-    max_bytes = rec_msc.residue;
+  if (rec_msc.residue != max_bytes) {
+    rec_msc_fail(pdev, SCSI_SENSE_ILLEGAL_REQ, SCSI_ASC_INVALID_FIELD);
+    return;
   }
   rec_msc.write_lba = lba;
   rec_msc.write_expected = max_bytes;
   rec_msc.write_received = 0U;
   rec_msc.sector_pos = 0U;
+  rec_msc.io_blocks = 0U;
   __DMB();
   rec_msc.stage = REC_MSC_STAGE_DATA_OUT;
   (void)USBD_LL_PrepareReceive(pdev, REC_MSC_OUT_EP, rec_msc.rx,
@@ -561,11 +641,11 @@ static void rec_msc_dispatch_scsi(USBD_HandleTypeDef *pdev) {
       if (rec_msc_storage_online_cached()) {
         rec_msc_send_csw(pdev);
       } else {
-        rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+        rec_msc_fail_media(pdev);
       }
       break;
     case SCSI_INQUIRY:
-      rec_msc_scsi_inquiry(pdev);
+      rec_msc_scsi_inquiry(pdev, cmd);
       break;
     case SCSI_REQUEST_SENSE:
       rec_msc_scsi_request_sense(pdev);
@@ -601,7 +681,7 @@ static void rec_msc_dispatch_scsi(USBD_HandleTypeDef *pdev) {
       break;
     case SCSI_SYNC_CACHE10:
       if (!rec_msc_storage_online_cached()) {
-        rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+        rec_msc_fail_media(pdev);
       } else {
         rec_msc.io_generation = rec_msc.bot_generation;
         __DMB();
@@ -632,7 +712,7 @@ static void rec_msc_parse_cbw(USBD_HandleTypeDef *pdev, uint32_t len) {
 static void rec_msc_handle_write_data(USBD_HandleTypeDef *pdev, uint32_t len) {
   uint32_t pos = 0U;
   while (pos < len && rec_msc.write_received < rec_msc.write_expected) {
-    uint32_t room = REC_MSC_BLOCK_SIZE - rec_msc.sector_pos;
+    uint32_t room = REC_MSC_IO_BUFFER_SIZE - rec_msc.sector_pos;
     uint32_t left = len - pos;
     uint32_t n = (left < room) ? left : room;
     uint32_t expected_left = rec_msc.write_expected - rec_msc.write_received;
@@ -649,10 +729,18 @@ static void rec_msc_handle_write_data(USBD_HandleTypeDef *pdev, uint32_t len) {
     } else {
       rec_msc.residue = 0U;
     }
-    if (rec_msc.sector_pos == REC_MSC_BLOCK_SIZE) {
+    if (rec_msc.sector_pos == REC_MSC_IO_BUFFER_SIZE ||
+        rec_msc.write_received == rec_msc.write_expected) {
+      if ((rec_msc.sector_pos % REC_MSC_BLOCK_SIZE) != 0U) {
+        rec_msc.csw_status = 1U;
+        rec_msc_set_sense(SCSI_SENSE_ILLEGAL_REQ, SCSI_ASC_INVALID_FIELD);
+        rec_msc_send_csw(pdev);
+        return;
+      }
       /* Do not issue SDIO commands from the USB OUT callback.  Leave the OUT
        * endpoint unarmed so the host sees NAK until REC_MSC_Tick() commits the
-       * complete sector. */
+       * accumulated multi-sector chunk. */
+      rec_msc.io_blocks = rec_msc.sector_pos / REC_MSC_BLOCK_SIZE;
       rec_msc.io_generation = rec_msc.bot_generation;
       __DMB();
       rec_msc.stage = REC_MSC_STAGE_WRITE_WAIT;
@@ -797,6 +885,7 @@ REC_CODE uint8_t REC_MSC_IsStarted(void) {
 
 REC_CODE uint8_t REC_MSC_Start(void) {
   uint32_t now;
+  uint8_t media_ready;
 
   if (rec_msc.started) {
     return 1U;
@@ -804,6 +893,7 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc.sector_buf = rec_msc_sector_storage;
 
   rec_msc.storage_ready = 0U;
+  rec_msc.storage_initializing = 1U;
   rec_msc.card_blocks = 0U;
   rec_msc.stage = REC_MSC_STAGE_CBW;
   rec_msc.csw_status = 0U;
@@ -812,16 +902,22 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc.write_expected = 0U;
   rec_msc.write_received = 0U;
   rec_msc.sector_pos = 0U;
+  rec_msc.io_blocks = 0U;
   rec_msc.bot_generation = 0U;
   rec_msc.io_generation = 0U;
-  rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
-  /* Probe the card before USB enumeration.  This keeps potentially slow SDIO
-   * initialization out of the USB IRQ path, so Windows sees a responsive MSC
-   * device instead of timing out while issuing READ CAPACITY/TUR.  The USB
-   * device still enumerates with "no medium" if the card cannot be prepared. */
-  (void)rec_msc_storage_init();
+  rec_msc_set_sense_ex(SCSI_SENSE_NOT_READY, SCSI_ASC_LUN_NOT_READY,
+                       SCSI_ASCQ_BECOMING_READY);
   rec_msc_copy(rec_msc_cfg_desc, rec_msc_cfg_desc_template,
                sizeof(rec_msc_cfg_desc));
+
+  /* ST's official BOT implementation initializes the storage backend before
+   * arming the endpoint for the first CBW.  Do the equivalent here, but before
+   * connecting D+, so Windows never observes the transient NOT READY state
+   * that triggers its roughly 10-15 second removable-media polling backoff.
+   * The fast REC profile is bounded; a missing/bad card still reaches USB as
+   * a no-medium device instead of blocking REC indefinitely. */
+  media_ready = rec_msc_storage_init();
+
   SBL_USB_DisconnectPulse();
   if (USBD_Init(&rec_msc_dev, (USBD_DescriptorsTypeDef *)&REC_MSC_Desc,
                 DEVICE_FS) != USBD_OK) {
@@ -848,7 +944,7 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc.started = 1U;
   now = HAL_GetTick();
   rec_msc.enum_deadline = now + REC_MSC_ENUM_GRACE_MS;
-  rec_msc.retry_at = 0U;
+  rec_msc.retry_at = media_ready ? 0U : (now + REC_MSC_RETRY_MS);
   return 1U;
 }
 
@@ -859,6 +955,7 @@ REC_CODE void REC_MSC_Stop(void) {
   }
   rec_msc.started = 0U;
   REC_BlockRelease();
+  rec_msc.storage_initializing = 0U;
   rec_msc_storage_mark_offline(SCSI_SENSE_NO_SENSE, 0U);
   rec_msc.stage = REC_MSC_STAGE_CBW;
   rec_msc.enum_deadline = 0U;
@@ -882,7 +979,11 @@ REC_CODE void REC_MSC_Tick(void) {
   /* SD media discovery/recovery belongs to the REC main loop.  The USB host
    * keeps receiving prompt NOT READY responses while this potentially slow
    * operation runs, because all USB interrupt callbacks remain nonblocking. */
-  if (!rec_msc.storage_ready && rec_msc.stage == REC_MSC_STAGE_CBW &&
+  if (!rec_msc.storage_ready &&
+      rec_msc.stage != REC_MSC_STAGE_READ_WAIT &&
+      rec_msc.stage != REC_MSC_STAGE_WRITE_WAIT &&
+      rec_msc.stage != REC_MSC_STAGE_SYNC_WAIT &&
+      rec_msc.stage != REC_MSC_STAGE_DATA_OUT &&
       (rec_msc.retry_at == 0U || (int32_t)(now - rec_msc.retry_at) >= 0)) {
     rec_msc.retry_at = now + REC_MSC_RETRY_MS;
     if (rec_msc_storage_init()) {
@@ -891,8 +992,12 @@ REC_CODE void REC_MSC_Tick(void) {
   }
 
   if (rec_msc.stage == REC_MSC_STAGE_READ_WAIT) {
+    uint32_t blocks = rec_msc.read_blocks;
+    if (blocks > REC_MSC_IO_BLOCKS) {
+      blocks = REC_MSC_IO_BLOCKS;
+    }
     generation = rec_msc.io_generation;
-    ok = REC_BlockRead(rec_msc.read_lba, rec_msc.sector_buf);
+    ok = REC_BlockRead(rec_msc.read_lba, rec_msc.sector_buf, blocks);
     if (generation != rec_msc.bot_generation ||
         rec_msc.stage != REC_MSC_STAGE_READ_WAIT) {
       return;
@@ -907,10 +1012,10 @@ REC_CODE void REC_MSC_Tick(void) {
       rec_msc_send_csw(&rec_msc_dev);
       return;
     }
-    rec_msc.read_lba++;
-    rec_msc.read_blocks--;
+    rec_msc.read_lba += blocks;
+    rec_msc.read_blocks -= blocks;
     rec_msc.tx_buf = rec_msc.sector_buf;
-    rec_msc.tx_len = REC_MSC_BLOCK_SIZE;
+    rec_msc.tx_len = blocks * REC_MSC_BLOCK_SIZE;
     rec_msc.tx_pos = 0U;
     __DMB();
     rec_msc.stage = REC_MSC_STAGE_DATA_IN;
@@ -920,7 +1025,8 @@ REC_CODE void REC_MSC_Tick(void) {
 
   if (rec_msc.stage == REC_MSC_STAGE_WRITE_WAIT) {
     generation = rec_msc.io_generation;
-    ok = REC_BlockWrite(rec_msc.write_lba, rec_msc.sector_buf);
+    ok = REC_BlockWrite(rec_msc.write_lba, rec_msc.sector_buf,
+                        rec_msc.io_blocks);
     if (generation != rec_msc.bot_generation ||
         rec_msc.stage != REC_MSC_STAGE_WRITE_WAIT) {
       return;
@@ -936,7 +1042,8 @@ REC_CODE void REC_MSC_Tick(void) {
       rec_msc_send_csw(&rec_msc_dev);
       return;
     }
-    rec_msc.write_lba++;
+    rec_msc.write_lba += rec_msc.io_blocks;
+    rec_msc.io_blocks = 0U;
     rec_msc.sector_pos = 0U;
     if (rec_msc.write_received >= rec_msc.write_expected) {
       rec_msc_send_csw(&rec_msc_dev);

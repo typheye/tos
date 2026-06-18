@@ -23,8 +23,10 @@ REC_CODE const char *REC_FatLastError(void);
  * never from a USB interrupt callback. */
 REC_CODE uint8_t REC_BlockInit(uint32_t *block_count);
 REC_CODE uint8_t REC_BlockReady(void);
-REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer);
-REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer);
+REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer,
+                               uint32_t block_count);
+REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer,
+                                uint32_t block_count);
 REC_CODE uint8_t REC_BlockSync(void);
 REC_CODE void REC_BlockRelease(void);
 

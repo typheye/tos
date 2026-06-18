@@ -64,6 +64,7 @@ FRESULT FMCore_CopyFile(const char *src, const char *dst, bool fatal_on_storage_
 bool FMCore_IsInitialized(void);
 FRESULT FMCore_NextIndexedPath(const char *dir, const char *ext,
                                char *out, size_t out_sz);
+FRESULT FMCore_PrepareSystemStorage(void);
 FRESULT FMCore_AppendBootLog(const char *line, uint32_t len);
 bool FMCore_IsBootLogFaultFatal(void);
 FRESULT FMCore_WriteSystemDump(uint32_t code, const char *name,

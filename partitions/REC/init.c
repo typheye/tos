@@ -157,6 +157,10 @@ REC_CODE void REC_Run(uint8_t mode) {
   effective_mode = rec_resolve_mode(mode);
 
   if (effective_mode == REC_MODE_WAIT) {
+    /* Paint first so the user gets immediate feedback.  REC_MSC_Start() now
+     * performs a bounded SD warm-up before connecting USB, which prevents the
+     * host from observing a transient NOT READY medium and entering a long
+     * retry backoff. */
     rec_draw_full(rec_restart, SBL_GREEN);
     (void)REC_MSC_Start();
     while (1) {

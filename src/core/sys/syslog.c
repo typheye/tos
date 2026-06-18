@@ -99,6 +99,17 @@ bool SysLog_IsFileOutputDisabled(void) {
 
 static void syslog_handle_file_result(FRESULT res) {
   if (res == FR_OK) return;
+
+  /* Logging starts before SDIO/FatFs is mounted.  Those early messages are
+   * expected to return a transient readiness/path result and must not disable
+   * file logging for the rest of the boot.  Once /storage is mounted the next
+   * log line retries, creates /storage/tos/log, and opens the boot log. */
+  if (res == FR_NOT_READY || res == FR_NOT_ENABLED ||
+      res == FR_INVALID_DRIVE || res == FR_NO_FILESYSTEM ||
+      res == FR_NO_PATH) {
+    return;
+  }
+
   g_syslog_file_disabled = 1U;
   printf("%s [WARN ] [SYS  ] SD log write failed: %d; file logging disabled\r\n",
          syslog_ts(), (int)res);
