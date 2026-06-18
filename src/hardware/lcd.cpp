@@ -29,6 +29,30 @@ static uint16_t *lcd_tile_buffer = nullptr;
 static volatile uint8_t lcd_debug_overlay_suppressed = 0;
 static volatile uint8_t lcd_preserve_sah_splash = 1;
 
+static void lcd_backlight_pwm_ensure(void) {
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_TIM4_CLK_ENABLE();
+
+  const uint32_t mode = (GPIOD->MODER >> (13U * 2U)) & 0x3U;
+  const uint32_t af = (GPIOD->AFR[1] >> ((13U - 8U) * 4U)) & 0xFU;
+
+  /* Recover if the early splash helper left PD13 as a plain GPIO. */
+  if (mode != 0x2U || af != GPIO_AF2_TIM4) {
+    GPIO_InitTypeDef gpio{};
+    gpio.Pin = GPIO_PIN_13;
+    gpio.Mode = GPIO_MODE_AF_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_HIGH;
+    gpio.Alternate = GPIO_AF2_TIM4;
+    HAL_GPIO_Init(GPIOD, &gpio);
+  }
+
+  if ((TIM4->CCER & TIM_CCER_CC2E) == 0U) {
+    (void)HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  }
+  TIM4->CR1 |= TIM_CR1_CEN;
+}
+
 extern "C" void SysUI_DebugOverlayBeginFrame(void);
 extern "C" void SysUI_DebugOverlayEndFrame(void);
 extern "C" void SysUI_DebugOverlayDraw(void);
@@ -413,7 +437,13 @@ void LCD::setBrightness(uint16_t val) {
   if (val > 1000)
     val = 1000;
   _brightness_pwm = val;
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, val);
+  lcd_backlight_pwm_ensure();
+
+  /* Keep the public scale independent of the timer period. */
+  const uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim4) + 1U;
+  const uint32_t compare =
+      (val >= 1000U) ? period : ((uint32_t)val * period) / 1000U;
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, compare);
 }
 
 void LCD::setAutoBrightness(bool on) {
@@ -443,7 +473,7 @@ void LCD::updateAutoBrightness(void) {
     _auto_brightness_logged = true;
   }
 
-  const uint32_t interval = _auto_brightness_force ? 0U : 300U;
+  const uint32_t interval = _auto_brightness_force ? 0U : 1000U;
   if ((uint32_t)(now - _auto_brightness_last) < interval)
     return;
   _auto_brightness_last = now;
@@ -453,6 +483,9 @@ void LCD::updateAutoBrightness(void) {
     return;
 
   float lux = boardTCS3472.getLux();
+  if (lux < 0.0f || lux > 20000.0f) {
+    return;
+  }
   uint16_t target;
   if (lux < 1)
     target = 50;

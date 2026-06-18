@@ -187,7 +187,11 @@ static void request_rec_init_if_needed(void) {
   bool needs_init = false;
 
   if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized()) {
-    needs_init = true;
+    /* No card, failed SDIO init, or hardware-disabled SD must not block TOS.
+     * REC INIT is only for an inserted card that can be reached but needs the
+     * TOS layout.  Boot without SD keeps /storage empty. */
+    LOG_W("MAIN", "SD unavailable; skip REC INIT and continue boot");
+    return;
   } else if ((res = FMCore_MountStorage(NULL, false)) == FR_NO_FILESYSTEM) {
     needs_init = true;
   } else if (res != FR_OK) {
@@ -288,6 +292,27 @@ static void cleanup_sd_root_whitelist(void) {
   }
 }
 
+static void cleanup_legacy_storage_dirs(void) {
+  FILINFO info;
+
+  if (TSDIO_IsHardDisabled() || !TSDIO_IsInitialized() ||
+      !FMCore_IsInitialized()) {
+    return;
+  }
+
+  if (f_stat("0:/storage/tos/_", &info) == FR_OK) {
+    SysWatchdog_FeedNow();
+    FRESULT res = sd_delete_recursive_quiet("0:/storage/tos/_");
+    SysWatchdog_FeedNow();
+    if (res == FR_OK || res == FR_NO_FILE || res == FR_NO_PATH) {
+      LOG_I("MAIN", "Removed legacy SD path: 0:/storage/tos/_");
+    } else {
+      LOG_W("MAIN", "Cannot remove legacy SD path: %s(%d)",
+            FMCore_FResultName(res), (int)res);
+    }
+  }
+}
+
 void TOS::init() {
   SysDram_Init();
   boardSerial.init();
@@ -319,6 +344,7 @@ void TOS::init() {
   request_rec_init_if_needed();
   if (!TSDIO_IsHardDisabled()) {
     cleanup_sd_root_whitelist();
+    cleanup_legacy_storage_dirs();
   } else {
     LOG_W("MAIN", "SD card is hard-disabled - SD features unavailable");
   }

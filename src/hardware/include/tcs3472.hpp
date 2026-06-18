@@ -136,6 +136,7 @@ private:
   I2C_HandleTypeDef *_hi2c;
   uint16_t _addr;
   bool _initialized;
+  bool _last_read_ok;
   uint8_t _gain;
   uint8_t _atime;
 
@@ -143,6 +144,7 @@ private:
   uint8_t readReg(uint8_t reg);
   void writeReg(uint8_t reg, uint8_t value);
   uint16_t readReg16(uint8_t reg);
+  bool readBytes(uint8_t reg, uint8_t *data, uint16_t length);
 
   
   float calculateColorTemperature(uint16_t r, uint16_t g, uint16_t b);

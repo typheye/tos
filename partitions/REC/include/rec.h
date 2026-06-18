@@ -16,6 +16,18 @@ REC_CODE uint8_t REC_FatInitStorage(void);
 REC_CODE void REC_FatRelease(void);
 REC_CODE const char *REC_FatLastError(void);
 
+/* Raw 512-byte block access used by REC USB MSC.  These wrappers deliberately
+ * reuse the same SDIO initialization/retry path as REC FatFs so the two REC
+ * storage users cannot drift into subtly different card geometry or bus
+ * setup.  All calls are blocking and therefore must run from REC main context,
+ * never from a USB interrupt callback. */
+REC_CODE uint8_t REC_BlockInit(uint32_t *block_count);
+REC_CODE uint8_t REC_BlockReady(void);
+REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer);
+REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer);
+REC_CODE uint8_t REC_BlockSync(void);
+REC_CODE void REC_BlockRelease(void);
+
 #define REC_MODE_WAIT    0U
 #define REC_MODE_FORMAT  1U
 #define REC_MODE_UPGRADE 2U

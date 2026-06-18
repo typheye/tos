@@ -38,6 +38,20 @@ static __attribute__((unused)) Flash_Status_t wait_ready(uint32_t timeout) {
 static inline void flash_unlock(void) { HAL_FLASH_Unlock(); }
 static inline void flash_lock(void)   { HAL_FLASH_Lock(); }
 
+/* The F407 flash data cache may retain the erased (0xFF) contents of a journal
+ * slot that was inspected immediately before programming.  Without an
+ * explicit reset, a later save in the same boot can believe the freshly
+ * written slot is still empty and attempt an illegal overwrite. */
+static void flash_data_cache_reset(void) {
+  if ((FLASH->ACR & FLASH_ACR_DCEN) != 0U) {
+    __HAL_FLASH_DATA_CACHE_DISABLE();
+    __HAL_FLASH_DATA_CACHE_RESET();
+    __HAL_FLASH_DATA_CACHE_ENABLE();
+  }
+  __DSB();
+  __ISB();
+}
+
 
 static Flash_Status_t erase_sector(uint32_t sector) {
   flash_unlock();
@@ -58,23 +72,28 @@ static Flash_Status_t erase_sector(uint32_t sector) {
 }
 
 
-static Flash_Status_t program_word(uint32_t addr, uint32_t data) {
+static Flash_Status_t program_words(uint32_t addr, const uint32_t *data,
+                                    uint32_t count) {
+  Flash_Status_t result = FLASH_OK;
+
+  if (!data || count == 0U || (addr & 3U) != 0U ||
+      (((uint32_t)data) & 3U) != 0U) {
+    return FLASH_ERR_ALIGN;
+  }
+
   flash_unlock();
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                           FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
-  HAL_StatusTypeDef st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, data);
-  Flash_Status_t ret = (st == HAL_OK) ? FLASH_OK : FLASH_ERR_PROGRAM;
-  flash_lock();
-  return ret;
-}
-
-
-static Flash_Status_t program_words(uint32_t addr, const uint32_t *data, uint32_t count) {
-  for (uint32_t i = 0; i < count; i++) {
-    Flash_Status_t st = program_word(addr + i * 4, data[i]);
-    if (st != FLASH_OK) return st;
+  for (uint32_t i = 0U; i < count; ++i) {
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr + i * 4U,
+                          data[i]) != HAL_OK) {
+      result = FLASH_ERR_PROGRAM;
+      break;
+    }
   }
-  return FLASH_OK;
+  flash_lock();
+  flash_data_cache_reset();
+  return result;
 }
 
 static bool flash_bl_state_erased(const TosTeeStateRecord *r) {
@@ -200,7 +219,7 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   Flash_Status_t st = check_align(pData, dataSize);
   if (st != FLASH_OK) return st;
 
-  uint32_t record[FLASH_RECORD_MAX / 4 + 2];
+  uint32_t record[(FLASH_RECORD_MAX + FLASH_HDR_SIZE + 3U) / 4U];
   Flash_Record_Header_t hdr;
   hdr.magic    = FLASH_RECORD_MAGIC;
   hdr.datasize = dataSize;
@@ -354,10 +373,25 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
     next = FLASH_DATA_ADDR;
   }
 
-  st = program_words(next, (const uint32_t *)&hdr,
-                     sizeof(hdr) / sizeof(uint32_t));
+  /* Commit the magic last.  A reset during payload/header programming leaves
+   * an invalid record that can never be mistaken for a completed save. */
+  st = program_words(next + sizeof(hdr), pData,
+                     dataSize / sizeof(uint32_t));
   if (st == FLASH_OK) {
-    st = program_words(next + sizeof(hdr), pData, dataSize / sizeof(uint32_t));
+    const uint32_t tail[2] = {hdr.crc, hdr.datasize};
+    st = program_words(next + sizeof(uint32_t), tail, 2U);
+  }
+  if (st == FLASH_OK) {
+    uint32_t magic = hdr.magic;
+    st = program_words(next, &magic, 1U);
+  }
+  if (st == FLASH_OK) {
+    Flash_Record_Header_t *written = NULL;
+    if (!rolling_record_valid(next, &written) ||
+        written->datasize != dataSize ||
+        memcmp((const void *)(next + FLASH_HDR_SIZE), pData, dataSize) != 0) {
+      st = FLASH_ERR_CRC;
+    }
   }
   LOG_I("FLASH", "Rolling write @0x%08lX %lu bytes: %s",
         next, (unsigned long)dataSize, st == FLASH_OK ? "OK" : "FAIL");

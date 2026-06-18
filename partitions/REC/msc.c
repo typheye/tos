@@ -15,13 +15,8 @@
 #define REC_MSC_OUT_EP           0x01U
 #define REC_MSC_EP_MPS           64U
 #define REC_MSC_BLOCK_SIZE       512U
-#define REC_MSC_SD_TIMEOUT_MS    500U
-#define REC_MSC_INIT_ATTEMPTS    2U
 #define REC_MSC_ENUM_GRACE_MS    6000U
 #define REC_MSC_RETRY_MS         1500U
-#ifndef REC_MSC_ENABLE_WIDE_BUS
-#define REC_MSC_ENABLE_WIDE_BUS 0
-#endif
 
 #define MSC_REQ_BOT_RESET        0xFFU
 #define MSC_REQ_GET_MAX_LUN      0xFEU
@@ -40,6 +35,7 @@
 #define SCSI_WRITE10             0x2AU
 #define SCSI_VERIFY10            0x2FU
 #define SCSI_SYNC_CACHE10        0x35U
+#define SCSI_MODE_SENSE10        0x5AU
 
 #define SCSI_SENSE_NO_SENSE      0x00U
 #define SCSI_SENSE_NOT_READY     0x02U
@@ -56,33 +52,39 @@ typedef enum {
   REC_MSC_STAGE_DATA_IN,
   REC_MSC_STAGE_DATA_OUT,
   REC_MSC_STAGE_CSW,
+  REC_MSC_STAGE_READ_WAIT,
+  REC_MSC_STAGE_WRITE_WAIT,
+  REC_MSC_STAGE_SYNC_WAIT,
+  REC_MSC_STAGE_STALL,
+  REC_MSC_STAGE_RECOVERY,
 } REC_MSC_Stage;
 
 typedef struct {
   uint8_t cbw[31];
   uint8_t csw[13];
   uint8_t rx[REC_MSC_EP_MPS];
-  uint8_t sense_key;
-  uint8_t sense_asc;
-  uint8_t stage;
-  uint8_t started;
-  uint8_t storage_ready;
-  uint8_t storage_recover;
-  uint8_t csw_status;
-  uint32_t tag;
-  uint32_t residue;
-  uint32_t card_blocks;
-  uint32_t tx_len;
-  uint32_t tx_pos;
-  uint32_t read_lba;
-  uint32_t read_blocks;
-  uint32_t write_lba;
-  uint32_t write_expected;
-  uint32_t write_received;
-  uint32_t sector_pos;
-  uint32_t enum_deadline;
-  uint32_t retry_at;
-  uint8_t *tx_buf;
+  volatile uint8_t sense_key;
+  volatile uint8_t sense_asc;
+  volatile uint8_t stage;
+  volatile uint8_t started;
+  volatile uint8_t storage_ready;
+  volatile uint8_t csw_status;
+  volatile uint8_t bot_generation;
+  volatile uint8_t io_generation;
+  volatile uint32_t tag;
+  volatile uint32_t residue;
+  volatile uint32_t card_blocks;
+  volatile uint32_t tx_len;
+  volatile uint32_t tx_pos;
+  volatile uint32_t read_lba;
+  volatile uint32_t read_blocks;
+  volatile uint32_t write_lba;
+  volatile uint32_t write_expected;
+  volatile uint32_t write_received;
+  volatile uint32_t sector_pos;
+  volatile uint32_t enum_deadline;
+  volatile uint32_t retry_at;
+  uint8_t * volatile tx_buf;
   uint8_t *sector_buf;
 } REC_MSC_Context;
 
@@ -91,6 +93,7 @@ static REC_MSC_Context rec_msc;
 static uint8_t rec_msc_sector_storage[REC_MSC_BLOCK_SIZE] __attribute__((aligned(4)));
 static uint8_t rec_msc_str_desc[64] __ALIGN_END;
 static uint8_t rec_msc_cfg_desc[REC_MSC_CFG_SIZE] __ALIGN_END;
+static uint8_t rec_msc_ep0_reply[2] __attribute__((aligned(4)));
 
 static uint8_t REC_USBD_MSC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t REC_USBD_MSC_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
@@ -304,128 +307,46 @@ static void rec_msc_set_sense(uint8_t key, uint8_t asc) {
   rec_msc.sense_asc = asc;
 }
 
-static void rec_msc_storage_drop(uint8_t key, uint8_t asc) {
-  if (hsd.Instance == SDIO) {
-    /* MSC uses polling transfers.  Avoid HAL_SD_Abort() here: it sends an
-     * additional card-status command and can extend an SD removal/error while
-     * the USB host is waiting for a BOT response. */
-    (void)HAL_SD_DeInit(&hsd);
-  }
+static void rec_msc_storage_mark_offline(uint8_t key, uint8_t asc) {
   rec_msc.storage_ready = 0U;
   rec_msc.card_blocks = 0U;
   rec_msc_set_sense(key, asc);
 }
 
-static uint8_t rec_msc_wait_ready(uint32_t timeout_ms) {
-  uint32_t start = HAL_GetTick();
-  while ((uint32_t)(HAL_GetTick() - start) < timeout_ms) {
-    HAL_SD_CardStateTypeDef state = HAL_SD_GetCardState(&hsd);
-    if (state == HAL_SD_CARD_TRANSFER) {
-      return 1U;
-    }
-    if (state == HAL_SD_CARD_ERROR) {
-      return 0U;
-    }
-    SBL_DelayMs(1U);
-  }
-  return 0U;
-}
-
+/* All SDIO/FatFs block operations are executed from REC_MSC_Tick() in thread
+ * context.  USB callbacks only inspect these cached fields and queue work. */
 static uint8_t rec_msc_storage_init(void) {
-  HAL_SD_CardInfoTypeDef info;
+  uint32_t blocks = 0U;
 
-  if (rec_msc.storage_ready) {
-    if (HAL_SD_GetCardState(&hsd) == HAL_SD_CARD_TRANSFER) {
-      return 1U;
-    }
-    rec_msc_storage_drop(SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
-  }
-
-  for (uint8_t attempt = 0U; attempt < REC_MSC_INIT_ATTEMPTS; ++attempt) {
-    MX_SDIO_SD_Init();
-    (void)HAL_SD_DeInit(&hsd);
-    SBL_DelayMs(20U);
-    MX_SDIO_SD_Init();
-    __HAL_RCC_DMA2_CLK_ENABLE();
-    if (HAL_SD_Init(&hsd) != HAL_OK) {
-      rec_msc_storage_drop(SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
-      SBL_DelayMs(50U);
-      continue;
-    }
-    SBL_DelayMs(100U);
-
-    rec_msc.card_blocks = 0U;
-    for (uint8_t i = 0U; i < 4U; ++i) {
-      if (HAL_SD_GetCardInfo(&hsd, &info) == HAL_OK && info.BlockNbr > 0U) {
-        rec_msc.card_blocks = info.BlockNbr;
-        break;
-      }
-      SBL_DelayMs(50U);
-    }
-    if (rec_msc.card_blocks == 0U) {
-      rec_msc_storage_drop(SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
-      continue;
-    }
-
-#if REC_MSC_ENABLE_WIDE_BUS && defined(SDIO_BUS_WIDE_4B)
-    (void)HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B);
-#endif
-    if (!rec_msc_wait_ready(REC_MSC_SD_TIMEOUT_MS)) {
-      rec_msc_storage_drop(SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
-      continue;
-    }
-
-    rec_msc.storage_ready = 1U;
-    rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
-    return 1U;
-  }
-
-  return 0U;
-}
-
-static uint8_t rec_msc_storage_online(void) {
-  if (!rec_msc.storage_ready) {
+  REC_BlockRelease();
+  if (!REC_BlockInit(&blocks) || blocks == 0U) {
+    rec_msc_storage_mark_offline(SCSI_SENSE_NOT_READY,
+                                 SCSI_ASC_NO_MEDIUM);
     return 0U;
   }
-  if (HAL_SD_GetCardState(&hsd) == HAL_SD_CARD_TRANSFER) {
-    return 1U;
-  }
-  rec_msc_storage_drop(SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
-  rec_msc.storage_recover = 1U;
-  return 0U;
-}
-
-static uint8_t rec_msc_read_sector(uint32_t lba) {
-  if (!rec_msc_storage_online()) {
+  /* Prove that the raw path can read LBA0 before exposing capacity to the
+   * host.  Card identification alone is insufficient: a broken polling path
+   * otherwise enumerates as a disk but hangs Explorer on its first boot-sector
+   * read. */
+  if (!REC_BlockRead(0U, rec_msc.sector_buf)) {
+    REC_BlockRelease();
+    rec_msc_storage_mark_offline(SCSI_SENSE_MEDIUM_ERROR,
+                                 SCSI_ASC_READ_ERROR);
     return 0U;
   }
-  if (HAL_SD_ReadBlocks(&hsd, rec_msc.sector_buf, lba, 1U,
-                        REC_MSC_SD_TIMEOUT_MS) == HAL_OK &&
-      rec_msc_wait_ready(REC_MSC_SD_TIMEOUT_MS)) {
-    rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
-    return 1U;
-  }
-  rec_msc_storage_drop(SCSI_SENSE_MEDIUM_ERROR, SCSI_ASC_READ_ERROR);
-  rec_msc.storage_recover = 1U;
-  return 0U;
+
+  rec_msc.card_blocks = blocks;
+  rec_msc.storage_ready = 1U;
+  rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
+  return 1U;
 }
 
-static uint8_t rec_msc_write_sector(uint32_t lba) {
-  if (!rec_msc_storage_online()) {
-    return 0U;
-  }
-  if (HAL_SD_WriteBlocks(&hsd, rec_msc.sector_buf, lba, 1U,
-                         REC_MSC_SD_TIMEOUT_MS) == HAL_OK &&
-      rec_msc_wait_ready(REC_MSC_SD_TIMEOUT_MS)) {
-    rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
-    return 1U;
-  }
-  rec_msc_storage_drop(SCSI_SENSE_MEDIUM_ERROR, SCSI_ASC_WRITE_FAULT);
-  rec_msc.storage_recover = 1U;
-  return 0U;
+static uint8_t rec_msc_storage_online_cached(void) {
+  return (rec_msc.storage_ready && rec_msc.card_blocks > 0U) ? 1U : 0U;
 }
 
 static void rec_msc_prepare_cbw(USBD_HandleTypeDef *pdev) {
+  __DMB();
   rec_msc.stage = REC_MSC_STAGE_CBW;
   (void)USBD_LL_PrepareReceive(pdev, REC_MSC_OUT_EP, rec_msc.cbw,
                                sizeof(rec_msc.cbw));
@@ -436,6 +357,7 @@ static void rec_msc_send_csw(USBD_HandleTypeDef *pdev) {
   rec_msc_put_le32(&rec_msc.csw[4], rec_msc.tag);
   rec_msc_put_le32(&rec_msc.csw[8], rec_msc.residue);
   rec_msc.csw[12] = rec_msc.csw_status;
+  __DMB();
   rec_msc.stage = REC_MSC_STAGE_CSW;
   (void)USBD_LL_Transmit(pdev, REC_MSC_IN_EP, rec_msc.csw,
                          sizeof(rec_msc.csw));
@@ -458,18 +380,11 @@ static void rec_msc_send_next_in(USBD_HandleTypeDef *pdev) {
   }
 
   if (rec_msc.read_blocks > 0U) {
-    if (!rec_msc_read_sector(rec_msc.read_lba)) {
-      rec_msc.csw_status = 1U;
-      rec_msc.read_blocks = 0U;
-      rec_msc_send_csw(pdev);
-      return;
-    }
-    rec_msc.read_lba++;
-    rec_msc.read_blocks--;
-    rec_msc.tx_buf = rec_msc.sector_buf;
-    rec_msc.tx_len = REC_MSC_BLOCK_SIZE;
-    rec_msc.tx_pos = 0U;
-    rec_msc_send_next_in(pdev);
+    /* Leave the IN endpoint unqueued so the USB core returns NAK while the
+     * main loop performs the next SDIO read. */
+    rec_msc.io_generation = rec_msc.bot_generation;
+    __DMB();
+    rec_msc.stage = REC_MSC_STAGE_READ_WAIT;
     return;
   }
 
@@ -481,6 +396,7 @@ static void rec_msc_send_data(USBD_HandleTypeDef *pdev, uint8_t *buf,
   if (len > rec_msc.residue) {
     len = rec_msc.residue;
   }
+  __DMB();
   rec_msc.stage = REC_MSC_STAGE_DATA_IN;
   rec_msc.tx_buf = buf;
   rec_msc.tx_len = len;
@@ -491,7 +407,22 @@ static void rec_msc_send_data(USBD_HandleTypeDef *pdev, uint8_t *buf,
 static void rec_msc_fail(USBD_HandleTypeDef *pdev, uint8_t key, uint8_t asc) {
   rec_msc_set_sense(key, asc);
   rec_msc.csw_status = 1U;
-  rec_msc_send_csw(pdev);
+  if (rec_msc.residue == 0U) {
+    rec_msc_send_csw(pdev);
+    return;
+  }
+
+  /* A CSW must not be injected into a data phase.  For example, if READ
+   * CAPACITY fails and we transmit the 13-byte CSW immediately, Windows reads
+   * its first eight bytes as capacity data and the BOT stream becomes
+   * permanently desynchronised.  Terminate the failed data phase with a bulk
+   * stall; after the host clears the IN halt, Setup() sends the failed CSW. */
+  if ((rec_msc.cbw[12] & 0x80U) == 0U) {
+    (void)USBD_LL_StallEP(pdev, REC_MSC_OUT_EP);
+  }
+  (void)USBD_LL_StallEP(pdev, REC_MSC_IN_EP);
+  __DMB();
+  rec_msc.stage = REC_MSC_STAGE_STALL;
 }
 
 static void rec_msc_scsi_inquiry(USBD_HandleTypeDef *pdev) {
@@ -522,7 +453,7 @@ static void rec_msc_scsi_request_sense(USBD_HandleTypeDef *pdev) {
 }
 
 static void rec_msc_scsi_read_capacity(USBD_HandleTypeDef *pdev) {
-  if (!rec_msc_storage_online()) {
+  if (!rec_msc_storage_online_cached()) {
     rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
     return;
   }
@@ -532,7 +463,7 @@ static void rec_msc_scsi_read_capacity(USBD_HandleTypeDef *pdev) {
 }
 
 static void rec_msc_scsi_read_format_cap(USBD_HandleTypeDef *pdev) {
-  if (!rec_msc_storage_online()) {
+  if (!rec_msc_storage_online_cached()) {
     rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
     return;
   }
@@ -552,12 +483,19 @@ static void rec_msc_scsi_mode_sense6(USBD_HandleTypeDef *pdev) {
   rec_msc_send_data(pdev, rec_msc.sector_buf, 4U);
 }
 
+static void rec_msc_scsi_mode_sense10(USBD_HandleTypeDef *pdev) {
+  rec_msc_zero(rec_msc.sector_buf, 8U);
+  /* Eight-byte MODE PARAMETER HEADER(10), no block descriptor/pages. */
+  rec_msc.sector_buf[1] = 6U;
+  rec_msc_send_data(pdev, rec_msc.sector_buf, 8U);
+}
+
 static void rec_msc_scsi_read10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
   uint32_t lba = rec_msc_get_be32(&cmd[2]);
   uint32_t blocks = rec_msc_get_be16(&cmd[7]);
   uint32_t max_blocks = rec_msc.residue / REC_MSC_BLOCK_SIZE;
 
-  if (!rec_msc_storage_online()) {
+  if (!rec_msc_storage_online_cached()) {
     rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
     return;
   }
@@ -576,8 +514,9 @@ static void rec_msc_scsi_read10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
   rec_msc.read_blocks = blocks;
   rec_msc.tx_len = 0U;
   rec_msc.tx_pos = 0U;
-  rec_msc.stage = REC_MSC_STAGE_DATA_IN;
-  rec_msc_send_next_in(pdev);
+  rec_msc.io_generation = rec_msc.bot_generation;
+  __DMB();
+  rec_msc.stage = REC_MSC_STAGE_READ_WAIT;
 }
 
 static void rec_msc_scsi_write10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
@@ -585,7 +524,7 @@ static void rec_msc_scsi_write10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
   uint32_t blocks = rec_msc_get_be16(&cmd[7]);
   uint32_t max_bytes = blocks * REC_MSC_BLOCK_SIZE;
 
-  if (!rec_msc_storage_online()) {
+  if (!rec_msc_storage_online_cached()) {
     rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
     return;
   }
@@ -604,6 +543,7 @@ static void rec_msc_scsi_write10(USBD_HandleTypeDef *pdev, const uint8_t *cmd) {
   rec_msc.write_expected = max_bytes;
   rec_msc.write_received = 0U;
   rec_msc.sector_pos = 0U;
+  __DMB();
   rec_msc.stage = REC_MSC_STAGE_DATA_OUT;
   (void)USBD_LL_PrepareReceive(pdev, REC_MSC_OUT_EP, rec_msc.rx,
                                REC_MSC_EP_MPS);
@@ -618,7 +558,7 @@ static void rec_msc_dispatch_scsi(USBD_HandleTypeDef *pdev) {
 
   switch (cmd[0]) {
     case SCSI_TEST_UNIT_READY:
-      if (rec_msc_storage_online()) {
+      if (rec_msc_storage_online_cached()) {
         rec_msc_send_csw(pdev);
       } else {
         rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
@@ -639,6 +579,9 @@ static void rec_msc_dispatch_scsi(USBD_HandleTypeDef *pdev) {
     case SCSI_MODE_SENSE6:
       rec_msc_scsi_mode_sense6(pdev);
       break;
+    case SCSI_MODE_SENSE10:
+      rec_msc_scsi_mode_sense10(pdev);
+      break;
     case SCSI_READ10:
       rec_msc_scsi_read10(pdev, cmd);
       break;
@@ -650,19 +593,20 @@ static void rec_msc_dispatch_scsi(USBD_HandleTypeDef *pdev) {
       rec_msc_send_csw(pdev);
       break;
     case SCSI_START_STOP_UNIT:
-      if ((cmd[4] & 0x02U) != 0U && (cmd[4] & 0x01U) == 0U) {
-        rec_msc_storage_drop(SCSI_SENSE_NO_SENSE, 0U);
-      }
+      /* Windows may issue LoEj/Start=0 during normal probing or when the shell
+       * refreshes the drive.  Do not treat it as physical media removal; REC
+       * has no tray and dropping SD here makes the next capacity/read command
+       * look like an empty/no-media disk. */
       rec_msc_send_csw(pdev);
       break;
     case SCSI_SYNC_CACHE10:
-      if (rec_msc.storage_ready &&
-          !rec_msc_wait_ready(REC_MSC_SD_TIMEOUT_MS)) {
-        rec_msc_storage_drop(SCSI_SENSE_MEDIUM_ERROR,
-                             SCSI_ASC_WRITE_FAULT);
-        rec_msc.csw_status = 1U;
+      if (!rec_msc_storage_online_cached()) {
+        rec_msc_fail(pdev, SCSI_SENSE_NOT_READY, SCSI_ASC_NO_MEDIUM);
+      } else {
+        rec_msc.io_generation = rec_msc.bot_generation;
+        __DMB();
+        rec_msc.stage = REC_MSC_STAGE_SYNC_WAIT;
       }
-      rec_msc_send_csw(pdev);
       break;
     default:
       rec_msc_fail(pdev, SCSI_SENSE_ILLEGAL_REQ, SCSI_ASC_INVALID_CMD);
@@ -677,7 +621,7 @@ static void rec_msc_parse_cbw(USBD_HandleTypeDef *pdev, uint32_t len) {
       rec_msc.cbw[14] > 16U) {
     (void)USBD_LL_StallEP(pdev, REC_MSC_IN_EP);
     (void)USBD_LL_StallEP(pdev, REC_MSC_OUT_EP);
-    rec_msc.stage = REC_MSC_STAGE_CBW;
+    rec_msc.stage = REC_MSC_STAGE_RECOVERY;
     return;
   }
   rec_msc.tag = rec_msc_get_le32(&rec_msc.cbw[4]);
@@ -706,12 +650,13 @@ static void rec_msc_handle_write_data(USBD_HandleTypeDef *pdev, uint32_t len) {
       rec_msc.residue = 0U;
     }
     if (rec_msc.sector_pos == REC_MSC_BLOCK_SIZE) {
-      if (!rec_msc_write_sector(rec_msc.write_lba++)) {
-        rec_msc.csw_status = 1U;
-        rec_msc.write_received = rec_msc.write_expected;
-        break;
-      }
-      rec_msc.sector_pos = 0U;
+      /* Do not issue SDIO commands from the USB OUT callback.  Leave the OUT
+       * endpoint unarmed so the host sees NAK until REC_MSC_Tick() commits the
+       * complete sector. */
+      rec_msc.io_generation = rec_msc.bot_generation;
+      __DMB();
+      rec_msc.stage = REC_MSC_STAGE_WRITE_WAIT;
+      return;
     }
   }
 
@@ -729,6 +674,7 @@ static void rec_msc_handle_write_data(USBD_HandleTypeDef *pdev, uint32_t len) {
 
 static uint8_t REC_USBD_MSC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx) {
   (void)cfgidx;
+  rec_msc.bot_generation++;
   rec_msc.stage = REC_MSC_STAGE_CBW;
   rec_msc.csw_status = 0U;
   rec_msc.residue = 0U;
@@ -754,14 +700,15 @@ static uint8_t REC_USBD_MSC_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx) {
 
 static uint8_t REC_USBD_MSC_Setup(USBD_HandleTypeDef *pdev,
                                   USBD_SetupReqTypedef *req) {
-  uint16_t status = 0U;
-  uint8_t max_lun = 0U;
-
   switch (req->bmRequest & USB_REQ_TYPE_MASK) {
     case USB_REQ_TYPE_CLASS:
       if (req->bRequest == MSC_REQ_GET_MAX_LUN && req->wLength == 1U) {
-        (void)USBD_CtlSendData(pdev, &max_lun, 1U);
+        /* EP0 transmission is asynchronous.  Never pass a pointer to a stack
+         * variable that ceases to exist when Setup() returns. */
+        rec_msc_ep0_reply[0] = 0U;
+        (void)USBD_CtlSendData(pdev, rec_msc_ep0_reply, 1U);
       } else if (req->bRequest == MSC_REQ_BOT_RESET) {
+        rec_msc.bot_generation++;
         (void)USBD_LL_FlushEP(pdev, REC_MSC_IN_EP);
         (void)USBD_LL_FlushEP(pdev, REC_MSC_OUT_EP);
         (void)USBD_LL_ClearStallEP(pdev, REC_MSC_IN_EP);
@@ -780,11 +727,25 @@ static uint8_t REC_USBD_MSC_Setup(USBD_HandleTypeDef *pdev,
       break;
     case USB_REQ_TYPE_STANDARD:
       switch (req->bRequest) {
+        case USB_REQ_CLEAR_FEATURE:
+          if (rec_msc.stage == REC_MSC_STAGE_RECOVERY) {
+            /* An invalid CBW requires the class-specific BOT reset sequence;
+             * clearing endpoint halts alone must not resume the stream. */
+            (void)USBD_LL_StallEP(pdev, REC_MSC_IN_EP);
+            (void)USBD_LL_StallEP(pdev, REC_MSC_OUT_EP);
+          } else if (rec_msc.stage == REC_MSC_STAGE_STALL &&
+                     ((uint8_t)req->wIndex & 0x80U) != 0U) {
+            rec_msc_send_csw(pdev);
+          }
+          break;
         case USB_REQ_GET_STATUS:
-          (void)USBD_CtlSendData(pdev, (uint8_t *)&status, 2U);
+          rec_msc_ep0_reply[0] = 0U;
+          rec_msc_ep0_reply[1] = 0U;
+          (void)USBD_CtlSendData(pdev, rec_msc_ep0_reply, 2U);
           break;
         case USB_REQ_GET_INTERFACE:
-          (void)USBD_CtlSendData(pdev, (uint8_t *)&status, 1U);
+          rec_msc_ep0_reply[0] = 0U;
+          (void)USBD_CtlSendData(pdev, rec_msc_ep0_reply, 1U);
           break;
         case USB_REQ_SET_INTERFACE:
           break;
@@ -844,7 +805,6 @@ REC_CODE uint8_t REC_MSC_Start(void) {
 
   rec_msc.storage_ready = 0U;
   rec_msc.card_blocks = 0U;
-  rec_msc.storage_recover = 0U;
   rec_msc.stage = REC_MSC_STAGE_CBW;
   rec_msc.csw_status = 0U;
   rec_msc.residue = 0U;
@@ -852,6 +812,8 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc.write_expected = 0U;
   rec_msc.write_received = 0U;
   rec_msc.sector_pos = 0U;
+  rec_msc.bot_generation = 0U;
+  rec_msc.io_generation = 0U;
   rec_msc_set_sense(SCSI_SENSE_NO_SENSE, 0U);
   /* Probe the card before USB enumeration.  This keeps potentially slow SDIO
    * initialization out of the USB IRQ path, so Windows sees a responsive MSC
@@ -867,6 +829,10 @@ REC_CODE uint8_t REC_MSC_Start(void) {
     rec_msc.retry_at = HAL_GetTick() + REC_MSC_RETRY_MS;
     return 0U;
   }
+  /* CubeMX's shared PCD MSP callback installs OTG_FS at priority 0.  Lower it
+   * before connecting the pull-up so SysTick and the SDIO polling timebase can
+   * continue while the host enumerates the MSC device. */
+  HAL_NVIC_SetPriority(OTG_FS_IRQn, 6U, 0U);
   if (USBD_RegisterClass(&rec_msc_dev,
                          (USBD_ClassTypeDef *)&REC_USBD_MSC_CLASS) != USBD_OK) {
     (void)USBD_DeInit(&rec_msc_dev);
@@ -879,7 +845,6 @@ REC_CODE uint8_t REC_MSC_Start(void) {
     rec_msc.retry_at = HAL_GetTick() + REC_MSC_RETRY_MS;
     return 0U;
   }
-  HAL_NVIC_SetPriority(OTG_FS_IRQn, 6U, 0U);
   rec_msc.started = 1U;
   now = HAL_GetTick();
   rec_msc.enum_deadline = now + REC_MSC_ENUM_GRACE_MS;
@@ -893,25 +858,18 @@ REC_CODE void REC_MSC_Stop(void) {
     (void)USBD_DeInit(&rec_msc_dev);
   }
   rec_msc.started = 0U;
-  rec_msc_storage_drop(SCSI_SENSE_NO_SENSE, 0U);
-  rec_msc.storage_recover = 0U;
+  REC_BlockRelease();
+  rec_msc_storage_mark_offline(SCSI_SENSE_NO_SENSE, 0U);
   rec_msc.stage = REC_MSC_STAGE_CBW;
   rec_msc.enum_deadline = 0U;
 }
 
 REC_CODE void REC_MSC_Tick(void) {
   uint32_t now;
+  uint8_t generation;
+  uint8_t ok;
 
   now = HAL_GetTick();
-  if (rec_msc.storage_recover) {
-    /* A failed SD stream may leave the peripheral state machine wedged.  Do
-     * recovery outside the USB interrupt: disconnect, reset SDIO, then let the
-     * normal start path pre-probe the card and enumerate a clean MSC device. */
-    rec_msc.storage_recover = 0U;
-    REC_MSC_Stop();
-    rec_msc.retry_at = now + 100U;
-    return;
-  }
   if (!rec_msc.started) {
     if (rec_msc.retry_at == 0U ||
         (int32_t)(now - rec_msc.retry_at) >= 0) {
@@ -920,17 +878,101 @@ REC_CODE void REC_MSC_Tick(void) {
     }
     return;
   }
+
+  /* SD media discovery/recovery belongs to the REC main loop.  The USB host
+   * keeps receiving prompt NOT READY responses while this potentially slow
+   * operation runs, because all USB interrupt callbacks remain nonblocking. */
+  if (!rec_msc.storage_ready && rec_msc.stage == REC_MSC_STAGE_CBW &&
+      (rec_msc.retry_at == 0U || (int32_t)(now - rec_msc.retry_at) >= 0)) {
+    rec_msc.retry_at = now + REC_MSC_RETRY_MS;
+    if (rec_msc_storage_init()) {
+      rec_msc.retry_at = 0U;
+    }
+  }
+
+  if (rec_msc.stage == REC_MSC_STAGE_READ_WAIT) {
+    generation = rec_msc.io_generation;
+    ok = REC_BlockRead(rec_msc.read_lba, rec_msc.sector_buf);
+    if (generation != rec_msc.bot_generation ||
+        rec_msc.stage != REC_MSC_STAGE_READ_WAIT) {
+      return;
+    }
+    if (!ok) {
+      REC_BlockRelease();
+      rec_msc_storage_mark_offline(SCSI_SENSE_MEDIUM_ERROR,
+                                   SCSI_ASC_READ_ERROR);
+      rec_msc.retry_at = HAL_GetTick() + REC_MSC_RETRY_MS;
+      rec_msc.csw_status = 1U;
+      rec_msc.read_blocks = 0U;
+      rec_msc_send_csw(&rec_msc_dev);
+      return;
+    }
+    rec_msc.read_lba++;
+    rec_msc.read_blocks--;
+    rec_msc.tx_buf = rec_msc.sector_buf;
+    rec_msc.tx_len = REC_MSC_BLOCK_SIZE;
+    rec_msc.tx_pos = 0U;
+    __DMB();
+    rec_msc.stage = REC_MSC_STAGE_DATA_IN;
+    rec_msc_send_next_in(&rec_msc_dev);
+    return;
+  }
+
+  if (rec_msc.stage == REC_MSC_STAGE_WRITE_WAIT) {
+    generation = rec_msc.io_generation;
+    ok = REC_BlockWrite(rec_msc.write_lba, rec_msc.sector_buf);
+    if (generation != rec_msc.bot_generation ||
+        rec_msc.stage != REC_MSC_STAGE_WRITE_WAIT) {
+      return;
+    }
+    if (!ok) {
+      REC_BlockRelease();
+      rec_msc_storage_mark_offline(SCSI_SENSE_MEDIUM_ERROR,
+                                   SCSI_ASC_WRITE_FAULT);
+      rec_msc.retry_at = HAL_GetTick() + REC_MSC_RETRY_MS;
+      rec_msc.csw_status = 1U;
+      rec_msc.write_received = rec_msc.write_expected;
+      rec_msc.sector_pos = 0U;
+      rec_msc_send_csw(&rec_msc_dev);
+      return;
+    }
+    rec_msc.write_lba++;
+    rec_msc.sector_pos = 0U;
+    if (rec_msc.write_received >= rec_msc.write_expected) {
+      rec_msc_send_csw(&rec_msc_dev);
+    } else {
+      __DMB();
+      rec_msc.stage = REC_MSC_STAGE_DATA_OUT;
+      (void)USBD_LL_PrepareReceive(&rec_msc_dev, REC_MSC_OUT_EP,
+                                   rec_msc.rx, REC_MSC_EP_MPS);
+    }
+    return;
+  }
+
+  if (rec_msc.stage == REC_MSC_STAGE_SYNC_WAIT) {
+    generation = rec_msc.io_generation;
+    ok = REC_BlockSync();
+    if (generation != rec_msc.bot_generation ||
+        rec_msc.stage != REC_MSC_STAGE_SYNC_WAIT) {
+      return;
+    }
+    if (!ok) {
+      REC_BlockRelease();
+      rec_msc_storage_mark_offline(SCSI_SENSE_MEDIUM_ERROR,
+                                   SCSI_ASC_WRITE_FAULT);
+      rec_msc.retry_at = HAL_GetTick() + REC_MSC_RETRY_MS;
+      rec_msc.csw_status = 1U;
+    }
+    rec_msc_send_csw(&rec_msc_dev);
+    return;
+  }
+
   if (REC_MSC_IsConfigured()) {
     rec_msc.enum_deadline = now + REC_MSC_ENUM_GRACE_MS;
     rec_msc.retry_at = 0U;
     return;
   }
-  if (rec_msc.enum_deadline == 0U) {
-    rec_msc.enum_deadline = now + REC_MSC_ENUM_GRACE_MS;
-    return;
-  }
-  if ((int32_t)(now - rec_msc.enum_deadline) >= 0) {
-    REC_MSC_Stop();
-    rec_msc.retry_at = HAL_GetTick() + REC_MSC_RETRY_MS;
-  }
+  /* Do not auto-disconnect active REC MSC.  Windows may still be probing the
+   * device or retrying after a medium error; forcing a USB stop/start here
+   * turns a recoverable empty/no-medium state into an Unknown Device. */
 }

@@ -34,31 +34,49 @@ TCS3472::TCS3472() {
   _hi2c = &hi2c1;
   _addr = TCS3472_ADDR_8BIT;
   _initialized = false;
+  _last_read_ok = false;
   _gain = TCS3472_CONTROL_AGAIN_16X;
   _atime = 0xEB; /* ~50 ms integration; responsive enough for backlight. */
+}
+
+bool TCS3472::readBytes(uint8_t reg, uint8_t *data, uint16_t length) {
+  uint8_t cmd = TCS3472_COMMAND_BIT | reg;
+  if (!data || length == 0U)
+    return false;
+
+  for (uint8_t attempt = 0U; attempt < 2U; ++attempt) {
+    if (HAL_I2C_Mem_Read(_hi2c, _addr, cmd, I2C_MEMADD_SIZE_8BIT,
+                         data, length, 100U) == HAL_OK) {
+      return true;
+    }
+    JPDelay(2U);
+  }
+  return false;
 }
 
 
 uint8_t TCS3472::readReg(uint8_t reg) {
   uint8_t value = 0;
-  uint8_t cmd = TCS3472_COMMAND_BIT | reg;
-
-  HAL_I2C_Mem_Read(_hi2c, _addr, cmd, I2C_MEMADD_SIZE_8BIT, &value, 1, 100);
+  (void)readBytes(reg, &value, 1U);
   return value;
 }
 
 
 void TCS3472::writeReg(uint8_t reg, uint8_t value) {
   uint8_t cmd = TCS3472_COMMAND_BIT | reg;
-  HAL_I2C_Mem_Write(_hi2c, _addr, cmd, I2C_MEMADD_SIZE_8BIT, &value, 1, 100);
+  for (uint8_t attempt = 0U; attempt < 2U; ++attempt) {
+    if (HAL_I2C_Mem_Write(_hi2c, _addr, cmd, I2C_MEMADD_SIZE_8BIT,
+                          &value, 1U, 100U) == HAL_OK) {
+      return;
+    }
+    JPDelay(2U);
+  }
 }
 
 
 uint16_t TCS3472::readReg16(uint8_t reg) {
-  uint8_t buffer[2];
-  uint8_t cmd = TCS3472_COMMAND_BIT | reg;
-
-  HAL_I2C_Mem_Read(_hi2c, _addr, cmd, I2C_MEMADD_SIZE_8BIT, buffer, 2, 100);
+  uint8_t buffer[2] = {0U, 0U};
+  (void)readBytes(reg, buffer, 2U);
   return (uint16_t)(buffer[0] | (buffer[1] << 8));
 }
 
@@ -118,7 +136,11 @@ bool TCS3472::waitForData(uint32_t timeout_ms) {
   uint32_t start = HAL_GetTick();
 
   while (HAL_GetTick() - start < timeout_ms) {
-    uint8_t status = readReg(TCS3472_STATUS);
+    uint8_t status = 0U;
+    if (!readBytes(TCS3472_STATUS, &status, 1U)) {
+      JPDelay(2U);
+      continue;
+    }
     if (status & TCS3472_STATUS_AVALID) {
       return true;
     }
@@ -130,24 +152,27 @@ bool TCS3472::waitForData(uint32_t timeout_ms) {
 
 TCS3472_RawData_t TCS3472::readRaw(void) {
   TCS3472_RawData_t data = {0, 0, 0, 0, 0};
+  _last_read_ok = false;
 
   if (!_initialized)
     return data;
 
   
-  if (!waitForData(30)) {
+  if (!waitForData(70)) {
     return data;
   }
 
   
   uint8_t buffer[8];
-  uint8_t cmd = TCS3472_COMMAND_BIT | TCS3472_CDATAL;
-  HAL_I2C_Mem_Read(_hi2c, _addr, cmd, I2C_MEMADD_SIZE_8BIT, buffer, 8, 100);
+  if (!readBytes(TCS3472_CDATAL, buffer, sizeof(buffer))) {
+    return data;
+  }
 
   data.clear = (uint16_t)(buffer[1] << 8) | buffer[0];
   data.red = (uint16_t)(buffer[3] << 8) | buffer[2];
   data.green = (uint16_t)(buffer[5] << 8) | buffer[4];
   data.blue = (uint16_t)(buffer[7] << 8) | buffer[6];
+  _last_read_ok = true;
 
   return data;
 }
@@ -176,34 +201,43 @@ float TCS3472::calculateColorTemperature(uint16_t r, uint16_t g, uint16_t b) {
 
 
 float TCS3472::calculateLux(uint16_t c, uint16_t r, uint16_t g, uint16_t b) {
-  
-  float ir = (float)(c - r - g - b);
-  if (ir < 0)
-    ir = 0;
+  if (c == 0U) {
+    return 0.0f;
+  }
 
-  float g_norm = (float)g / c;
+  float sum = (float)r + (float)g + (float)b;
+  float ir = sum > (float)c ? (sum - (float)c) * 0.5f : 0.0f;
+  float rc = (float)r - ir;
+  float gc = (float)g - ir;
+  float bc = (float)b - ir;
+  if (rc < 0.0f) rc = 0.0f;
+  if (gc < 0.0f) gc = 0.0f;
+  if (bc < 0.0f) bc = 0.0f;
 
-  
-  
-  float lux = (0.136f * r + 0.542f * g + 0.035f * b) * (1.0f / g_norm);
+  float gain;
+  switch (_gain) {
+    case TCS3472_CONTROL_AGAIN_1X:  gain = 1.0f; break;
+    case TCS3472_CONTROL_AGAIN_4X:  gain = 4.0f; break;
+    case TCS3472_CONTROL_AGAIN_60X: gain = 60.0f; break;
+    default:                        gain = 16.0f; break;
+  }
 
-  
-  float gain_factor = pow(4, _gain);
-  lux = lux * (16.0f / gain_factor);
+  const float integration_ms = (float)(256U - _atime) * 2.4f;
+  const float cpl = (integration_ms * gain) / 310.0f;
+  if (cpl <= 0.0f) {
+    return 0.0f;
+  }
 
-  
-  float time_factor = (256 - _atime) * 2.4f / 50.0f;
-  lux = lux / time_factor;
-
-  return lux;
+  float lux = (0.136f * rc + 1.000f * gc - 0.444f * bc) / cpl;
+  return lux > 0.0f ? lux : 0.0f;
 }
 
 
 TCS3472_ColorData_t TCS3472::readColor(void) {
-  TCS3472_ColorData_t result = {0, 0, 0, 0, 0};
+  TCS3472_ColorData_t result = {0, 0, 0, 0, -1.0f};
 
   TCS3472_RawData_t raw = readRaw();
-  if (raw.clear == 0)
+  if (!_last_read_ok || raw.clear == 0)
     return result;
 
   

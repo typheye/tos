@@ -43,6 +43,13 @@ static void sanitize(void) {
   g_settings.debug_dashboard = g_settings.debug_dashboard ? 1U : 0U;
   g_settings.debug_log_com = g_settings.debug_log_com ? 1U : 0U;
   g_settings.boot_gfx = g_settings.boot_gfx ? true : false;
+  g_settings.disp_auto = g_settings.disp_auto ? true : false;
+  if (g_settings.disp_bright < 1U || g_settings.disp_bright > 10U) {
+    g_settings.disp_bright = 10U;
+  }
+  if (g_settings.disp_dir > 1U) {
+    g_settings.disp_dir = 0U;
+  }
   for (uint8_t i = 0; i < SM_SAVED_MAX; ++i) {
     g_settings.saved[i].ssid[sizeof(g_settings.saved[i].ssid) - 1] = '\0';
     g_settings.saved[i].pwd[sizeof(g_settings.saved[i].pwd) - 1] = '\0';
@@ -129,13 +136,35 @@ void SM_Init(void) {
 }
 
 void SM_Save(void) {
+  Settings_t verify;
+  uint32_t verify_size;
+  Flash_Status_t st = FLASH_ERR_PROGRAM;
+
   g_settings.magic = SM_MAGIC;
   g_settings.crc = 0;
   sanitize();
-  Flash_Status_t st = Flash_Rolling_Write((uint32_t *)&g_settings, sizeof(g_settings));
-  LOG_I("SMGR", "Save (%luB): %s", (unsigned long)sizeof(g_settings),
-        st == FLASH_OK ? "OK" : "FAIL");
-  (void)st;
+
+  for (uint8_t attempt = 0U; attempt < 2U; ++attempt) {
+    st = Flash_Rolling_Write((uint32_t *)&g_settings, sizeof(g_settings));
+    if (st == FLASH_OK) {
+      memset(&verify, 0, sizeof(verify));
+      verify_size = 0U;
+      st = Flash_Rolling_Read((uint32_t *)&verify, sizeof(verify),
+                              &verify_size);
+      if (st == FLASH_OK && verify_size == sizeof(verify) &&
+          memcmp(&verify, &g_settings, sizeof(verify)) == 0) {
+        LOG_I("SMGR", "Save verified (%luB, try %u)",
+              (unsigned long)sizeof(g_settings), (unsigned)(attempt + 1U));
+        return;
+      }
+      st = FLASH_ERR_CRC;
+    }
+    LOG_W("SMGR", "Save attempt %u failed (%d)",
+          (unsigned)(attempt + 1U), (int)st);
+  }
+
+  LOG_E("SMGR", "Save failed after retry (%luB, status=%d)",
+        (unsigned long)sizeof(g_settings), (int)st);
 }
 
 Settings_t *SM_Get(void) { return &g_settings; }

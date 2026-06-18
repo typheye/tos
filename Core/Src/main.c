@@ -145,7 +145,10 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-  TOS_KeepSplashBacklightOn();
+  /* MX_TIM4_Init() has already switched PD13 from GPIO output to
+   * TIM4_CH2 alternate-function mode.  Do not call
+   * TOS_KeepSplashBacklightOn() here: it would silently switch PD13 back to
+   * GPIO and disconnect the PWM signal from the LCD backlight pin. */
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 1000U);
   SysWatchdog_FeedNow();

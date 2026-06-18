@@ -47,7 +47,14 @@ static uint8_t rec_clock_config(void) {
   while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) if (--guard == 0U) return 0U;
   SCB->VTOR = TOS_PART_REC_ADDRESS;
   SystemCoreClock = 168000000UL;
-  return SysTick_Config(SystemCoreClock / 1000UL) == 0U ? 1U : 0U;
+  if (SysTick_Config(SystemCoreClock / 1000UL) != 0U) {
+    return 0U;
+  }
+  /* USB bulk traffic must never starve the millisecond timebase used by HAL
+   * SDIO timeouts.  USB callbacks are short after the MSC rework, but keeping
+   * SysTick one preemption level above OTG_FS makes this invariant explicit. */
+  HAL_NVIC_SetPriority(SysTick_IRQn, 5U, 0U);
+  return 1U;
 }
 
 void REC_RuntimeMain(void) {
@@ -58,6 +65,7 @@ void REC_RuntimeMain(void) {
   SBL_LedsOff();
   SystemCoreClock = 16000000UL;
   (void)SysTick_Config(SystemCoreClock / 1000UL);
+  HAL_NVIC_SetPriority(SysTick_IRQn, 5U, 0U);
   ok = rec_clock_config();
   REC_Main(ok);
 }

@@ -39,7 +39,8 @@ SYSTEM always exposes a virtual root:
 ```
 
 The SD root is restricted to `/storage` and `/init`. Logs and dumps are stored
-under `/storage/tos/_` so they remain accessible from an external reader.
+under `/storage/tos/log`, `/storage/tos/dump`, and `/storage/tos/rec` so they
+remain accessible from an external reader.
 
 TMP staging starts at `0x080C1000`; the first 4 KiB is regenerated FAT metadata.
 USERDATA keeps the existing settings journal in the first 32 KiB and exposes a

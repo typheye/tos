@@ -161,7 +161,9 @@ REC_CODE void REC_Run(uint8_t mode) {
     (void)REC_MSC_Start();
     while (1) {
       REC_MSC_Tick();
-      SBL_DelayMs(20U);
+      /* Keep the BOT main-loop bridge responsive.  SDIO I/O is intentionally
+       * performed here rather than in USB IRQ callbacks. */
+      SBL_DelayMs(1U);
     }
   }
 

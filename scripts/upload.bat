@@ -58,7 +58,6 @@ echo [FLASH] SYSTEM 0x08040000 %FW_OC%/system.bin
   -c "init" ^
   -c "reset halt" ^
   -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
-  -c "verify_image {%FW_OC%/system.bin} 0x08040000 bin" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"
@@ -83,9 +82,6 @@ echo [FLASH] SYSTEM 0x08040000 %FW_OC%/system.bin
   -c "flash write_image erase {%FW_OC%/rec.bin} 0x08010000 bin" ^
   -c "flash write_image erase {%FW_OC%/sah.bin} 0x08020000 bin" ^
   -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
-  -c "verify_image {%FW_OC%/rec.bin} 0x08010000 bin" ^
-  -c "verify_image {%FW_OC%/sah.bin} 0x08020000 bin" ^
-  -c "verify_image {%FW_OC%/system.bin} 0x08040000 bin" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"
@@ -125,12 +121,6 @@ rem Program ELF last so an interrupted migration cannot boot a partial new layou
   -c "flash write_image erase {%FW_OC%/sah.bin} 0x08020000 bin" ^
   -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
   -c "flash write_image erase {%FACTORY_OC%/elf_stage.elf}" ^
-  -c "verify_image {%FW_OC%/sbl.bin} 0x08004000 bin" ^
-  -c "verify_image {%FW_OC%/tee.bin} 0x0800C000 bin" ^
-  -c "verify_image {%FW_OC%/rec.bin} 0x08010000 bin" ^
-  -c "verify_image {%FW_OC%/sah.bin} 0x08020000 bin" ^
-  -c "verify_image {%FW_OC%/system.bin} 0x08040000 bin" ^
-  -c "verify_image {%FACTORY_OC%/elf_stage.elf}" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"

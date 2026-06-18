@@ -16,6 +16,8 @@ static const char part_tee[] SBL_CONST = "tee";
 static const char part_rec[] SBL_CONST = "rec";
 static const char part_sah[] SBL_CONST = "sah";
 static const char part_system[] SBL_CONST = "system";
+static const char part_tmp[] SBL_CONST = "tmp";
+static const char part_userdata[] SBL_CONST = "userdata";
 
 static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
     {part_sbl, TOS_PART_SBL_OFFSET, TOS_PART_SBL_ADDRESS,
@@ -28,6 +30,10 @@ static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
      TOS_PART_SAH_ADDRESS, TOS_PART_SAH_SIZE, 0U, 1U, 1U, 0U},
     {part_system, TOS_PART_SYSTEM_OFFSET, TOS_PART_SYSTEM_ADDRESS,
      TOS_PART_SYSTEM_ADDRESS, TOS_PART_SYSTEM_SIZE, 0U, 1U, 1U, 0U},
+    {part_tmp, TOS_PART_TMP_OFFSET, TOS_PART_TMP_ADDRESS,
+     TOS_PART_TMP_ADDRESS, TOS_PART_TMP_SIZE, 0U, 0U, 1U, 0U},
+    {part_userdata, TOS_PART_USERDATA_OFFSET, TOS_PART_USERDATA_ADDRESS,
+     TOS_PART_USERDATA_ADDRESS, TOS_PART_USERDATA_SIZE, 0U, 0U, 1U, 0U},
 };
 
 static const SBL_SectorInfo sectors[] SBL_CONST = {
