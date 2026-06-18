@@ -124,7 +124,14 @@ SBL_CODE void SBL_Run(void) {
       boot_target == SBL_BOOT_TARGET_RECOVERY_FORMAT ||
       boot_target == SBL_BOOT_TARGET_RECOVERY_UPGRADE ||
       boot_target == SBL_BOOT_TARGET_RECOVERY_INIT) {
-    if (!SBL_RecLooksValid()) SBL_UiRunRecoveryException();
+    if (!SBL_RecLooksValid()) {
+      /* Recovery boot targets are one-shot requests.  If REC itself has been
+       * erased or damaged, clear the request before showing the exception page
+       * so the 5-second reboot returns to the normal SYSTEM boot path instead
+       * of looping forever on the stale REC flag. */
+      (void)SBL_StateConsumeBootTarget();
+      SBL_UiRunRecoveryException();
+    }
     jump_to_image(TOS_PART_REC_ADDRESS);
   }
 
