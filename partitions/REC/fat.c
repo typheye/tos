@@ -9,13 +9,10 @@
 #include "tos_partitions.h"
 
 #define REC_SD_TIMEOUT_MS 5000U
-#define REC_SD_FAST_READY_MS 250U
-#define REC_BLOCK_IO_TIMEOUT_MS 300U
 #define REC_FLASH_BUF_SZ 512U
 #define REC_SD_IO_ATTEMPTS 2U
-/* Keep REC MSC startup conservative. Full-speed USB is the bottleneck, so
- * 1-bit SDIO is fast enough for browsing and flashing while avoiding the
- * multi-second HAL_SD_ConfigWideBusOperation stalls observed on some cards. */
+/* Keep REC SDIO conservative. 1-bit mode is sufficient for card flashing
+ * and TDB file access and avoids wide-bus compatibility stalls. */
 #ifndef REC_ENABLE_WIDE_BUS
 #define REC_ENABLE_WIDE_BUS 0
 #endif
@@ -226,8 +223,8 @@ static REC_CODE DSTATUS rec_disk_initialize_profile(BYTE lun,
   HAL_SD_CardInfoTypeDef info;
   (void)lun;
 
-  /* FatFs calls disk_initialize() again from f_mount(..., 1).  MSC startup
-   * has already initialized SDIO immediately before that mount, so tearing
+  /* FatFs may call disk_initialize() again from f_mount(..., 1).  If REC
+   * already has a live card handle, tearing
    * the live card down and running the complete identification sequence a
    * second time adds several seconds on some cards.  The ST MSC storage model
    * initializes its backend once and then serves capacity/read requests from
@@ -289,10 +286,6 @@ static REC_CODE DSTATUS rec_disk_initialize_profile(BYTE lun,
 
 static REC_CODE DSTATUS rec_disk_initialize(BYTE lun) {
   return rec_disk_initialize_profile(lun, REC_SD_TIMEOUT_MS);
-}
-
-static REC_CODE DSTATUS rec_disk_initialize_fast(BYTE lun) {
-  return rec_disk_initialize_profile(lun, REC_SD_FAST_READY_MS);
 }
 
 static REC_CODE DSTATUS rec_disk_status(BYTE lun) {
@@ -1046,144 +1039,18 @@ REC_CODE const char *REC_FatLastError(void) {
   return rec_last_error[0] ? rec_last_error : rec_err_none;
 }
 
-REC_CODE void REC_MscLogReady(uint32_t block_count) {
-  char msg[64];
-  char *p = msg;
-
-  /* Logging and host access must never overlap on the same FAT volume.  This
-   * snapshot is written while the LUN still reports NO MEDIUM, then FatFs is
-   * fully detached before the raw block device becomes visible to USB. */
-  if (block_count == 0U || !rec_mount()) {
-    rec_close_fs_keep_card();
-    return;
+REC_CODE uint8_t REC_FsMount(void) {
+  if (rec_mounted) {
+    return 1U;
   }
-
-  p = rec_append_str(p, "MSC USB ready; SD attach blocks=");
-  p = rec_append_u32(p, block_count);
-  *p = 0;
-  rec_log_line("INFO ", "MSC  ", msg);
-  rec_close_fs_keep_card();
-}
-
-REC_CODE uint8_t REC_BlockInit(uint32_t *block_count) {
-  DSTATUS status = 0U;
-  if (!rec_buffers_init()) {
-    rec_copy_error(rec_err_memory);
-    return 0U;
-  }
-  if (rec_card_blocks == 0U) {
-    status = rec_disk_initialize_fast(0U);
-  }
-  if (status != 0U && rec_card_blocks == 0U) {
-    return 0U;
-  }
-  if (rec_card_block_size != 512U || rec_card_blocks == 0U) {
-    rec_copy_error(rec_err_card_info);
-    rec_sd_drop();
-    return 0U;
-  }
-  if (block_count) {
-    *block_count = rec_card_blocks;
-  }
-  if (!rec_wait_ready(20U)) {
-    rec_copy_error(rec_err_card_ready);
-    return 0U;
-  }
-  return 1U;
-}
-
-REC_CODE uint8_t REC_FatPrepareMsc(uint32_t *block_count) {
-  uint32_t blocks = 0U;
-  DSTATUS status;
-
   rec_copy_error(rec_err_none);
-  if (!rec_buffers_init()) {
-    return 0U;
-  }
-
-  /* MSC exposes the raw block device; a complete FatFs mount is neither
-   * required nor desirable here.  The previous startup path used the normal
-   * 5-second REC timeout and then mounted/unmounted FatFs before connecting
-   * USB.  A single slow CMD13 therefore delayed the USB device by 5 seconds,
-   * and the retry path could double that delay.  Perform one bounded card
-   * identification instead, then prove the medium with an actual LBA0 read.
-   * This remains safe for unformatted cards because no filesystem structure
-   * is interpreted or modified. */
-  status = rec_disk_initialize_fast(0U);
-  if (status != 0U && rec_card_blocks == 0U) {
-    return 0U;
-  }
-  if (rec_card_block_size != 512U || rec_card_blocks == 0U) {
-    rec_copy_error(rec_err_card_info);
-    rec_sd_drop();
-    return 0U;
-  }
-  blocks = rec_card_blocks;
-
-  if (!REC_BlockRead(0U, rec_scratch_buf, 1U)) {
-    rec_copy_error(rec_err_sd_read);
-    rec_sd_drop();
-    return 0U;
-  }
-
-  if (block_count) {
-    *block_count = blocks;
-  }
-  return 1U;
+  return rec_mount();
 }
 
-REC_CODE uint8_t REC_BlockReady(void) {
-  return rec_disk_status(0U) == 0U ? 1U : 0U;
+REC_CODE void REC_FsUnmount(void) {
+  REC_FatRelease();
 }
 
-REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer,
-                               uint32_t block_count) {
-  if (!buffer || block_count == 0U) {
-    return 0U;
-  }
-  if (rec_card_blocks == 0U && !REC_BlockInit(0)) {
-    return 0U;
-  }
-  if (lba >= rec_card_blocks || block_count > (rec_card_blocks - lba) ||
-      ((uint32_t)buffer & 3U) != 0U) {
-    return 0U;
-  }
-  /* MSC must never hold a BOT transaction in NAK for the multi-second retry
-   * policy used by recovery flashing.  A raw block either completes promptly
-   * or the MSC layer reports MEDIUM ERROR and re-probes from its main loop. */
-  if (HAL_SD_ReadBlocks(&hsd, buffer, lba, block_count,
-                        REC_BLOCK_IO_TIMEOUT_MS) != HAL_OK) {
-    return 0U;
-  }
-  return rec_wait_ready(REC_BLOCK_IO_TIMEOUT_MS);
-}
-
-REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer,
-                                uint32_t block_count) {
-  if (!buffer || block_count == 0U) {
-    return 0U;
-  }
-  if (rec_card_blocks == 0U && !REC_BlockInit(0)) {
-    return 0U;
-  }
-  if (lba >= rec_card_blocks || block_count > (rec_card_blocks - lba) ||
-      ((uint32_t)buffer & 3U) != 0U) {
-    return 0U;
-  }
-  if (HAL_SD_WriteBlocks(&hsd, (uint8_t *)buffer, lba, block_count,
-                         REC_BLOCK_IO_TIMEOUT_MS) != HAL_OK) {
-    return 0U;
-  }
-  return rec_wait_ready(REC_BLOCK_IO_TIMEOUT_MS);
-}
-
-REC_CODE uint8_t REC_BlockSync(void) {
-  if (rec_card_blocks == 0U) {
-    return 0U;
-  }
-  return rec_wait_ready(REC_BLOCK_IO_TIMEOUT_MS);
-}
-
-REC_CODE void REC_BlockRelease(void) {
-  rec_sd_drop();
+REC_CODE uint8_t REC_FsIsMounted(void) {
+  return rec_mounted;
 }

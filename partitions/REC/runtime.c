@@ -19,7 +19,7 @@ extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
  * This routine runs before interrupts and before any REC USB/HAL setup.  It
  * resets and gates OTG FS, then drives PA12 (D+) low.  PA12 remains low until
  * USBD_Init() configures the pin for AF10 and USBD_Start() deliberately
- * connects the fully prepared MSC device.
+ * connects the fully prepared CDC/TDB device.
  */
 static REC_CODE void rec_usb_hold_disconnected(void) {
   NVIC_DisableIRQ(OTG_FS_IRQn);
@@ -83,8 +83,8 @@ static uint8_t rec_clock_config(void) {
   if (SysTick_Config(SystemCoreClock / 1000UL) != 0U) {
     return 0U;
   }
-  /* USB bulk traffic must never starve the millisecond timebase used by HAL
-   * SDIO timeouts.  USB callbacks are short after the MSC rework, but keeping
+  /* USB CDC traffic must never starve the millisecond timebase used by HAL
+   * SDIO timeouts.  TDB callbacks only move endpoint bytes, but keeping
    * SysTick one preemption level above OTG_FS makes this invariant explicit. */
   HAL_NVIC_SetPriority(SysTick_IRQn, 5U, 0U);
   return 1U;

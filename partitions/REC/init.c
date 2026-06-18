@@ -1,6 +1,6 @@
 #include "rec.h"
 
-#include "rec_msc.h"
+#include "rec_tdb.h"
 #include "sbl_common.h"
 #include "sbl_flash.h"
 #include "sbl_hw.h"
@@ -24,7 +24,9 @@ typedef struct {
 } REC_Command;
 
 static const char rec_title[] REC_CONST = "Recovery Mode";
-static const char rec_restart[] REC_CONST = "Press the RST button to restart.";
+static const char rec_tdb_ready[] REC_CONST = "TDB bridge ready";
+static const char rec_tdb_hint[] REC_CONST = "Connect with tdb.py";
+static const char rec_tdb_fail[] REC_CONST = "TDB USB init failed";
 static const char rec_format[] REC_CONST = "Formatting userdata...";
 static const char rec_format_done[] REC_CONST = "Format completed";
 static const char rec_format_fail[] REC_CONST = "Format failed";
@@ -157,16 +159,21 @@ REC_CODE void REC_Run(uint8_t mode) {
   effective_mode = rec_resolve_mode(mode);
 
   if (effective_mode == REC_MODE_WAIT) {
-    /* Paint first, then connect one stable MSC device. SD probing runs from
-     * REC_MSC_Tick(), so a slow card no longer delays USB enumeration or
-     * causes Windows to see repeated device disconnects. */
-    rec_draw_full(rec_restart, SBL_GREEN);
+    /* CDC enumerates immediately and never waits for SD.  The SD/FatFs path is
+     * opened only when a TDB filesystem command actually needs it, so an
+     * absent or slow card cannot delay the COM device. */
+    rec_draw_full(rec_tdb_ready, SBL_GREEN);
+    rec_draw_detail(rec_tdb_hint, SBL_WHITE);
     SBL_DelayMs(20U);
-    (void)REC_MSC_Start();
+    if (!REC_TDB_Start()) {
+      rec_draw_status(rec_tdb_fail, SBL_RED);
+    }
     while (1) {
-      REC_MSC_Tick();
-      /* Keep the BOT main-loop bridge responsive.  SDIO I/O is intentionally
-       * performed here rather than in USB IRQ callbacks. */
+      if (!REC_TDB_IsStarted()) {
+        SBL_DelayMs(250U);
+        (void)REC_TDB_Start();
+      }
+      REC_TDB_Tick();
       SBL_DelayMs(1U);
     }
   }

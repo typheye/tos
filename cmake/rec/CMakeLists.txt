@@ -4,7 +4,7 @@ add_executable(rec
     ${CMAKE_SOURCE_DIR}/partitions/REC/runtime.c
     ${CMAKE_SOURCE_DIR}/partitions/REC/init.c
     ${CMAKE_SOURCE_DIR}/partitions/REC/fat.c
-    ${CMAKE_SOURCE_DIR}/partitions/REC/msc.c
+    ${CMAKE_SOURCE_DIR}/partitions/REC/tdb.c
     ${CMAKE_SOURCE_DIR}/partitions/SBL/common.c
     ${CMAKE_SOURCE_DIR}/partitions/SBL/flash.c
     ${CMAKE_SOURCE_DIR}/partitions/SBL/hw.c
@@ -40,12 +40,5 @@ add_executable(rec
 tos_partition_target(rec ld/rec.ld rec)
 target_compile_definitions(rec PRIVATE REC_IMAGE USER_VECT_TAB_ADDRESS VECT_TAB_OFFSET=0x00010000U)
 
-# Keep the vendor HAL source unchanged while bounding only REC's ACMD41 loop.
-# The forced header is attached to this source in the REC directory scope and
-# is not applied to SYSTEM or to any CubeMX-generated FatFs source.
-set_property(SOURCE
-    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c
-    APPEND PROPERTY COMPILE_OPTIONS
-    -include${CMAKE_SOURCE_DIR}/partitions/REC/include/rec_hal_sd_limits.h)
 target_link_libraries(rec PRIVATE stm32cubemx ${TOOLCHAIN_LINK_LIBRARIES})
 target_link_options(rec PRIVATE -nostartfiles)

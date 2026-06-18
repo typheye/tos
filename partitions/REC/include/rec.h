@@ -13,26 +13,14 @@ REC_CODE uint8_t REC_FatHasUpgradeManifest(void);
 REC_CODE uint8_t REC_FatFlashUpgrade(void (*status)(const char *, uint16_t));
 REC_CODE uint8_t REC_FatFormat(void);
 REC_CODE uint8_t REC_FatInitStorage(void);
-REC_CODE uint8_t REC_FatPrepareMsc(uint32_t *block_count);
 REC_CODE void REC_FatRelease(void);
 REC_CODE const char *REC_FatLastError(void);
 
-/* Raw 512-byte block access used by REC USB MSC.  These wrappers deliberately
- * reuse the same SDIO initialization/retry path as REC FatFs so the two REC
- * storage users cannot drift into subtly different card geometry or bus
- * setup.  All calls are blocking and therefore must run from REC main context,
- * never from a USB interrupt callback. */
-REC_CODE uint8_t REC_BlockInit(uint32_t *block_count);
-REC_CODE uint8_t REC_BlockReady(void);
-REC_CODE uint8_t REC_BlockRead(uint32_t lba, uint8_t *buffer,
-                               uint32_t block_count);
-REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer,
-                                uint32_t block_count);
-REC_CODE uint8_t REC_BlockSync(void);
-REC_CODE void REC_BlockRelease(void);
-/* Best-effort diagnostic written before the raw SD medium is handed to USB.
- * It never blocks attachment on a filesystem/logging failure. */
-REC_CODE void REC_MscLogReady(uint32_t block_count);
+/* REC TDB owns the SD filesystem only while servicing a command.  USB CDC
+ * enumeration never waits for SD initialization. */
+REC_CODE uint8_t REC_FsMount(void);
+REC_CODE void REC_FsUnmount(void);
+REC_CODE uint8_t REC_FsIsMounted(void);
 
 #define REC_MODE_WAIT    0U
 #define REC_MODE_FORMAT  1U
