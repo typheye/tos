@@ -134,10 +134,20 @@ SBL_CODE void SBL_Run(void) {
   fastboot_requested = boot_target == SBL_BOOT_TARGET_FASTBOOT ? 1U
                                                                : SBL_IsFastbootRequested();
   app_valid = SBL_AppLooksValid();
-  if (!app_valid) {
-    fastboot_requested = 1U;
+
+  /* A damaged or erased SYSTEM must remain visibly distinguishable from an
+   * explicit FASTBOOT request.  The old code converted every invalid SYSTEM
+   * into fastboot_requested=1, which made the SYSTEM DAMAGE page unreachable
+   * after `erase system` + `reboot`.  Only the button or an explicit boot
+   * target may enter FASTBOOT; otherwise stay on the non-rebooting damage
+   * page so the user can decide when to recover the device. */
+  if (!fastboot_requested) {
+    if (app_valid) {
+      jump_to_image(TOS_PART_SYSTEM_ADDRESS);
+    }
+    SBL_LedsOff();
+    SBL_UiRunSystemDamage();
   }
-  if (!fastboot_requested && app_valid) jump_to_image(TOS_PART_SYSTEM_ADDRESS);
 
   SBL_LedsOff();
   if (fastboot_requested) {
@@ -154,7 +164,6 @@ SBL_CODE void SBL_Run(void) {
     }
     SBL_UiRunFastboot();
   }
-  if (!app_valid) SBL_UiRunSystemDamage();
   SBL_UiRunFastboot();
 }
 

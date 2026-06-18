@@ -25,7 +25,7 @@ static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
     {part_tee, TOS_PART_TEE_OFFSET, TOS_PART_TEE_ADDRESS,
      TOS_PART_TEE_ADDRESS, TOS_PART_TEE_SIZE, 0U, 1U, 0U, 0U},
     {part_rec, TOS_PART_REC_OFFSET, TOS_PART_REC_ADDRESS,
-     TOS_TMP_STAGE_ADDRESS, TOS_PART_REC_SIZE, 1U, 1U, 0U, 0U},
+     TOS_TMP_STAGE_ADDRESS, TOS_PART_REC_SIZE, 1U, 1U, 1U, 0U},
     {part_sah, TOS_PART_SAH_OFFSET, TOS_PART_SAH_ADDRESS,
      TOS_PART_SAH_ADDRESS, TOS_PART_SAH_SIZE, 0U, 1U, 1U, 0U},
     {part_system, TOS_PART_SYSTEM_OFFSET, TOS_PART_SYSTEM_ADDRESS,
@@ -154,7 +154,8 @@ SBL_CODE void SBL_FlashSetPostBootTarget(SBL_FlashSession *session,
 }
 
 SBL_CODE uint8_t SBL_FlashErasePartition(const SBL_FlashPartition *part) {
-  if (!part || !part->allow_erase || part->staged) return 0U;
+  if (!part || !part->allow_erase) return 0U;
+  if (part->staged && part->address != TOS_PART_REC_ADDRESS) return 0U;
   return erase_range(part->address, part->size);
 }
 

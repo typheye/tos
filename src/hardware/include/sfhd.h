@@ -77,9 +77,6 @@ typedef struct __attribute__((packed)) {
 
 
 
-Flash_Status_t Flash_Erase_Sector(void);
-
-
 Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize);
 
 

@@ -272,16 +272,17 @@ void about_activity_run(void) {
         break;
       case 11: /* Restore to Default */
         if (confirm_show("RST", "Erase all settings?\nDevice will reboot.")) {
-          /* Loading screen */
-          LCD_FLUSH({
-            UI_DrawFrameTitle("RST");
-            PD_SetColor(TOS_TEXT);
-            PD_DrawString(26, 33, "Resetting...");
-          });
-          JPDelay(2000);
-          /* Erase flash sector and reboot */
-          Flash_Erase_Sector();
-          NVIC_SystemReset();
+          /* Destructive USERDATA erase belongs to the independent REC image,
+           * not to SYSTEM.  Persist the one-shot target in TEE and reset; REC
+           * will erase and verify sector 11, then reboot into clean defaults. */
+          if (!Flash_BL_RecoveryAvailable()) {
+            alert_show("RST", "Recovery is unavailable.");
+          } else if (Flash_BL_SetBootTarget(
+                         FLASH_BL_BOOT_RECOVERY_FORMAT) == FLASH_OK) {
+            NVIC_SystemReset();
+          } else {
+            alert_show("RST", "Failed to enter recovery.");
+          }
         }
         break;
       }

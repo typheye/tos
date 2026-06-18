@@ -8,6 +8,39 @@
 extern uint32_t SystemCoreClock;
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
+/*
+ * Keep the USB device electrically absent from the host for the whole REC
+ * preparation phase.  Merely delaying USBD_Start() is not sufficient when
+ * REC is entered from a stage that previously used OTG FS: the peripheral or
+ * D+ pull-up may remain active long enough for Windows to create an instance
+ * and begin its media probe.  Replacing that instance a moment later with MSC
+ * triggers the host's long reset/retry path.
+ *
+ * This routine runs before interrupts and before any REC USB/HAL setup.  It
+ * resets and gates OTG FS, then drives PA12 (D+) low.  PA12 remains low until
+ * USBD_Init() configures the pin for AF10 and USBD_Start() deliberately
+ * connects the fully prepared MSC device.
+ */
+static REC_CODE void rec_usb_hold_disconnected(void) {
+  NVIC_DisableIRQ(OTG_FS_IRQn);
+  NVIC_ClearPendingIRQ(OTG_FS_IRQn);
+
+  RCC->AHB2RSTR |= RCC_AHB2RSTR_OTGFSRST;
+  __DSB();
+  RCC->AHB2RSTR &= ~RCC_AHB2RSTR_OTGFSRST;
+  RCC->AHB2ENR &= ~RCC_AHB2ENR_OTGFSEN;
+
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+  (void)RCC->AHB1ENR;
+  GPIOA->MODER &= ~(3UL << (12U * 2U));
+  GPIOA->MODER |= (1UL << (12U * 2U));
+  GPIOA->OTYPER &= ~(1UL << 12U);
+  GPIOA->OSPEEDR |= (3UL << (12U * 2U));
+  GPIOA->PUPDR &= ~(3UL << (12U * 2U));
+  GPIOA->BSRR = (1UL << (12U + 16U));
+  __DSB();
+}
+
 static uint8_t rec_clock_config(void) {
   uint32_t guard;
   uint32_t pll_m = 8UL;
@@ -60,6 +93,7 @@ static uint8_t rec_clock_config(void) {
 void REC_RuntimeMain(void) {
   uint8_t ok;
   SCB->VTOR = TOS_PART_REC_ADDRESS;
+  rec_usb_hold_disconnected();
   __enable_irq();
   SBL_HwBootstrap();
   SBL_LedsOff();

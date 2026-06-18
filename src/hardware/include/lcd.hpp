@@ -103,7 +103,9 @@ private:
   bool _auto_brightness;
   bool _auto_brightness_logged;
   bool _auto_brightness_force;
+  bool _auto_brightness_lux_valid;
   uint32_t _auto_brightness_last;
+  float _auto_brightness_lux;
   uint16_t _tile_y;
   uint16_t _tile_h;
 

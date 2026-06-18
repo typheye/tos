@@ -13,6 +13,7 @@ REC_CODE uint8_t REC_FatHasUpgradeManifest(void);
 REC_CODE uint8_t REC_FatFlashUpgrade(void (*status)(const char *, uint16_t));
 REC_CODE uint8_t REC_FatFormat(void);
 REC_CODE uint8_t REC_FatInitStorage(void);
+REC_CODE uint8_t REC_FatPrepareMsc(uint32_t *block_count);
 REC_CODE void REC_FatRelease(void);
 REC_CODE const char *REC_FatLastError(void);
 

@@ -805,8 +805,17 @@ static SBL_CODE void sbl_handle_command(const uint8_t *line) {
     (void)sbl_flash_parse_end();
   } else if (sbl_streq(line, "INFO") || sbl_streq(line, "info")) {
     sbl_send_info();
+  } else if (sbl_streq(line, "REBOOT RECOVERY") ||
+             sbl_streq(line, "reboot recovery")) {
+    if (!SBL_StateSetBootTarget(SBL_BOOT_TARGET_RECOVERY)) {
+      SBL_USB_WriteTextWait("FAIL boot target write failed\r\n");
+    } else {
+      SBL_USB_WriteTextWait("OK rebooting recovery\r\n");
+      SBL_DelayMs(80U);
+      SBL_SystemReboot();
+    }
   } else if (sbl_streq(line, "REBOOT") || sbl_streq(line, "reboot")) {
-    SBL_USB_WriteText("OK rebooting\r\n");
+    SBL_USB_WriteTextWait("OK rebooting\r\n");
     SBL_DelayMs(80U);
     SBL_SystemReboot();
   } else if (sbl_streq(line, "OEM UNLOCK") ||

@@ -236,7 +236,7 @@ static uint8_t *REC_MSC_ManufacturerStrDescriptor(USBD_SpeedTypeDef speed,
 static uint8_t *REC_MSC_ProductStrDescriptor(USBD_SpeedTypeDef speed,
                                              uint16_t *length) {
   (void)speed;
-  rec_msc_get_string("TOS REC MSC", length);
+  rec_msc_get_string("TOS USB Disk", length);
   return rec_msc_str_desc;
 }
 
@@ -250,14 +250,14 @@ static uint8_t *REC_MSC_SerialStrDescriptor(USBD_SpeedTypeDef speed,
 static uint8_t *REC_MSC_ConfigStrDescriptor(USBD_SpeedTypeDef speed,
                                             uint16_t *length) {
   (void)speed;
-  rec_msc_get_string("REC MSC Config", length);
+  rec_msc_get_string("Mass Storage", length);
   return rec_msc_str_desc;
 }
 
 static uint8_t *REC_MSC_InterfaceStrDescriptor(USBD_SpeedTypeDef speed,
                                                uint16_t *length) {
   (void)speed;
-  rec_msc_get_string("REC Mass Storage", length);
+  rec_msc_get_string("Mass Storage", length);
   return rec_msc_str_desc;
 }
 
@@ -456,7 +456,7 @@ static void rec_msc_fail_media(USBD_HandleTypeDef *pdev) {
 static void rec_msc_scsi_inquiry(USBD_HandleTypeDef *pdev,
                                  const uint8_t *cmd) {
   static const uint8_t vendor[] REC_CONST = "Typheye ";
-  static const uint8_t product[] REC_CONST = "TOS REC SD      ";
+  static const uint8_t product[] REC_CONST = "USB SD DISK     ";
   static const uint8_t rev[] REC_CONST = "0001";
   static const uint8_t unit_serial[] REC_CONST = "TOSREC000001";
   uint32_t len;
@@ -773,6 +773,11 @@ static uint8_t REC_USBD_MSC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx) {
                        REC_MSC_EP_MPS);
   (void)USBD_LL_OpenEP(pdev, REC_MSC_OUT_EP, USBD_EP_TYPE_BULK,
                        REC_MSC_EP_MPS);
+  /* Keep the core endpoint bookkeeping consistent with ST's official MSC
+   * class.  Standard CLEAR_FEATURE handling consults these flags; leaving
+   * them unset can turn a recoverable BOT halt into a host-side timeout. */
+  pdev->ep_in[REC_MSC_IN_EP & 0x0FU].is_used = 1U;
+  pdev->ep_out[REC_MSC_OUT_EP & 0x0FU].is_used = 1U;
   rec_msc_prepare_cbw(pdev);
   return (uint8_t)USBD_OK;
 }
@@ -781,6 +786,8 @@ static uint8_t REC_USBD_MSC_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx) {
   (void)cfgidx;
   (void)USBD_LL_CloseEP(pdev, REC_MSC_IN_EP);
   (void)USBD_LL_CloseEP(pdev, REC_MSC_OUT_EP);
+  pdev->ep_in[REC_MSC_IN_EP & 0x0FU].is_used = 0U;
+  pdev->ep_out[REC_MSC_OUT_EP & 0x0FU].is_used = 0U;
   pdev->pClassData = NULL;
   pdev->pClassDataCmsit[pdev->classId] = NULL;
   return (uint8_t)USBD_OK;
@@ -790,12 +797,14 @@ static uint8_t REC_USBD_MSC_Setup(USBD_HandleTypeDef *pdev,
                                   USBD_SetupReqTypedef *req) {
   switch (req->bmRequest & USB_REQ_TYPE_MASK) {
     case USB_REQ_TYPE_CLASS:
-      if (req->bRequest == MSC_REQ_GET_MAX_LUN && req->wLength == 1U) {
+      if (req->bRequest == MSC_REQ_GET_MAX_LUN && req->wValue == 0U &&
+          req->wLength == 1U && (req->bmRequest & 0x80U) != 0U) {
         /* EP0 transmission is asynchronous.  Never pass a pointer to a stack
          * variable that ceases to exist when Setup() returns. */
         rec_msc_ep0_reply[0] = 0U;
         (void)USBD_CtlSendData(pdev, rec_msc_ep0_reply, 1U);
-      } else if (req->bRequest == MSC_REQ_BOT_RESET) {
+      } else if (req->bRequest == MSC_REQ_BOT_RESET && req->wValue == 0U &&
+                 req->wLength == 0U && (req->bmRequest & 0x80U) == 0U) {
         rec_msc.bot_generation++;
         (void)USBD_LL_FlushEP(pdev, REC_MSC_IN_EP);
         (void)USBD_LL_FlushEP(pdev, REC_MSC_OUT_EP);
@@ -885,7 +894,6 @@ REC_CODE uint8_t REC_MSC_IsStarted(void) {
 
 REC_CODE uint8_t REC_MSC_Start(void) {
   uint32_t now;
-  uint8_t media_ready;
 
   if (rec_msc.started) {
     return 1U;
@@ -893,7 +901,7 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc.sector_buf = rec_msc_sector_storage;
 
   rec_msc.storage_ready = 0U;
-  rec_msc.storage_initializing = 1U;
+  rec_msc.storage_initializing = 0U;
   rec_msc.card_blocks = 0U;
   rec_msc.stage = REC_MSC_STAGE_CBW;
   rec_msc.csw_status = 0U;
@@ -910,15 +918,12 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc_copy(rec_msc_cfg_desc, rec_msc_cfg_desc_template,
                sizeof(rec_msc_cfg_desc));
 
-  /* ST's official BOT implementation initializes the storage backend before
-   * arming the endpoint for the first CBW.  Do the equivalent here, but before
-   * connecting D+, so Windows never observes the transient NOT READY state
-   * that triggers its roughly 10-15 second removable-media polling backoff.
-   * The fast REC profile is bounded; a missing/bad card still reaches USB as
-   * a no-medium device instead of blocking REC indefinitely. */
-  media_ready = rec_msc_storage_init();
-
-  SBL_USB_DisconnectPulse();
+  /* Start one stable MSC device immediately and probe SD from REC_MSC_Tick().
+   * Waiting for SD before connecting D+ made slow cards look like a 10s USB
+   * delay; disconnect/retry made Windows rebuild the device and sometimes
+   * report Unknown Device.  During the short probe window SCSI returns
+   * NOT READY/BECOMING READY, matching a normal USB disk whose medium is still
+   * spinning up, and the USB identity never changes. */
   if (USBD_Init(&rec_msc_dev, (USBD_DescriptorsTypeDef *)&REC_MSC_Desc,
                 DEVICE_FS) != USBD_OK) {
     (void)USBD_DeInit(&rec_msc_dev);
@@ -944,7 +949,7 @@ REC_CODE uint8_t REC_MSC_Start(void) {
   rec_msc.started = 1U;
   now = HAL_GetTick();
   rec_msc.enum_deadline = now + REC_MSC_ENUM_GRACE_MS;
-  rec_msc.retry_at = media_ready ? 0U : (now + REC_MSC_RETRY_MS);
+  rec_msc.retry_at = now;
   return 1U;
 }
 

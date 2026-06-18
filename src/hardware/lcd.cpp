@@ -131,7 +131,9 @@ LCD::LCD() {
   _auto_brightness = false;
   _auto_brightness_logged = false;
   _auto_brightness_force = false;
+  _auto_brightness_lux_valid = false;
   _auto_brightness_last = 0;
+  _auto_brightness_lux = 0.0f;
   _tile_y = 0;
   _tile_h = TILE_HEIGHT;
 }
@@ -451,13 +453,35 @@ void LCD::setAutoBrightness(bool on) {
   if (_auto_brightness != enabled) {
     _auto_brightness_force = enabled;
     _auto_brightness_last = 0;
+    _auto_brightness_lux_valid = false;
   } else if (enabled) {
     _auto_brightness_force = true;
   }
   _auto_brightness = enabled;
   if (!enabled) {
     _auto_brightness_logged = false;
+    _auto_brightness_lux_valid = false;
   }
+}
+
+static uint16_t lcd_auto_brightness_target(float lux) {
+  if (lux < 3.0f)
+    return 85U;
+  if (lux < 10.0f)
+    return 135U;
+  if (lux < 30.0f)
+    return 210U;
+  if (lux < 80.0f)
+    return 320U;
+  if (lux < 180.0f)
+    return 460U;
+  if (lux < 400.0f)
+    return 620U;
+  if (lux < 900.0f)
+    return 780U;
+  if (lux < 2500.0f)
+    return 900U;
+  return 1000U;
 }
 
 void LCD::updateAutoBrightness(void) {
@@ -466,6 +490,7 @@ void LCD::updateAutoBrightness(void) {
   if (!_auto_brightness) {
     _auto_brightness_logged = false;
     _auto_brightness_last = 0;
+    _auto_brightness_lux_valid = false;
     return;
   }
   if (!_auto_brightness_logged) {
@@ -473,7 +498,7 @@ void LCD::updateAutoBrightness(void) {
     _auto_brightness_logged = true;
   }
 
-  const uint32_t interval = _auto_brightness_force ? 0U : 1000U;
+  const uint32_t interval = _auto_brightness_force ? 0U : 300U;
   if ((uint32_t)(now - _auto_brightness_last) < interval)
     return;
   _auto_brightness_last = now;
@@ -486,34 +511,40 @@ void LCD::updateAutoBrightness(void) {
   if (lux < 0.0f || lux > 20000.0f) {
     return;
   }
-  uint16_t target;
-  if (lux < 1)
-    target = 50;
-  else if (lux < 10)
-    target = 100;
-  else if (lux < 50)
-    target = 200;
-  else if (lux < 200)
-    target = 350;
-  else if (lux < 500)
-    target = 550;
-  else if (lux < 1000)
-    target = 750;
-  else
-    target = 1000;
+
+  if (!_auto_brightness_lux_valid) {
+    _auto_brightness_lux = lux;
+    _auto_brightness_lux_valid = true;
+  } else {
+    float alpha = lux > _auto_brightness_lux ? 0.55f : 0.35f;
+    if (lux < _auto_brightness_lux && lux < 30.0f)
+      alpha = 0.25f;
+    _auto_brightness_lux += (lux - _auto_brightness_lux) * alpha;
+  }
+
+  uint16_t target = lcd_auto_brightness_target(_auto_brightness_lux);
 
   uint16_t cur = _brightness_pwm;
-  uint16_t pwm;
-  if (_auto_brightness_force) {
-    pwm = target;
+  uint16_t distance = target > cur ? (uint16_t)(target - cur)
+                                   : (uint16_t)(cur - target);
+
+  if (distance < 25U) {
     _auto_brightness_force = false;
-  } else if (target > cur) {
-    uint16_t d = target - cur;
-    pwm = cur + (d > 220U ? 220U : d);
-  } else {
-    uint16_t d = cur - target;
-    pwm = cur - (d > 220U ? 220U : d);
+    return;
   }
+
+  uint16_t pwm = cur;
+  if (target > cur) {
+    uint16_t d = (uint16_t)(target - cur);
+    uint16_t max_step = _auto_brightness_force ? 1000U : 160U;
+    pwm = (uint16_t)(cur + (d > max_step ? max_step : d));
+  } else {
+    uint16_t d = (uint16_t)(cur - target);
+    uint16_t max_step = _auto_brightness_lux < 30.0f ? 70U : 120U;
+    pwm = (uint16_t)(cur - (d > max_step ? max_step : d));
+  }
+
+  _auto_brightness_force = false;
 
   if (pwm != _brightness_pwm)
     setBrightness(pwm);

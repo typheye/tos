@@ -9,18 +9,12 @@
 #include "tos_partitions.h"
 
 #define REC_SD_TIMEOUT_MS 5000U
-#define REC_SD_FAST_READY_MS 750U
+#define REC_SD_FAST_READY_MS 250U
 #define REC_BLOCK_IO_TIMEOUT_MS 300U
 #define REC_FLASH_BUF_SZ 512U
 #define REC_SD_IO_ATTEMPTS 2U
 #ifndef REC_ENABLE_WIDE_BUS
 #define REC_ENABLE_WIDE_BUS 1
-#endif
-
-/* Keep destructive userdata erase disabled during development. Set to 0 only
- * for production builds that should really erase Flash sector 11. */
-#ifndef REC_FORMAT_FAKE
-#define REC_FORMAT_FAKE 1U
 #endif
 
 #define REC_USERDATA_SECTOR_INDEX 11U
@@ -228,6 +222,18 @@ static REC_CODE DSTATUS rec_disk_initialize_profile(BYTE lun,
                                                     uint32_t ready_timeout_ms) {
   HAL_SD_CardInfoTypeDef info;
   (void)lun;
+
+  /* FatFs calls disk_initialize() again from f_mount(..., 1).  MSC startup
+   * has already initialized SDIO immediately before that mount, so tearing
+   * the live card down and running the complete identification sequence a
+   * second time adds several seconds on some cards.  The ST MSC storage model
+   * initializes its backend once and then serves capacity/read requests from
+   * that live handle.  Preserve the same behavior here: a valid cached
+   * geometry plus a card in TRANSFER state is already initialized. */
+  if (hsd.Instance == SDIO && rec_card_blocks > 0U &&
+      rec_card_block_size == 512U && rec_wait_ready(20U)) {
+    return 0U;
+  }
 
   rec_card_blocks = 0U;
   rec_card_block_size = 512U;
@@ -981,9 +987,10 @@ REC_CODE uint8_t REC_FatInitStorage(void) {
 REC_CODE uint8_t REC_FatFormat(void) {
   rec_copy_error(rec_err_none);
 
-#if REC_FORMAT_FAKE
-  return 1U;
-#else
+  /* Factory reset is deliberately owned by REC.  SYSTEM only requests the
+   * RECOVERY_FORMAT boot target and resets; REC performs the destructive
+   * sector erase from its independent image and verifies every word before
+   * returning success. */
   if (!SBL_FlashUnlock()) {
     rec_copy_error(rec_err_userdata);
     return 0U;
@@ -1004,7 +1011,6 @@ REC_CODE uint8_t REC_FatFormat(void) {
     }
   }
   return 1U;
-#endif
 }
 
 REC_CODE void REC_FatRelease(void) {
@@ -1050,6 +1056,46 @@ REC_CODE uint8_t REC_BlockInit(uint32_t *block_count) {
   }
   if (block_count) {
     *block_count = rec_card_blocks;
+  }
+  return 1U;
+}
+
+REC_CODE uint8_t REC_FatPrepareMsc(uint32_t *block_count) {
+  uint32_t blocks = 0U;
+  DSTATUS status;
+
+  rec_copy_error(rec_err_none);
+  if (!rec_buffers_init()) {
+    return 0U;
+  }
+
+  /* MSC exposes the raw block device; a complete FatFs mount is neither
+   * required nor desirable here.  The previous startup path used the normal
+   * 5-second REC timeout and then mounted/unmounted FatFs before connecting
+   * USB.  A single slow CMD13 therefore delayed the USB device by 5 seconds,
+   * and the retry path could double that delay.  Perform one bounded card
+   * identification instead, then prove the medium with an actual LBA0 read.
+   * This remains safe for unformatted cards because no filesystem structure
+   * is interpreted or modified. */
+  status = rec_disk_initialize_fast(0U);
+  if (status != 0U && rec_card_blocks == 0U) {
+    return 0U;
+  }
+  if (rec_card_block_size != 512U || rec_card_blocks == 0U) {
+    rec_copy_error(rec_err_card_info);
+    rec_sd_drop();
+    return 0U;
+  }
+  blocks = rec_card_blocks;
+
+  if (!REC_BlockRead(0U, rec_scratch_buf, 1U)) {
+    rec_copy_error(rec_err_sd_read);
+    rec_sd_drop();
+    return 0U;
+  }
+
+  if (block_count) {
+    *block_count = blocks;
   }
   return 1U;
 }

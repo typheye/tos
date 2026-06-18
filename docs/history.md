@@ -604,3 +604,33 @@ USB 可以反复插拔重新识别
 再次审查各分区的独立性，确保system、rec、sah分区被我抹除后系统仍能启动sbl！！！
 
 修改代码，用我给你的最新code包，基于这个修改，生成增量包！
+
+变成至10、11s了，更慢了
+
+其他的：
+
+修改SBL：增加reboot recovery指令实现，用于sbltools.py实现重启到rec；
+
+当我主动
+
+(test) C:\Code\tos\win-pc\src>python sbltools.py --port COM8 erase system
+
+OKAY ERASED
+
+(test) C:\Code\tos\win-pc\src>python sbltools.py --port COM8 reboot
+
+OK rebooting
+
+把system等分区擦除重启导致无法正常引导进入系统时，应该跳转到永不自动重启的SYSTEM DAMAGE界面，而不是直接进入fastboot！
+
+TOS方面，自动亮度策略太激进了，可能导致暗光环境下出现短时间内亮度频繁变化
+
+修改sbltools.py以兼容适应新sbl指令，
+
+修改我重新打包的code.zip，返回增量包
+
+自动亮度失效了/变化反应太迟钝！！！修改优化，不要加什么复杂的算法，稳定及时为主
+
+修改sbl策略，REC可以擦除，之后进入rec时运行，检测，不存在就跳转到RECOVERY EXCEPTION（规则同SYSTEM DAMAGE，不可自动重启）第二行字显示"The recovery has some errors."
+
+USB的哪个要不再尝试重构一下？？？深入分析延迟来源！
