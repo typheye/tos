@@ -13,6 +13,11 @@ SBL_CODE uint8_t SBL_StateScheduleUpdate(uint32_t update_kind,
                                          uint32_t target_address,
                                          uint32_t image_size,
                                          uint32_t image_crc32);
+SBL_CODE uint8_t SBL_StateScheduleUpdatePost(uint32_t update_kind,
+                                             uint32_t target_address,
+                                             uint32_t image_size,
+                                             uint32_t image_crc32,
+                                             uint32_t post_boot_target);
 
 #define SBL_BOOT_TARGET_NONE             TOS_BOOT_TARGET_NONE
 #define SBL_BOOT_TARGET_FASTBOOT         TOS_BOOT_TARGET_FASTBOOT

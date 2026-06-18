@@ -109,14 +109,23 @@ SBL_CODE uint8_t SBL_StateScheduleUpdate(uint32_t update_kind,
                                          uint32_t target_address,
                                          uint32_t image_size,
                                          uint32_t image_crc32) {
+  return SBL_StateScheduleUpdatePost(update_kind, target_address, image_size,
+                                     image_crc32, SBL_BOOT_TARGET_FASTBOOT);
+}
+
+SBL_CODE uint8_t SBL_StateScheduleUpdatePost(uint32_t update_kind,
+                                             uint32_t target_address,
+                                             uint32_t image_size,
+                                             uint32_t image_crc32,
+                                             uint32_t post_boot_target) {
   if ((update_kind != TOS_UPDATE_SBL && update_kind != TOS_UPDATE_REC) ||
       image_crc32 == 0xFFFFFFFFUL) {
     return 0U;
   }
-  return sbl_state_append(SBL_StateUnlocked(), SBL_BOOT_TARGET_FASTBOOT,
+  return sbl_state_append(SBL_StateUnlocked(), post_boot_target,
                           update_kind, TOS_TXN_STATE_PENDING,
                           target_address, image_size, image_crc32,
-                          SBL_BOOT_TARGET_FASTBOOT);
+                          post_boot_target);
 }
 
 SBL_CODE uint32_t SBL_StatePeekBootTarget(void) {

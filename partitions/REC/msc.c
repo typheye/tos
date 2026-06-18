@@ -19,6 +19,9 @@
 #define REC_MSC_INIT_ATTEMPTS    2U
 #define REC_MSC_ENUM_GRACE_MS    6000U
 #define REC_MSC_RETRY_MS         1500U
+#ifndef REC_MSC_ENABLE_WIDE_BUS
+#define REC_MSC_ENABLE_WIDE_BUS 0
+#endif
 
 #define MSC_REQ_BOT_RESET        0xFFU
 #define MSC_REQ_GET_MAX_LUN      0xFEU
@@ -364,7 +367,7 @@ static uint8_t rec_msc_storage_init(void) {
       continue;
     }
 
-#ifdef SDIO_BUS_WIDE_4B
+#if REC_MSC_ENABLE_WIDE_BUS && defined(SDIO_BUS_WIDE_4B)
     (void)HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B);
 #endif
     if (!rec_msc_wait_ready(REC_MSC_SD_TIMEOUT_MS)) {

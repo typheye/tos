@@ -9,23 +9,21 @@
 #include "tos_partitions.h"
 
 #define REC_SD_TIMEOUT_MS 5000U
-#define REC_FLASH_BUF_SZ  4096U
+#define REC_FLASH_BUF_SZ 512U
 #define REC_SD_IO_ATTEMPTS 2U
+#ifndef REC_ENABLE_WIDE_BUS
+#define REC_ENABLE_WIDE_BUS 0
+#endif
 
-/* Development safety switch: keep the REC format flow and bootloader
- * lock/unlock security semantics intact, but skip the destructive TMP and
- * USERDATA erase while this board is still being debugged. Set this to 0 for
- * production so lock/unlock performs the real data wipe required by policy. */
+/* Keep destructive userdata erase disabled during development. Set to 0 only
+ * for production builds that should really erase Flash sector 11. */
 #ifndef REC_FORMAT_FAKE
 #define REC_FORMAT_FAKE 1U
 #endif
 
-#define REC_TMP_SECTOR_INDEX 10U
-#define REC_TMP_START        0x080C0000UL
-#define REC_TMP_END          0x080E0000UL
 #define REC_USERDATA_SECTOR_INDEX 11U
-#define REC_USERDATA_START        0x080E0000UL
-#define REC_USERDATA_END          0x08100000UL
+#define REC_USERDATA_START 0x080E0000UL
+#define REC_USERDATA_END 0x08100000UL
 
 static FATFS rec_fs;
 static char rec_path[4];
@@ -64,7 +62,8 @@ static const char rec_err_format[] REC_CONST = "SD format failed";
 static const char rec_err_format_verify[] REC_CONST = "SD verify failed";
 static const char rec_err_layout[] REC_CONST = "Layout create failed";
 static const char rec_err_userdata[] REC_CONST = "Userdata erase failed";
-static const char rec_err_userdata_verify[] REC_CONST = "Userdata verify failed";
+static const char rec_err_userdata_verify[] REC_CONST =
+    "Userdata verify failed";
 static const char rec_err_sync[] REC_CONST = "SD sync failed";
 static const char rec_path_init[] REC_CONST = "0:/init";
 static const char rec_path_manifest[] REC_CONST =
@@ -73,15 +72,12 @@ static const char rec_path_sbl[] REC_CONST =
     "0:/storage/tos/upgrade/firmware/sbl.bin";
 static const char rec_path_tee[] REC_CONST =
     "0:/storage/tos/upgrade/firmware/tee.bin";
-static const char rec_path_rec[] REC_CONST =
-    "0:/storage/tos/upgrade/firmware/rec.bin";
 static const char rec_path_sah[] REC_CONST =
     "0:/storage/tos/upgrade/firmware/sah.bin";
 static const char rec_path_system[] REC_CONST =
     "0:/storage/tos/upgrade/firmware/system.bin";
 static const char rec_status_sbl[] REC_CONST = "Flashing SBL...";
 static const char rec_status_tee[] REC_CONST = "Flashing TEE...";
-static const char rec_status_rec[] REC_CONST = "Flashing REC...";
 static const char rec_status_sah[] REC_CONST = "Flashing SAH...";
 static const char rec_status_system[] REC_CONST = "Flashing SYSTEM...";
 static const char rec_log_started[] REC_CONST = "Recovery log started";
@@ -90,11 +86,11 @@ static const char rec_log_init_found[] REC_CONST = "/init found";
 static const char rec_log_manifest_found[] REC_CONST = "Upgrade manifest found";
 static const char rec_log_crc[] REC_CONST = "Calculating image CRC";
 static const char rec_log_image_flashed[] REC_CONST = "Image flashed";
-static const char rec_log_image_skipped[] REC_CONST = "Image not present, skipped";
+static const char rec_log_image_skipped[] REC_CONST =
+    "Image not present, skipped";
 static const char rec_log_upgrade_done[] REC_CONST = "Upgrade completed";
 static const char rec_log_init_done[] REC_CONST = "Storage initialized";
 static const char rec_err_no_images[] REC_CONST = "No upgrade images found";
-static const char rec_err_too_many_staged[] REC_CONST = "Only one SBL/REC image allowed";
 
 static REC_CODE void rec_copy_error(const char *msg) {
   uint32_t i = 0U;
@@ -110,27 +106,48 @@ static REC_CODE void rec_copy_error(const char *msg) {
 
 static REC_CODE const char *rec_fresult_name(FRESULT fr) {
   switch (fr) {
-    case FR_OK: return "FR_OK";
-    case FR_DISK_ERR: return "FR_DISK_ERR";
-    case FR_INT_ERR: return "FR_INT_ERR";
-    case FR_NOT_READY: return "FR_NOT_READY";
-    case FR_NO_FILE: return "FR_NO_FILE";
-    case FR_NO_PATH: return "FR_NO_PATH";
-    case FR_INVALID_NAME: return "FR_INVALID_NAME";
-    case FR_DENIED: return "FR_DENIED";
-    case FR_EXIST: return "FR_EXIST";
-    case FR_INVALID_OBJECT: return "FR_INVALID_OBJECT";
-    case FR_WRITE_PROTECTED: return "FR_WRITE_PROTECTED";
-    case FR_INVALID_DRIVE: return "FR_INVALID_DRIVE";
-    case FR_NOT_ENABLED: return "FR_NOT_ENABLED";
-    case FR_NO_FILESYSTEM: return "FR_NO_FILESYSTEM";
-    case FR_MKFS_ABORTED: return "FR_MKFS_ABORTED";
-    case FR_TIMEOUT: return "FR_TIMEOUT";
-    case FR_LOCKED: return "FR_LOCKED";
-    case FR_NOT_ENOUGH_CORE: return "FR_NOT_ENOUGH_CORE";
-    case FR_TOO_MANY_OPEN_FILES: return "FR_TOO_MANY_OPEN_FILES";
-    case FR_INVALID_PARAMETER: return "FR_INVALID_PARAMETER";
-    default: return "FR_UNKNOWN";
+  case FR_OK:
+    return "FR_OK";
+  case FR_DISK_ERR:
+    return "FR_DISK_ERR";
+  case FR_INT_ERR:
+    return "FR_INT_ERR";
+  case FR_NOT_READY:
+    return "FR_NOT_READY";
+  case FR_NO_FILE:
+    return "FR_NO_FILE";
+  case FR_NO_PATH:
+    return "FR_NO_PATH";
+  case FR_INVALID_NAME:
+    return "FR_INVALID_NAME";
+  case FR_DENIED:
+    return "FR_DENIED";
+  case FR_EXIST:
+    return "FR_EXIST";
+  case FR_INVALID_OBJECT:
+    return "FR_INVALID_OBJECT";
+  case FR_WRITE_PROTECTED:
+    return "FR_WRITE_PROTECTED";
+  case FR_INVALID_DRIVE:
+    return "FR_INVALID_DRIVE";
+  case FR_NOT_ENABLED:
+    return "FR_NOT_ENABLED";
+  case FR_NO_FILESYSTEM:
+    return "FR_NO_FILESYSTEM";
+  case FR_MKFS_ABORTED:
+    return "FR_MKFS_ABORTED";
+  case FR_TIMEOUT:
+    return "FR_TIMEOUT";
+  case FR_LOCKED:
+    return "FR_LOCKED";
+  case FR_NOT_ENOUGH_CORE:
+    return "FR_NOT_ENOUGH_CORE";
+  case FR_TOO_MANY_OPEN_FILES:
+    return "FR_TOO_MANY_OPEN_FILES";
+  case FR_INVALID_PARAMETER:
+    return "FR_INVALID_PARAMETER";
+  default:
+    return "FR_UNKNOWN";
   }
 }
 
@@ -155,9 +172,7 @@ static REC_CODE void rec_set_error_fresult(const char *prefix, FRESULT fr) {
   *p = 0;
 }
 
-static REC_CODE uint8_t rec_buffers_init(void) {
-  return 1U;
-}
+static REC_CODE uint8_t rec_buffers_init(void) { return 1U; }
 
 static REC_CODE void rec_memcpy(uint8_t *dst, const uint8_t *src, uint32_t n) {
   while (n--) {
@@ -238,7 +253,7 @@ static REC_CODE DSTATUS rec_disk_initialize(BYTE lun) {
     return STA_NOINIT;
   }
 
-#ifdef SDIO_BUS_WIDE_4B
+#if REC_ENABLE_WIDE_BUS && defined(SDIO_BUS_WIDE_4B)
   (void)HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B);
 #endif
 
@@ -274,15 +289,14 @@ static REC_CODE DRESULT rec_disk_read(BYTE lun, BYTE *buff, DWORD sector,
   }
   if (((uint32_t)buff & 3U) == 0U) {
     for (uint8_t attempt = 0U; attempt < REC_SD_IO_ATTEMPTS; ++attempt) {
-      if (HAL_SD_ReadBlocks(&hsd, buff, sector, count,
-                            REC_SD_TIMEOUT_MS) == HAL_OK &&
+      if (HAL_SD_ReadBlocks(&hsd, buff, sector, count, REC_SD_TIMEOUT_MS) ==
+              HAL_OK &&
           rec_wait_ready(REC_SD_TIMEOUT_MS)) {
         return RES_OK;
       }
       rec_sd_drop();
       rec_copy_error(rec_err_sd_read);
-      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
-          rec_disk_initialize(0U) == 0U) {
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS && rec_disk_initialize(0U) == 0U) {
         continue;
       }
       break;
@@ -292,16 +306,15 @@ static REC_CODE DRESULT rec_disk_read(BYTE lun, BYTE *buff, DWORD sector,
   for (UINT i = 0U; i < count; ++i) {
     uint8_t ok = 0U;
     for (uint8_t attempt = 0U; attempt < REC_SD_IO_ATTEMPTS; ++attempt) {
-      if (HAL_SD_ReadBlocks(&hsd, scratch, sector + i, 1U,
-                            REC_SD_TIMEOUT_MS) == HAL_OK &&
+      if (HAL_SD_ReadBlocks(&hsd, scratch, sector + i, 1U, REC_SD_TIMEOUT_MS) ==
+              HAL_OK &&
           rec_wait_ready(REC_SD_TIMEOUT_MS)) {
         ok = 1U;
         break;
       }
       rec_sd_drop();
       rec_copy_error(rec_err_sd_read);
-      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
-          rec_disk_initialize(0U) == 0U) {
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS && rec_disk_initialize(0U) == 0U) {
         continue;
       }
       break;
@@ -334,8 +347,7 @@ static REC_CODE DRESULT rec_disk_write(BYTE lun, const BYTE *buff, DWORD sector,
       }
       rec_sd_drop();
       rec_copy_error(rec_err_sd_write);
-      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
-          rec_disk_initialize(0U) == 0U) {
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS && rec_disk_initialize(0U) == 0U) {
         continue;
       }
       break;
@@ -354,8 +366,7 @@ static REC_CODE DRESULT rec_disk_write(BYTE lun, const BYTE *buff, DWORD sector,
       }
       rec_sd_drop();
       rec_copy_error(rec_err_sd_write);
-      if (attempt + 1U < REC_SD_IO_ATTEMPTS &&
-          rec_disk_initialize(0U) == 0U) {
+      if (attempt + 1U < REC_SD_IO_ATTEMPTS && rec_disk_initialize(0U) == 0U) {
         continue;
       }
       break;
@@ -370,31 +381,31 @@ static REC_CODE DRESULT rec_disk_write(BYTE lun, const BYTE *buff, DWORD sector,
 static REC_CODE DRESULT rec_disk_ioctl(BYTE lun, BYTE cmd, void *buff) {
   (void)lun;
   switch (cmd) {
-    case CTRL_SYNC:
-      return rec_wait_ready(REC_SD_TIMEOUT_MS) ? RES_OK : RES_ERROR;
-    case GET_SECTOR_COUNT:
-      if (!buff || rec_card_blocks == 0U) return RES_ERROR;
-      *(DWORD *)buff = rec_card_blocks;
-      return RES_OK;
-    case GET_SECTOR_SIZE:
-      if (!buff) return RES_PARERR;
-      *(WORD *)buff = 512U;
-      return RES_OK;
-    case GET_BLOCK_SIZE:
-      if (!buff) return RES_PARERR;
-      *(DWORD *)buff = 1U;
-      return RES_OK;
-    default:
+  case CTRL_SYNC:
+    return rec_wait_ready(REC_SD_TIMEOUT_MS) ? RES_OK : RES_ERROR;
+  case GET_SECTOR_COUNT:
+    if (!buff || rec_card_blocks == 0U)
+      return RES_ERROR;
+    *(DWORD *)buff = rec_card_blocks;
+    return RES_OK;
+  case GET_SECTOR_SIZE:
+    if (!buff)
       return RES_PARERR;
+    *(WORD *)buff = 512U;
+    return RES_OK;
+  case GET_BLOCK_SIZE:
+    if (!buff)
+      return RES_PARERR;
+    *(DWORD *)buff = 1U;
+    return RES_OK;
+  default:
+    return RES_PARERR;
   }
 }
 
 static const Diskio_drvTypeDef rec_sd_driver REC_CONST = {
-    rec_disk_initialize,
-    rec_disk_status,
-    rec_disk_read,
-    rec_disk_write,
-    rec_disk_ioctl,
+    rec_disk_initialize, rec_disk_status, rec_disk_read,
+    rec_disk_write,      rec_disk_ioctl,
 };
 
 static REC_CODE uint8_t rec_sd_write_preflight(void) {
@@ -452,8 +463,8 @@ static REC_CODE char *rec_append_u32(char *p, uint32_t v) {
   return p;
 }
 
-static REC_CODE char *rec_append_u32_pad(char *p, uint32_t v,
-                                         uint8_t width, char pad) {
+static REC_CODE char *rec_append_u32_pad(char *p, uint32_t v, uint8_t width,
+                                         char pad) {
   char tmp[10];
   uint8_t n = 0U;
   do {
@@ -593,8 +604,7 @@ static REC_CODE uint8_t rec_crc_file(FIL *file, uint32_t *crc_out) {
   return 1U;
 }
 
-static REC_CODE uint8_t rec_flash_file(const char *part_name,
-                                       const char *path,
+static REC_CODE uint8_t rec_flash_file(const char *part_name, const char *path,
                                        const char *status_text,
                                        void (*status)(const char *, uint16_t),
                                        uint8_t *flashed) {
@@ -624,11 +634,13 @@ static REC_CODE uint8_t rec_flash_file(const char *part_name,
     (void)f_close(&file);
     rec_copy_error(rec_err_bad_size);
     rec_log_line("ERROR", "REC  ", rec_err_bad_size);
-    if (status) status(rec_err_bad_size, SBL_RED);
+    if (status)
+      status(rec_err_bad_size, SBL_RED);
     return 0U;
   }
 
-  if (status) status(status_text, SBL_WHITE);
+  if (status)
+    status(status_text, SBL_WHITE);
   rec_log_line("INFO ", "REC  ", rec_log_crc);
   if (!rec_crc_file(&file, &image_crc)) {
     (void)f_close(&file);
@@ -640,6 +652,9 @@ static REC_CODE uint8_t rec_flash_file(const char *part_name,
     rec_copy_error(rec_err_flash_begin);
     rec_log_line("ERROR", "FLASH", rec_err_flash_begin);
     return 0U;
+  }
+  if (part->address == TOS_PART_SBL_ADDRESS) {
+    SBL_FlashSetPostBootTarget(&session, TOS_BOOT_TARGET_NONE);
   }
 
   fr = f_lseek(&file, 0U);
@@ -662,7 +677,8 @@ static REC_CODE uint8_t rec_flash_file(const char *part_name,
       uint32_t chunk_crc = SBL_FlashCrc32Finish(
           SBL_FlashCrc32Update(SBL_FlashCrc32Seed(), rec_flash_buf, br));
       if ((br & 3U) != 0U ||
-          !SBL_FlashWriteChunk(&session, offset, rec_flash_buf, br, chunk_crc)) {
+          !SBL_FlashWriteChunk(&session, offset, rec_flash_buf, br,
+                               chunk_crc)) {
         (void)f_close(&file);
         SBL_FlashAbort(&session);
         rec_copy_error(rec_err_flash_write);
@@ -726,8 +742,7 @@ REC_CODE uint8_t REC_FatProbeInit(void) {
     fr = f_read(&file, rec_flash_buf, REC_FLASH_BUF_SZ, &br);
     if (fr != FR_OK || br != REC_FLASH_BUF_SZ) {
       (void)f_close(&file);
-      rec_set_error_fresult(rec_err_init_stat,
-                            fr == FR_OK ? FR_DISK_ERR : fr);
+      rec_set_error_fresult(rec_err_init_stat, fr == FR_OK ? FR_DISK_ERR : fr);
       rec_log_line("ERROR", "REC  ", REC_FatLastError());
       return 0U;
     }
@@ -766,42 +781,32 @@ REC_CODE uint8_t REC_FatHasUpgradeManifest(void) {
 
 REC_CODE uint8_t REC_FatFlashUpgrade(void (*status)(const char *, uint16_t)) {
   uint8_t wrote = 0U;
-  uint8_t staged_count = 0U;
-  FRESULT fr;
 
   if (!rec_mounted) {
     rec_copy_error(rec_err_mount);
     return 0U;
   }
-  if (rec_file_exists(rec_path_sbl, &fr)) staged_count++;
-  if (rec_file_exists(rec_path_rec, &fr)) staged_count++;
-  if (staged_count > 1U) {
-    rec_copy_error(rec_err_too_many_staged);
-    rec_log_line("ERROR", "REC  ", rec_err_too_many_staged);
-    return 0U;
-  }
-
-  if (status) status(rec_status_tee, SBL_WHITE);
+  if (status)
+    status(rec_status_tee, SBL_WHITE);
   if (!rec_flash_file("tee", rec_path_tee, rec_status_tee, status, &wrote)) {
     return 0U;
   }
 
-  if (status) status(rec_status_sah, SBL_WHITE);
+  if (status)
+    status(rec_status_sah, SBL_WHITE);
   if (!rec_flash_file("sah", rec_path_sah, rec_status_sah, status, &wrote)) {
     return 0U;
   }
 
-  if (status) status(rec_status_system, SBL_WHITE);
-  if (!rec_flash_file("system", rec_path_system, rec_status_system, status, &wrote)) {
+  if (status)
+    status(rec_status_system, SBL_WHITE);
+  if (!rec_flash_file("system", rec_path_system, rec_status_system, status,
+                      &wrote)) {
     return 0U;
   }
 
-  if (status) status(rec_status_rec, SBL_WHITE);
-  if (!rec_flash_file("rec", rec_path_rec, rec_status_rec, status, &wrote)) {
-    return 0U;
-  }
-
-  if (status) status(rec_status_sbl, SBL_WHITE);
+  if (status)
+    status(rec_status_sbl, SBL_WHITE);
   if (!rec_flash_file("sbl", rec_path_sbl, rec_status_sbl, status, &wrote)) {
     return 0U;
   }
@@ -838,9 +843,11 @@ static REC_CODE uint8_t rec_write_init_marker(void) {
   for (uint32_t off = 0U; off < TOS_SD_INIT_FILE_SIZE && fr == FR_OK;
        off += REC_FLASH_BUF_SZ) {
     fr = f_write(&file, rec_flash_buf, REC_FLASH_BUF_SZ, &bw);
-    if (fr == FR_OK && bw != REC_FLASH_BUF_SZ) fr = FR_DISK_ERR;
+    if (fr == FR_OK && bw != REC_FLASH_BUF_SZ)
+      fr = FR_DISK_ERR;
   }
-  if (fr == FR_OK) fr = f_sync(&file);
+  if (fr == FR_OK)
+    fr = f_sync(&file);
 
   {
     FRESULT close_fr = f_close(&file);
@@ -904,15 +911,15 @@ REC_CODE uint8_t REC_FatInitStorage(void) {
   if (!rec_sd_write_preflight()) {
     return 0U;
   }
-  fr = f_mkfs(rec_path, (BYTE)(FM_FAT | FM_FAT32), 0U,
-              rec_flash_buf, REC_FLASH_BUF_SZ);
+  fr = f_mkfs(rec_path, (BYTE)(FM_FAT | FM_FAT32), 0U, rec_flash_buf,
+              REC_FLASH_BUF_SZ);
   if (fr != FR_OK) {
     rec_sd_drop();
     if (rec_disk_initialize(0U) != 0U) {
       return 0U;
     }
-    fr = f_mkfs(rec_path, (BYTE)(FM_FAT | FM_FAT32 | FM_SFD), 0U,
-                rec_flash_buf, REC_FLASH_BUF_SZ);
+    fr = f_mkfs(rec_path, (BYTE)(FM_FAT | FM_FAT32 | FM_SFD), 0U, rec_flash_buf,
+                REC_FLASH_BUF_SZ);
   }
   if (fr != FR_OK) {
     rec_set_error_fresult(rec_err_format, fr);
@@ -959,11 +966,6 @@ REC_CODE uint8_t REC_FatFormat(void) {
     rec_copy_error(rec_err_userdata);
     return 0U;
   }
-  if (!SBL_FlashEraseSectorIndex(REC_TMP_SECTOR_INDEX)) {
-    SBL_FlashLock();
-    rec_copy_error(rec_err_userdata);
-    return 0U;
-  }
   if (!SBL_FlashEraseSectorIndex(REC_USERDATA_SECTOR_INDEX)) {
     SBL_FlashLock();
     rec_copy_error(rec_err_userdata);
@@ -972,13 +974,6 @@ REC_CODE uint8_t REC_FatFormat(void) {
   SBL_FlashLock();
   SBL_FlashFlushCaches();
 
-  for (uint32_t addr = REC_TMP_START; addr < REC_TMP_END;
-       addr += sizeof(uint32_t)) {
-    if (*(const volatile uint32_t *)addr != 0xFFFFFFFFUL) {
-      rec_copy_error(rec_err_userdata_verify);
-      return 0U;
-    }
-  }
   for (uint32_t addr = REC_USERDATA_START; addr < REC_USERDATA_END;
        addr += sizeof(uint32_t)) {
     if (*(const volatile uint32_t *)addr != 0xFFFFFFFFUL) {

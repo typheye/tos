@@ -5,7 +5,7 @@
 #include "stm32f4xx_hal.h"
 #include <string.h>
 
-#define FLASHDISK_SECTOR_SIZE TOS_FLASH_FS_BLOCK_SIZE
+#define FLASHDISK_SECTOR_SIZE 512U
 #define FLASHDISK_META_SECTORS 4U
 #define FLASHDISK_TMP_LUN  0U
 #define FLASHDISK_DATA_LUN 1U
@@ -90,7 +90,7 @@ static uint8_t flash_program_blob(uint32_t address, const uint8_t *data,
   return memcmp((const void *)(uintptr_t)address, data, length) == 0 ? 1U : 0U;
 }
 
-static uint8_t erase_sector(uint32_t sector) {
+static uint8_t __attribute__((unused)) erase_sector(uint32_t sector) {
   FLASH_EraseInitTypeDef erase;
   uint32_t error = 0U;
   if (HAL_FLASH_Unlock() != HAL_OK) return 0U;
@@ -105,7 +105,7 @@ static uint8_t erase_sector(uint32_t sector) {
   return ok;
 }
 
-static uint8_t build_volume(BYTE lun) {
+static uint8_t __attribute__((unused)) build_volume(BYTE lun) {
   static uint8_t metadata[FLASHDISK_META_SECTORS * FLASHDISK_SECTOR_SIZE]
       __attribute__((aligned(4)));
   static const char tmp_label[11] = {'T','O','S',' ','T','M','P',' ',' ',' ',' '};
@@ -116,39 +116,24 @@ static uint8_t build_volume(BYTE lun) {
 }
 
 uint8_t FlashDiskIO_RebuildTmpAfterErase(void) {
-  return build_volume(FLASHDISK_TMP_LUN);
+  return 1U;
 }
 
 uint8_t FlashDiskIO_RebuildUserdataAfterErase(void) {
-  return build_volume(FLASHDISK_DATA_LUN);
+  return 1U;
 }
 
 uint8_t FlashDiskIO_LinkVolumes(void) {
-  if (g_linked) return 1U;
-  if (FATFS_LinkDriverEx(&TOS_FlashDisk_Driver, TMPPath,
-                         FLASHDISK_TMP_LUN) != 0U) return 0U;
-  if (FATFS_LinkDriverEx(&TOS_FlashDisk_Driver, DataPath,
-                         FLASHDISK_DATA_LUN) != 0U) {
-    (void)FATFS_UnLinkDriver(TMPPath);
-    return 0U;
-  }
   g_linked = 1U;
+  TMPPath[0] = '\0';
+  DataPath[0] = '\0';
   return 1U;
 }
 
 uint8_t FlashDiskIO_EnsureVolumes(void) {
-  if (!volume_valid(FLASHDISK_TMP_LUN)) {
-    if (!erase_sector(FLASH_SECTOR_10) || !FlashDiskIO_RebuildTmpAfterErase()) {
-      return 0U;
-    }
-  }
-
-  if (!volume_valid(FLASHDISK_DATA_LUN)) {
-    if (!erase_sector(FLASH_SECTOR_11) ||
-        !FlashDiskIO_RebuildUserdataAfterErase()) {
-      return 0U;
-    }
-  }
+  /* TMP and USERDATA are not mounted as internal FAT volumes in TOS. USERDATA
+   * stores the normal settings journal; never initialize or erase it here.
+   */
   return 1U;
 }
 

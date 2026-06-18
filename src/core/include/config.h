@@ -27,7 +27,7 @@
 /* ── Firmware ── */
 #define CFG_TOS_VERSION "1"
 #define CFG_VERSION_CODE 260615000
-#define CFG_BUILD "1.26.6.r1"
+#define CFG_BUILD "1.26.6.r2"
 #define CFG_PATCH "2026-06-01"
 
 /* ── Hardware revision ── */

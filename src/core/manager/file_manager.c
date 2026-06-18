@@ -14,7 +14,6 @@ extern bool TSDIO_IsHardDisabled(void);
 extern bool TSDIO_IsInitialized(void);
 
 static bool g_storage_mounted;
-static bool g_internal_mounted;
 static FATFS g_storage_fs;
 static char g_boot_log_path[FMCORE_PATH_MAX];
 static bool g_boot_log_ready_seen;
@@ -60,13 +59,13 @@ static FRESULT translate_path(const char *path, char *out, size_t out_sz,
     suffix = path + strlen("/storage");
     if (kind) *kind = FM_PATH_STORAGE;
   } else if (path_prefix(path, "/tmp")) {
-    base = TMPPath;
-    suffix = path + strlen("/tmp");
     if (kind) *kind = FM_PATH_TMP;
+    out[0] = '\0';
+    return FR_OK;
   } else if (path_prefix(path, "/data")) {
-    base = DataPath;
-    suffix = path + strlen("/data");
     if (kind) *kind = FM_PATH_DATA;
+    out[0] = '\0';
+    return FR_OK;
   } else if (strcmp(path, "/init") == 0) {
     base = "0:/init";
     if (kind) *kind = FM_PATH_INIT;
@@ -128,17 +127,6 @@ const char *FMCore_FResultName(FRESULT res) {
 }
 
 FRESULT FMCore_MountInternal(void) {
-  FRESULT res;
-  if (g_internal_mounted) return FR_OK;
-  if (!FlashDiskIO_EnsureVolumes()) return FR_DISK_ERR;
-  res = f_mount(&TMPFatFS, TMPPath, 1U);
-  if (res != FR_OK) return res;
-  res = f_mount(&DataFatFS, DataPath, 1U);
-  if (res != FR_OK) {
-    (void)f_mount(NULL, TMPPath, 0U);
-    return res;
-  }
-  g_internal_mounted = true;
   return FR_OK;
 }
 
@@ -155,12 +143,7 @@ FRESULT FMCore_MountStorage(FATFS *fs, bool log_result) {
 }
 
 FRESULT FMCore_Mount(FATFS *fs, bool fatal_on_storage_error) {
-  FRESULT internal = FMCore_MountInternal();
   FRESULT storage = FMCore_MountStorage(fs, true);
-  if (internal != FR_OK) {
-    fatal_if_needed(internal, fatal_on_storage_error, SYS_ERR_SD_BROWSER_FAILED);
-    return internal;
-  }
   /* An absent SD leaves /storage empty; it must not make /data or /tmp fail. */
   if (storage != FR_OK && storage != FR_NOT_READY) {
     LOG_W("FMCR", "external storage unavailable: %s(%d)",
@@ -202,6 +185,9 @@ FRESULT FMCore_Stat(const char *path, FILINFO *info, bool fatal_on_storage_error
     return FR_OK;
   }
   if ((kind == FM_PATH_STORAGE || kind == FM_PATH_INIT) && !g_storage_mounted) {
+    return FR_NO_PATH;
+  }
+  if (kind == FM_PATH_TMP || kind == FM_PATH_DATA) {
     return FR_NO_PATH;
   }
   res = f_stat(physical, info);
@@ -248,6 +234,10 @@ FRESULT FMCore_ListDir(const char *path, FMCore_Entry *entries, uint16_t max_ent
     return FR_OK;
   }
   if (kind == FM_PATH_STORAGE && !g_storage_mounted) {
+    if (out_count) *out_count = 0U;
+    return FR_OK;
+  }
+  if (kind == FM_PATH_TMP || kind == FM_PATH_DATA) {
     if (out_count) *out_count = 0U;
     return FR_OK;
   }
@@ -330,6 +320,7 @@ FRESULT FMCore_ReadFile(const char *path, void *buf, uint32_t max_len,
   if (!buf || max_len == 0U) return FR_INVALID_PARAMETER;
   res = translate_path(path, physical, sizeof(physical), &kind);
   if (res != FR_OK || kind == FM_PATH_VIRTUAL_ROOT) return FR_INVALID_OBJECT;
+  if (kind == FM_PATH_TMP || kind == FM_PATH_DATA) return FR_NO_PATH;
   res = f_open(&fp, physical, FA_READ);
   if (res == FR_OK) {
     res = f_read(&fp, buf, (UINT)max_len, &br);

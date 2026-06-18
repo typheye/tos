@@ -134,9 +134,17 @@ SBL_CODE uint8_t SBL_FlashBegin(SBL_FlashSession *session,
   session->received = 0U;
   session->running_crc = SBL_FlashCrc32Seed();
   session->write_address = part->write_address;
+  session->post_boot_target = SBL_BOOT_TARGET_FASTBOOT;
   session->active = 1U;
   session->requires_reset = 0U;
   return 1U;
+}
+
+SBL_CODE void SBL_FlashSetPostBootTarget(SBL_FlashSession *session,
+                                         uint32_t target) {
+  if (session && session->active) {
+    session->post_boot_target = target;
+  }
 }
 
 SBL_CODE uint8_t SBL_FlashErasePartition(const SBL_FlashPartition *part) {
@@ -181,9 +189,10 @@ SBL_CODE uint8_t SBL_FlashFinalize(SBL_FlashSession *session) {
   if (session->part->staged) {
     kind = session->part->address == TOS_PART_SBL_ADDRESS ? TOS_UPDATE_SBL
                                                          : TOS_UPDATE_REC;
-    if (!SBL_StateScheduleUpdate(kind, session->part->address,
-                                 session->expected_size,
-                                 session->expected_crc)) {
+    if (!SBL_StateScheduleUpdatePost(kind, session->part->address,
+                                     session->expected_size,
+                                     session->expected_crc,
+                                     session->post_boot_target)) {
       SBL_FlashAbort(session);
       return 0U;
     }
@@ -201,6 +210,7 @@ SBL_CODE void SBL_FlashAbort(SBL_FlashSession *session) {
   session->received = 0U;
   session->running_crc = 0U;
   session->write_address = 0U;
+  session->post_boot_target = SBL_BOOT_TARGET_NONE;
   session->active = 0U;
   session->requires_reset = 0U;
 }

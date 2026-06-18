@@ -1,18 +1,18 @@
 #include "rec.h"
 
+#include "rec_msc.h"
 #include "sbl_common.h"
 #include "sbl_flash.h"
 #include "sbl_hw.h"
 #include "sbl_lcd.h"
 #include "sbl_state.h"
-#include "rec_msc.h"
 
-#define REC_CMD_ADDR       0x0801FC00UL
-#define REC_CMD_MAGIC      0x52454331UL /* REC1 */
-#define REC_TITLE_Y        88U
-#define REC_STATUS_Y       112U
-#define REC_DETAIL_Y       136U
-#define REC_LINE_H         16U
+#define REC_CMD_ADDR 0x0801FC00UL
+#define REC_CMD_MAGIC 0x52454331UL /* REC1 */
+#define REC_TITLE_Y 88U
+#define REC_STATUS_Y 112U
+#define REC_DETAIL_Y 136U
+#define REC_LINE_H 16U
 #define REC_REBOOT_DELAY_MS 900U
 #define REC_ERROR_DELAY_MS 1800U
 
@@ -98,29 +98,39 @@ static REC_CODE uint8_t rec_resolve_mode(uint8_t mode) {
   REC_Command cmd;
   uint32_t target = SBL_StateConsumeBootTarget();
 
-  if (target == SBL_BOOT_TARGET_RECOVERY_FORMAT) return REC_MODE_FORMAT;
-  if (target == SBL_BOOT_TARGET_RECOVERY_UPGRADE) return REC_MODE_UPGRADE;
-  if (target == SBL_BOOT_TARGET_RECOVERY_INIT) return REC_MODE_INIT;
-  if (target == SBL_BOOT_TARGET_RECOVERY) return REC_MODE_WAIT;
+  if (target == SBL_BOOT_TARGET_RECOVERY_FORMAT)
+    return REC_MODE_FORMAT;
+  if (target == SBL_BOOT_TARGET_RECOVERY_UPGRADE)
+    return REC_MODE_UPGRADE;
+  if (target == SBL_BOOT_TARGET_RECOVERY_INIT)
+    return REC_MODE_INIT;
+  if (target == SBL_BOOT_TARGET_RECOVERY)
+    return REC_MODE_WAIT;
 
   if (mode != REC_MODE_WAIT && mode != REC_MODE_FORMAT &&
       mode != REC_MODE_UPGRADE && mode != REC_MODE_CLOCK_ERROR &&
-      mode != REC_MODE_INIT) mode = REC_MODE_WAIT;
+      mode != REC_MODE_INIT)
+    mode = REC_MODE_WAIT;
 
   /* Legacy command area is kept read-only compatible for already deployed
    * SYSTEM builds. New builds communicate exclusively through TEE state. */
-  if (!rec_read_command(&cmd)) return mode;
+  if (!rec_read_command(&cmd))
+    return mode;
   rec_erase_command();
-  if (mode != REC_MODE_WAIT) return mode;
-  if (cmd.command == 1U) return REC_MODE_FORMAT;
-  if (cmd.command == 2U) return REC_MODE_UPGRADE;
-  if (cmd.command == 3U) return REC_MODE_INIT;
+  if (mode != REC_MODE_WAIT)
+    return mode;
+  if (cmd.command == 1U)
+    return REC_MODE_FORMAT;
+  if (cmd.command == 2U)
+    return REC_MODE_UPGRADE;
+  if (cmd.command == 3U)
+    return REC_MODE_INIT;
   return REC_MODE_WAIT;
 }
 
 static REC_CODE void rec_reboot_after_result(const char *status,
-                                              uint16_t status_color,
-                                              const char *detail) {
+                                             uint16_t status_color,
+                                             const char *detail) {
   rec_draw_status(status, status_color);
   rec_draw_detail(detail, detail ? SBL_RED : SBL_WHITE);
   SBL_DelayMs(detail ? REC_ERROR_DELAY_MS : REC_REBOOT_DELAY_MS);
@@ -176,16 +186,8 @@ REC_CODE void REC_Run(uint8_t mode) {
     ok = REC_FatInitStorage();
     error = ok ? 0 : REC_FatLastError();
     REC_FatRelease();
-    if (ok) {
-      rec_reboot_after_result(rec_init_done, SBL_GREEN, 0);
-    }
-    rec_draw_status(rec_init_fail, SBL_RED);
-    rec_draw_detail(error, error ? SBL_RED : SBL_WHITE);
-    (void)REC_MSC_Start();
-    while (1) {
-      REC_MSC_Tick();
-      SBL_DelayMs(20U);
-    }
+    rec_reboot_after_result(ok ? rec_init_done : rec_init_fail,
+                            ok ? SBL_GREEN : SBL_RED, error);
     return;
   }
 
@@ -199,5 +201,7 @@ REC_CODE void REC_Run(uint8_t mode) {
 
 void REC_Main(uint8_t clock_ok) {
   REC_Run(clock_ok ? REC_MODE_WAIT : REC_MODE_CLOCK_ERROR);
-  while (1) { __NOP(); }
+  while (1) {
+    __NOP();
+  }
 }

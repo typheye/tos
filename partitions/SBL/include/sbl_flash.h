@@ -24,6 +24,7 @@ typedef struct {
   uint32_t received;
   uint32_t running_crc;
   uint32_t write_address;
+  uint32_t post_boot_target;
   uint8_t active;
   uint8_t requires_reset;
 } SBL_FlashSession;
@@ -43,6 +44,8 @@ SBL_CODE uint8_t SBL_FlashWriteChunk(SBL_FlashSession *session,
                                      const uint8_t *data,
                                      uint32_t len,
                                      uint32_t chunk_crc);
+SBL_CODE void SBL_FlashSetPostBootTarget(SBL_FlashSession *session,
+                                         uint32_t target);
 SBL_CODE uint8_t SBL_FlashFinalize(SBL_FlashSession *session);
 SBL_CODE void SBL_FlashAbort(SBL_FlashSession *session);
 
