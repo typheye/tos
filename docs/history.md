@@ -634,3 +634,263 @@ TOS方面，自动亮度策略太激进了，可能导致暗光环境下出现�
 修改sbl策略，REC可以擦除，之后进入rec时运行，检测，不存在就跳转到RECOVERY EXCEPTION（规则同SYSTEM DAMAGE，不可自动重启）第二行字显示"The recovery has some errors."
 
 USB的哪个要不再尝试重构一下？？？深入分析延迟来源！
+
+这次，进rec不卡资源管理器了，但是sd卡磁盘也不加载了，一直是这个设备！
+
+还有个更严重的问题，USERDATA分区或者TOS系统有问题，第二次刷入，开机动画加载到70左右，跑一会直接黑屏，必须进sbl擦除userdata才能恢复正常（见串口日志，还好我提前开了）
+
+---- 已打开串行端口 COM7 ----
+
+[ 0.001] [INFO ] [RTC ] Waiting for LSE oscillator...
+
+[ [ 128.263] [DEBUG] [PET ] slow frame 53ms
+
+[ 130.904] [DEBUG] [PET ] alive @ 130904ms, state=nap, expr=0,[ 131.312] [DEBUG] [PET ] slow frame 51ms
+
+[ 0.001] [INFO ] [RTC ] Waiting for LSE oscillator...
+
+[ 0.006] [INFO ] [RTC ] LSE ready after 5 ms
+
+[ 0.177] [INFO ] [FLASH] Rolling read @0x080E2A6C 712 bytes OK
+
+[ 0.183] [INFO ] [SMGR ] Loaded from Flash OK (712B)
+
+[ 0.346] [INFO ] [PD ] Starting progress splash (300ms)
+
+[ 0.715] [INFO ] [PD ] Progress splash started, waiting for finish signal
+
+[ 0.722] [INFO ] [RTC ] Initializing...
+
+[ 0.726] [INFO ] [RTC ] Waiting for LSE oscillator...
+
+[ 0.731] [INFO ] [RTC ] LSE ready after 5 ms
+
+[ 0.736] [INFO ] [RTC ] Initialized successfully: 2026-06-18 18:58:31
+
+[ 0.742] [INFO ] [SDIO ] Starting init...
+
+[ 0.746] [INFO ] [SDIO ] Calling HAL_SD_Init...
+
+[ 0.757] [INFO ] [SDIO ] HAL_SD_Init OK
+
+[ 0.962] [INFO ] [SDIO ] Checking card presence...
+
+[ 0.966] [INFO ] [SDIO ] Card state after init: 4
+
+[ 0.971] [INFO ] [SDIO ] Getting card info...
+
+[ 0.976] [INFO ] [SDIO ] Card Info: Type=1, BlockSize=512, BlockNbr=123473920
+
+[ 0.983] [INFO ] [SDIO ] Configuring bus width...
+
+[ 0.987] [INFO ] [SDIO ] 4-bit mode disabled at boot, using 1-bit
+
+[ 0.994] [INFO ] [SDIO ] Waiting for card ready...
+
+[ 0.998] [INFO ] [SDIO ] Init complete!
+
+[ 1.537] [INFO ] [TCS ] Initialized, ID=0x4D
+
+[ 1.590] [INFO ] [TCS ] Gain=16X, Integration=50.4ms
+
+[ 1.602] [INFO ] [HC00 ] SN74HC00N Driver Initialized
+
+[ 1.615] [INFO ] [HC00 ] Inputs: 8 switches (1A1B-4A4B)
+
+[ 1.627] [INFO ] [HC00 ] Outputs: PE10=1Y, PE11=2Y, PE12=3Y, PE13=4Y
+
+[ 1.641] [INFO ] [HC00 ] Logic: Y = NOT (A AND B)
+
+[ 1.653] [INFO ] [HC00 ] Note: Input logic flipped for your hardware
+
+[ 1.670] [INFO ] [POT ] Potentiometer Driver Initialized
+
+[ 1.683] [INFO ] [POT ] ADC Channel: PC0 (ADC123_IN10)
+
+[ 1.698] [INFO ] [POT ] Reference Voltage: V
+
+[ 1.710] [INFO ] [POT ] Max Resistance: kΩ
+
+[ 1.721] [INFO ] [POT ] Test reading: 7 (V)
+
+[ 1.733] [INFO ] [MAIN ] System initialized, CPU:168MHz
+
+[ 1.746] [INFO ] [DRAM ] Dynamic cap RAM=107424/131072B(81.9%) CCM=56648/65536B(86.4%)
+
+[ 1.761] [INFO ] [DRAM ] Dynamic cap total=164072/196608B(83.4%)
+
+[ 1.775] [INFO ] [DRAM ] RAM pool total=107424 used=29824 free=77540 largest=77540 peak=29824
+
+[ 1.791] [INFO ] [DRAM ] CCM pool total=56648 used=0 free=56628 largest=56628 peak=0
+
+[ 1.808] [INFO ] [ESP ] Initializing...
+
+[ 1.820] [DEBUG] [ESP ] UART2 RX count before: 0
+
+[ 1.824] [WARN ] [ESP ] Hardware reset via EN/RST (power-cycle)
+
+[ 5.026] [DEBUG] [ESP ] Sending AT test...
+
+[ 5.042] [DEBUG] [ESP ] OK after 11ms, rx=10 bytes
+
+[ 5.046] [INFO ] [ESP ] AT OK
+
+[ 5.071] [DEBUG] [ESP ] OK after 11ms, rx=12 bytes
+
+[ 5.088] [DEBUG] [ESP ] OK after 11ms, rx=6 bytes
+
+[ 5.105] [DEBUG] [ESP ] OK after 11ms, rx=6 bytes
+
+[ 5.195] [INFO ] [NET ] ESP modem sleep disabled
+
+[ 5.342] [INFO ] [MAIN ] Auto-connect: starting...
+
+[ 5.366] [DEBUG] [ESP ] OK after 11ms, rx=22 bytes
+
+[ 5.671] [INFO ] [MAIN ] Auto-connect: trying Redmi K50 (round 1/2)...
+
+[ 5.699] [DEBUG] [ESP ] Waiting... 11ms, rx=17/4096 bytes
+
+[ 6.992] [DEBUG] [ESP ] OK after 1304ms, rx=52 bytes
+
+[ 9.507] [INFO ] [FLASH] Rolling write @0x080E2D40 712 bytes: OK
+
+[ 9.526] [INFO ] [FLASH] Rolling read @0x080E2D40 712 bytes OK
+
+[ 9.542] [INFO ] [SMGR ] Save verified (712B, try 1)
+
+[ 9.562] [INFO ] [FLASH] Rolling write @0x080E3014 712 bytes: OK
+
+[ 9.582] [INFO ] [FLASH] Rolling read @0x080E3014 712 bytes OK
+
+[ 9.595] [INFO ] [SMGR ] Save verified (712B, try 1)
+
+[ 9.607] [INFO ] [MAIN ] Auto-connect: connected to Redmi K50!
+
+[ 9.621] [INFO ] [MAIN ] Auto time sync before UI startup
+
+[ 9.634] [INFO ] [SYTM ] ESP8266 time sync...
+
+[ 10.103] [DEBUG] [NET ] CIPSTATUS: STATUS:2 OK
+
+[ 10.198] [DEBUG] [NET ] CIFSR: +CIFSR:STAIP,"192.168.203.198" +CIFSR:STAMAC,"84:0d:8e:b7:f7:f9" OK
+
+[ 13.089] [DEBUG] [SYTM ] SNTP raw: +CIPSNTPTIME:Thu Jan 1 08:00:10 1970 OK
+
+[ 13.096] [DEBUG] [SYTM ] Waiting for SNTP second edge (10)
+
+[ 16.152] [DEBUG] [SYTM ] SNTP raw: +CIPSNTPTIME:Thu Jan 1 08:00:13 1970 OK
+
+[ 16.159] [DEBUG] [SYTM ] Waiting for SNTP second edge (20)
+
+[ 19.215] [DEBUG] [SYTM ] SNTP raw: +CIPSNTPTIME:Thu Jan 1 08:00:16 1970 OK
+
+[ 19.222] [DEBUG] [SYTM ] Waiting for SNTP second edge (30)
+
+[ 19.478] [WARN ] [SYTM ] SNTP did not return a valid time
+
+[ 19.493] [WARN ] [SYTM ] SNTP failed, trying HTTP fallback...
+
+[ 19.506] [INFO ] [SYTM ] HTTP time via www.baidu.com
+
+[ 19.519] [INFO ] [NET ] HTTP GET www.baidu.com:80/
+
+[ 19.987] [DEBUG] [NET ] CIPSTATUS: STATUS:2 OK
+
+[ 20.083] [DEBUG] [NET ] CIFSR: +CIFSR:STAIP,"192.168.203.198" +CIFSR:STAMAC,"84:0d:8e:b7:f7:f9" OK
+
+[ 20.420] [INFO ] [NET ] DNS cache www.baidu.com -> 223.109.82.16
+
+[ 26.607] [DEBUG] [NET ] CIPSTART: CONNECT OK
+
+[ 34.660] [DEBUG] [NET ] HTTP fail: Recv 58 bytes SEND OK +IPD,2920:HTTP/1.0 200 OK Accept-Ranges: bytes Cache-Control: no-cache Content-Length: 29506
+
+[ 34.676] [WARN ] [SYTM ] HTTP GET failed: www.baidu.com
+
+[ 34.688] [INFO ] [SYTM ] HTTP time via www.qq.com
+
+[ 34.701] [INFO ] [NET ] HTTP GET www.qq.com:80/
+
+[ 35.176] [DEBUG] [NET ] CIPSTATUS: STATUS:4 OK
+
+[ 35.272] [DEBUG] [NET ] CIFSR: +CIFSR:STAIP,"192.168.203.198" +CIFSR:STAMAC,"84:0d:8e:b7:f7:f9" OK
+
+[ 35.672] [INFO ] [NET ] DNS cache www.qq.com -> 183.194.238.19
+
+[ 48.928] [DEBUG] [NET ] CIPSTART fail: ERROR
+
+[ 48.932] [ERROR] [NET ] TCP connect failed
+
+[ 48.947] [WARN ] [SYTM ] HTTP GET failed: www.qq.com
+
+[ 48.959] [INFO ] [SYTM ] HTTP time via www.taobao.com
+
+[ 48.972] [INFO ] [NET ] HTTP GET www.taobao.com:80/
+
+[ 49.444] [DEBUG] [NET ] CIPSTATUS: STATUS:4 OK
+
+[ 49.540] [DEBUG] [NET ] CIFSR: +CIFSR:STAIP,"192.168.203.198" +CIFSR:STAMAC,"84:0d:8e:b7:f7:f9" OK
+
+[ 52.764] [INFO ] [NET ] DNS cache www.taobao.com -> 39.173.35.129
+
+[ 65.485] [DEBUG] [NET ] CIPSTART: CONNECT OK
+
+[ 73.538] [DEBUG] [NET ] HTTP fail: Recv 59 bytes SEND OK
+
+[ 73.546] [WARN ] [SYTM ] HTTP GET failed: www.taobao.com
+
+[ 73.558] [ERROR] [SYTM ] Time sync failed �?SNTP and HTTP both unavailable
+
+[ 73.573] [WARN ] [MAIN ] Boot auto time sync failed, deferred retry remains enabled
+
+[ 73.600] [DEBUG] [ESP ] OK after 11ms, rx=73 bytes
+
+[ 73.604] [INFO ] [TAPI ] LAN IP: 192.168.203.198
+
+[ 73.619] [INFO ] [TAPI ] Cloud client init, di=404e6efc4ba0 hb=4000ms mode=online-intended
+
+[ 73.635] [INFO ] [TAPI ] Deferred auto time sync scheduled in 45000ms
+
+[ 73.700] [INFO ] [PD ] Finish requested, completing progress (100ms)
+
+[ 73.900] [WARN ] [ESP ] UART2 RX rearmed #1 sr=0x000000F8 cr1=0x0000202C cr3=0x00000001
+
+[ 74.913] [INFO ] [NET ] DNS cache proxy-api.otodone.com -> 124.222.165.147
+
+[ 74.920] [INFO ] [NET ] Async POST proxy-api.otodone.com:80/v1/device/heartbeat via 124.222.165.147 (308B)
+
+[ 74.931] [DEBUG] [TAPI ] Heartbeat queued, body=196B expr=idle
+
+[ 74.939] [DEBUG] [NET ] CIPDOMAIN fail:
+
+[ 74.943] [INFO ] [NET ] Async POST proxy-api.otodone.com:80/v1/device/heartbeat via proxy-api.otodone.com (308B)
+
+[ 74.955] [DEBUG] [TAPI ] Heartbeat queued, body=196B expr=idle
+
+[ 78.734] [DEBUG] [NET ] CIPDOMAIN fail:
+
+[ 78.738] [INFO ] [NET ] Async POST proxy-api.otodone.com:80/v1/device/heartbeat via proxy-api.otodone.com (308B)
+
+[ 78.750] [DEBUG] [TAPI ] Heartbeat queued, body=196B expr=idle
+
+[ 78.756] [ERROR] [SDIO ] poll write state timeout: sector=19270 count=1 state=0
+
+[ 78.768] [WARN ] [SYS ] SD log write failed: 1; file logging disabled
+
+[ 79.796] [INFO ] [PD ] Progress splash finished
+
+[ 79.801] [INFO ] [LCD ] Auto-brightness active
+
+[ 79.807] [INFO ] [EHW ] Init done, poll=90ms motion_hold=120ms
+
+[ 79.813] [INFO ] [PET ] Launcher started - triple-press ENTER to exit
+
+[ 79.820] [DEBUG] [PET ] alive @ 79819ms, state=idle, expr=0, idle=6ms, state_age=6ms
+
+[ 79.838] [DEBUG] [PET ] state: boot -> stretch, idle=6ms expr=0
+
+[ 79.895] [DEBUG] [PET ] slow frame 76ms
+
+[ 82.140] [DEBUG] [PET ] state: stretch -> id
+
+我建议修复rec问题，应当中sd卡写日志，方便你排查，这里我提供一些旧日支

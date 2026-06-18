@@ -451,24 +451,19 @@ void TOS::init() {
     }
   }
 
-  bool boot_time_synced = false;
+  /* Never perform network time synchronisation while the progress splash owns
+   * the display.  USERDATA may legitimately preserve WLAN + auto-sync across a
+   * firmware reflash; the old synchronous path then held boot near 70% for up
+   * to a minute and looked like a corrupt SYSTEM/USERDATA or black screen.
+   * TosApi_Init() schedules the bounded post-UI sync instead. */
   if (!ESP8266_IsHardDisabled() && SM_Wlan_On() &&
       ESP8266_IsConnected() && SM_Time_AutoSync()) {
-    LOG_I("MAIN", "Auto time sync before UI startup");
-    if (SysTime_Sync()) {
-      boot_time_synced = true;
-      LOG_I("MAIN", "Boot auto time sync OK");
-    } else {
-      LOG_W("MAIN", "Boot auto time sync failed, deferred retry remains enabled");
-    }
+    LOG_I("MAIN", "Auto time sync deferred until UI is running");
   }
 
   EmotionManager_Init();
   HidManager_Init();
   TosApi_Init();
-  if (boot_time_synced) {
-    TosApi_MarkAutoTimeSynced();
-  }
 
   SysUI::init();
 

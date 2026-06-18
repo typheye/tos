@@ -30,6 +30,12 @@ static void copy_str(char *dst, const char *src, size_t cap) {
   dst[cap - 1] = '\0';
 }
 
+static bool str_same(const char *a, const char *b, size_t cap) {
+  if (!a) a = "";
+  if (!b) b = "";
+  return strncmp(a, b, cap) == 0;
+}
+
 static void sanitize(void) {
   g_settings.wlan_ssid[sizeof(g_settings.wlan_ssid) - 1] = '\0';
   g_settings.wlan_pwd[sizeof(g_settings.wlan_pwd) - 1] = '\0';
@@ -44,6 +50,12 @@ static void sanitize(void) {
   g_settings.debug_log_com = g_settings.debug_log_com ? 1U : 0U;
   g_settings.boot_gfx = g_settings.boot_gfx ? true : false;
   g_settings.disp_auto = g_settings.disp_auto ? true : false;
+  g_settings.wlan_on = g_settings.wlan_on ? true : false;
+  g_settings.wlan_auto_conn = g_settings.wlan_auto_conn ? true : false;
+  g_settings.time_auto_sync = g_settings.time_auto_sync ? true : false;
+  g_settings.time_style_24h = g_settings.time_style_24h ? true : false;
+  g_settings.hotspot_auto_close =
+      g_settings.hotspot_auto_close ? true : false;
   if (g_settings.disp_bright < 1U || g_settings.disp_bright > 10U) {
     g_settings.disp_bright = 10U;
   }
@@ -173,27 +185,65 @@ Settings_t *SM_Get(void) { return &g_settings; }
 bool    SM_Disp_Auto(void)          { return g_settings.disp_auto; }
 uint8_t SM_Disp_Bright(void)        { return g_settings.disp_bright; }
 uint8_t SM_Disp_Dir(void)           { return g_settings.disp_dir; }
-void    SM_Disp_SetAuto(bool v)     { g_settings.disp_auto = v; SM_Save(); }
-void    SM_Disp_SetBright(uint8_t v){ g_settings.disp_bright = v; SM_Save(); }
-void    SM_Disp_SetDir(uint8_t v)   { g_settings.disp_dir = v; SM_Save(); }
+void SM_Disp_SetAuto(bool v) {
+  v = v ? true : false;
+  if (g_settings.disp_auto != v) { g_settings.disp_auto = v; SM_Save(); }
+}
+void SM_Disp_SetBright(uint8_t v) {
+  if (g_settings.disp_bright != v) { g_settings.disp_bright = v; SM_Save(); }
+}
+void SM_Disp_SetDir(uint8_t v) {
+  if (g_settings.disp_dir != v) { g_settings.disp_dir = v; SM_Save(); }
+}
 
 /* --- WLAN current --- */
-const char *SM_Wlan_SSID(void)       { return g_settings.wlan_ssid; }
-const char *SM_Wlan_PWD(void)        { return g_settings.wlan_pwd; }
-void SM_Wlan_SetSSID(const char *s)  { copy_str(g_settings.wlan_ssid, s, sizeof(g_settings.wlan_ssid)); SM_Save(); }
-void SM_Wlan_SetPWD(const char *s)   { copy_str(g_settings.wlan_pwd, s, sizeof(g_settings.wlan_pwd)); SM_Save(); }
+const char *SM_Wlan_SSID(void) { return g_settings.wlan_ssid; }
+const char *SM_Wlan_PWD(void)  { return g_settings.wlan_pwd; }
+void SM_Wlan_SetSSID(const char *value) {
+  if (!str_same(g_settings.wlan_ssid, value, sizeof(g_settings.wlan_ssid))) {
+    copy_str(g_settings.wlan_ssid, value, sizeof(g_settings.wlan_ssid));
+    SM_Save();
+  }
+}
+void SM_Wlan_SetPWD(const char *value) {
+  if (!str_same(g_settings.wlan_pwd, value, sizeof(g_settings.wlan_pwd))) {
+    copy_str(g_settings.wlan_pwd, value, sizeof(g_settings.wlan_pwd));
+    SM_Save();
+  }
+}
 
 /* --- WLAN settings --- */
-bool SM_Wlan_On(void)               { return g_settings.wlan_on; }
-void SM_Wlan_SetOn(bool v)          { g_settings.wlan_on = v; SM_Save(); }
-bool SM_Wlan_AutoConn(void)         { return g_settings.wlan_auto_conn; }
-void SM_Wlan_SetAutoConn(bool v)    { g_settings.wlan_auto_conn = v; SM_Save(); }
+bool SM_Wlan_On(void) { return g_settings.wlan_on; }
+void SM_Wlan_SetOn(bool v) {
+  v = v ? true : false;
+  if (g_settings.wlan_on != v) { g_settings.wlan_on = v; SM_Save(); }
+}
+bool SM_Wlan_AutoConn(void) { return g_settings.wlan_auto_conn; }
+void SM_Wlan_SetAutoConn(bool v) {
+  v = v ? true : false;
+  if (g_settings.wlan_auto_conn != v) {
+    g_settings.wlan_auto_conn = v;
+    SM_Save();
+  }
+}
 
 /* --- Debug --- */
-bool SM_Debug_Dashboard(void)       { return g_settings.debug_dashboard ? true : false; }
-void SM_Debug_SetDashboard(bool v)  { g_settings.debug_dashboard = v ? 1U : 0U; SM_Save(); }
-bool SM_Debug_LogCom(void)          { return g_settings.debug_log_com ? true : false; }
-void SM_Debug_SetLogCom(bool v)     { g_settings.debug_log_com = v ? 1U : 0U; SM_Save(); }
+bool SM_Debug_Dashboard(void) { return g_settings.debug_dashboard != 0U; }
+void SM_Debug_SetDashboard(bool v) {
+  uint8_t next = v ? 1U : 0U;
+  if (g_settings.debug_dashboard != next) {
+    g_settings.debug_dashboard = next;
+    SM_Save();
+  }
+}
+bool SM_Debug_LogCom(void) { return g_settings.debug_log_com != 0U; }
+void SM_Debug_SetLogCom(bool v) {
+  uint8_t next = v ? 1U : 0U;
+  if (g_settings.debug_log_com != next) {
+    g_settings.debug_log_com = next;
+    SM_Save();
+  }
+}
 
 /* --- Saved networks --- */
 uint8_t SM_Saved_Count(void) { return g_settings.saved_count; }
@@ -204,6 +254,7 @@ const SM_SavedNet_t *SM_Saved_Get(uint8_t idx) {
 }
 
 bool SM_Saved_Find(const char *ssid) {
+  if (!ssid) return false;
   for (uint8_t i = 0; i < g_settings.saved_count; i++) {
     if (strcmp(g_settings.saved[i].ssid, ssid) == 0) return true;
   }
@@ -211,20 +262,23 @@ bool SM_Saved_Find(const char *ssid) {
 }
 
 bool SM_Saved_Add(const char *ssid, const char *pwd) {
-  /* Update existing entry if found */
+  if (!ssid || !ssid[0]) return false;
+  /* Update existing entry only when the password actually changed. */
   for (uint8_t i = 0; i < g_settings.saved_count; i++) {
     if (strcmp(g_settings.saved[i].ssid, ssid) == 0) {
-      copy_str(g_settings.saved[i].pwd, pwd, sizeof(g_settings.saved[i].pwd));
-      SM_Save();
+      if (!str_same(g_settings.saved[i].pwd, pwd,
+                    sizeof(g_settings.saved[i].pwd))) {
+        copy_str(g_settings.saved[i].pwd, pwd,
+                 sizeof(g_settings.saved[i].pwd));
+        SM_Save();
+      }
       return true;
     }
   }
-  /* Add new entry */
   if (g_settings.saved_count >= SM_SAVED_MAX) {
-    /* Shift oldest out (index 0) */
     memmove(&g_settings.saved[0], &g_settings.saved[1],
-            (SM_SAVED_MAX - 1) * sizeof(SM_SavedNet_t));
-    g_settings.saved_count = SM_SAVED_MAX - 1;
+            (SM_SAVED_MAX - 1U) * sizeof(SM_SavedNet_t));
+    g_settings.saved_count = SM_SAVED_MAX - 1U;
   }
   copy_str(g_settings.saved[g_settings.saved_count].ssid, ssid,
            sizeof(g_settings.saved[g_settings.saved_count].ssid));
@@ -237,33 +291,73 @@ bool SM_Saved_Add(const char *ssid, const char *pwd) {
 
 void SM_Saved_Del(uint8_t idx) {
   if (idx >= g_settings.saved_count) return;
-  uint8_t tail = g_settings.saved_count - idx - 1;
-  if (tail > 0)
-    memmove(&g_settings.saved[idx], &g_settings.saved[idx + 1],
+  uint8_t tail = g_settings.saved_count - idx - 1U;
+  if (tail > 0U) {
+    memmove(&g_settings.saved[idx], &g_settings.saved[idx + 1U],
             tail * sizeof(SM_SavedNet_t));
+  }
   g_settings.saved_count--;
+  memset(&g_settings.saved[g_settings.saved_count], 0,
+         sizeof(SM_SavedNet_t));
   SM_Save();
 }
 
 /* --- Time --- */
-bool SM_Time_AutoSync(void)        { return g_settings.time_auto_sync; }
-void SM_Time_SetAutoSync(bool v)   { g_settings.time_auto_sync = v; SM_Save(); }
-bool SM_Time_Style24h(void)        { return g_settings.time_style_24h; }
-void SM_Time_SetStyle24h(bool v)   { g_settings.time_style_24h = v; SM_Save(); }
+bool SM_Time_AutoSync(void) { return g_settings.time_auto_sync; }
+void SM_Time_SetAutoSync(bool v) {
+  v = v ? true : false;
+  if (g_settings.time_auto_sync != v) {
+    g_settings.time_auto_sync = v;
+    SM_Save();
+  }
+}
+bool SM_Time_Style24h(void) { return g_settings.time_style_24h; }
+void SM_Time_SetStyle24h(bool v) {
+  v = v ? true : false;
+  if (g_settings.time_style_24h != v) {
+    g_settings.time_style_24h = v;
+    SM_Save();
+  }
+}
 
 /* --- Hotspot --- */
-bool SM_Hotspot_AutoClose(void)        { return g_settings.hotspot_auto_close; }
-void SM_Hotspot_SetAutoClose(bool v)   { g_settings.hotspot_auto_close = v; SM_Save(); }
-const char *SM_Hotspot_IP(void)        { return g_settings.hotspot_ip; }
-void SM_Hotspot_SetIP(const char *s)   { copy_str(g_settings.hotspot_ip, s, sizeof(g_settings.hotspot_ip)); SM_Save(); }
+bool SM_Hotspot_AutoClose(void) { return g_settings.hotspot_auto_close; }
+void SM_Hotspot_SetAutoClose(bool v) {
+  v = v ? true : false;
+  if (g_settings.hotspot_auto_close != v) {
+    g_settings.hotspot_auto_close = v;
+    SM_Save();
+  }
+}
+const char *SM_Hotspot_IP(void) { return g_settings.hotspot_ip; }
+void SM_Hotspot_SetIP(const char *value) {
+  if (!str_same(g_settings.hotspot_ip, value,
+                sizeof(g_settings.hotspot_ip))) {
+    copy_str(g_settings.hotspot_ip, value, sizeof(g_settings.hotspot_ip));
+    SM_Save();
+  }
+}
 const char *SM_Hotspot_SSID(void) { return g_settings.hs_ssid; }
 const char *SM_Hotspot_PWD(void)  { return g_settings.hs_pwd; }
-void SM_Hotspot_SetSSID(const char *s) { copy_str(g_settings.hs_ssid, s, sizeof(g_settings.hs_ssid)); SM_Save(); }
-void SM_Hotspot_SetPWD(const char *s)  { copy_str(g_settings.hs_pwd, s, sizeof(g_settings.hs_pwd)); SM_Save(); }
+void SM_Hotspot_SetSSID(const char *value) {
+  if (!str_same(g_settings.hs_ssid, value, sizeof(g_settings.hs_ssid))) {
+    copy_str(g_settings.hs_ssid, value, sizeof(g_settings.hs_ssid));
+    SM_Save();
+  }
+}
+void SM_Hotspot_SetPWD(const char *value) {
+  if (!str_same(g_settings.hs_pwd, value, sizeof(g_settings.hs_pwd))) {
+    copy_str(g_settings.hs_pwd, value, sizeof(g_settings.hs_pwd));
+    SM_Save();
+  }
+}
 
 /* --- Sound & GFX --- */
-bool SM_BootGfx(void)                  { return g_settings.boot_gfx ? true : false; }
-void SM_SetBootGfx(bool v)             { g_settings.boot_gfx = v ? true : false; SM_Save(); }
+bool SM_BootGfx(void) { return g_settings.boot_gfx; }
+void SM_SetBootGfx(bool v) {
+  v = v ? true : false;
+  if (g_settings.boot_gfx != v) { g_settings.boot_gfx = v; SM_Save(); }
+}
 
 /* --- Status icon helpers (C-callable) --- */
 bool esp_wlan_is_on(void) {

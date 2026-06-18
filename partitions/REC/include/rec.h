@@ -30,6 +30,9 @@ REC_CODE uint8_t REC_BlockWrite(uint32_t lba, const uint8_t *buffer,
                                 uint32_t block_count);
 REC_CODE uint8_t REC_BlockSync(void);
 REC_CODE void REC_BlockRelease(void);
+/* Best-effort diagnostic written before the raw SD medium is handed to USB.
+ * It never blocks attachment on a filesystem/logging failure. */
+REC_CODE void REC_MscLogReady(uint32_t block_count);
 
 #define REC_MODE_WAIT    0U
 #define REC_MODE_FORMAT  1U

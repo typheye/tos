@@ -2,11 +2,11 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build factory",
+      "label": "Build (factory)",
       "type": "shell",
       "icon": {
         "id": "build",
-        "tooltip": "Tips"
+        "tooltip": "Build all partitions"
       },
       "command": "cmake",
       "args": [
@@ -30,11 +30,11 @@
       }
     },
     {
-      "label": "build system",
+      "label": "Build (system)",
       "type": "shell",
       "icon": {
         "id": "build",
-        "tooltip": "Tips"
+        "tooltip": "Build system partitions"
       },
       "command": "cmake",
       "args": [
@@ -54,11 +54,11 @@
       }
     },
     {
-      "label": "flash system",
+      "label": "Flash (system)",
       "type": "shell",
       "icon": {
         "id": "play",
-        "tooltip": "Tips"
+        "tooltip": "Flash system partitions"
       },
       "command": "${workspaceFolder}/scripts/upload.bat",
       "args": [
@@ -70,11 +70,11 @@
       }
     },
     {
-      "label": "flash runtime",
+      "label": "Flash (runtime)",
       "type": "shell",
       "icon": {
         "id": "play",
-        "tooltip": "Tips"
+        "tooltip": "Flash rec/sah/system partitions"
       },
       "command": "${workspaceFolder}/scripts/upload.bat",
       "args": [
@@ -86,11 +86,11 @@
       }
     },
     {
-      "label": "flash factory",
+      "label": "Flash (factory)",
       "type": "shell",
       "icon": {
         "id": "play",
-        "tooltip": "Tips"
+        "tooltip": "Flash all partitions"
       },
       "command": "${workspaceFolder}/scripts/upload.bat",
       "args": [
@@ -102,11 +102,11 @@
       }
     },
     {
-      "label": "clean",
+      "label": "Clean",
       "type": "shell",
       "icon": {
         "id": "trash",
-        "tooltip": "Tips"
+        "tooltip": "Clean the project"
       },
       "command": "cmake",
       "args": [

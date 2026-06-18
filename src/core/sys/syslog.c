@@ -32,6 +32,7 @@ extern RTC_HandleTypeDef hrtc;
 
 static uint8_t g_syslog_file_guard = 0;
 static uint8_t g_syslog_file_disabled = 0;
+static uint8_t g_syslog_file_failures = 0;
 
 static const char *syslog_level_name(SysLog_Level_t level) {
   switch (level) {
@@ -98,21 +99,31 @@ bool SysLog_IsFileOutputDisabled(void) {
 }
 
 static void syslog_handle_file_result(FRESULT res) {
-  if (res == FR_OK) return;
+  if (res == FR_OK) {
+    g_syslog_file_failures = 0U;
+    return;
+  }
 
   /* Logging starts before SDIO/FatFs is mounted.  Those early messages are
    * expected to return a transient readiness/path result and must not disable
-   * file logging for the rest of the boot.  Once /storage is mounted the next
-   * log line retries, creates /storage/tos/log, and opens the boot log. */
+   * file logging for the rest of the boot. */
   if (res == FR_NOT_READY || res == FR_NOT_ENABLED ||
       res == FR_INVALID_DRIVE || res == FR_NO_FILESYSTEM ||
       res == FR_NO_PATH) {
     return;
   }
 
-  g_syslog_file_disabled = 1U;
-  printf("%s [WARN ] [SYS  ] SD log write failed: %d; file logging disabled\r\n",
-         syslog_ts(), (int)res);
+  if (g_syslog_file_failures < 255U) {
+    g_syslog_file_failures++;
+  }
+  if (g_syslog_file_failures >= 3U) {
+    g_syslog_file_disabled = 1U;
+    printf("%s [WARN ] [SYS  ] SD log write failed: %d; disabled after %u consecutive errors\r\n",
+           syslog_ts(), (int)res, (unsigned)g_syslog_file_failures);
+  } else {
+    printf("%s [WARN ] [SYS  ] SD log write failed: %d; retrying (%u/3)\r\n",
+           syslog_ts(), (int)res, (unsigned)g_syslog_file_failures);
+  }
 }
 
 static void syslog_emit_v(SysLog_Level_t level, const char *mod,

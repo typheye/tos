@@ -485,7 +485,7 @@ static bool maybe_run_auto_time_sync(uint32_t now) {
         (unsigned)TOS_AUTO_TIME_SYNC_MAX_TRIES);
 
   SysWatchdog_FeedNow();
-  bool ok = SysTime_Sync();
+  bool ok = SysTime_SyncQuick();
   SysWatchdog_FeedNow();
 
   if (ok) {

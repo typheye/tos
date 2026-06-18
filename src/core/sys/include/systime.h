@@ -42,6 +42,12 @@ extern "C" {
  */
 bool SysTime_Sync(void);
 
+/**
+ * @brief  Bounded background SNTP attempt used after the UI is running.
+ *         No HTTP fallback and no long retry loop; failure is retried later.
+ */
+bool SysTime_SyncQuick(void);
+
 /* Format time string respecting 24H/12H setting from Settings */
 void time_fmt(char *buf, int sz, int h24, int m);
 

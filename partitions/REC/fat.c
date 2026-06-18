@@ -13,8 +13,11 @@
 #define REC_BLOCK_IO_TIMEOUT_MS 300U
 #define REC_FLASH_BUF_SZ 512U
 #define REC_SD_IO_ATTEMPTS 2U
+/* Keep REC MSC startup conservative. Full-speed USB is the bottleneck, so
+ * 1-bit SDIO is fast enough for browsing and flashing while avoiding the
+ * multi-second HAL_SD_ConfigWideBusOperation stalls observed on some cards. */
 #ifndef REC_ENABLE_WIDE_BUS
-#define REC_ENABLE_WIDE_BUS 1
+#define REC_ENABLE_WIDE_BUS 0
 #endif
 
 #define REC_USERDATA_SECTOR_INDEX 11U
@@ -571,6 +574,22 @@ static REC_CODE void rec_open_log(void) {
   }
 }
 
+static REC_CODE void rec_close_fs_keep_card(void) {
+  if (rec_log_opened) {
+    (void)f_sync(&rec_log_file);
+    (void)f_close(&rec_log_file);
+    rec_log_opened = 0U;
+  }
+  if (rec_mounted) {
+    (void)f_mount(0, rec_path, 0U);
+    rec_mounted = 0U;
+  }
+  if (rec_driver_linked) {
+    (void)FATFS_UnLinkDriver(rec_path);
+    rec_driver_linked = 0U;
+  }
+}
+
 static REC_CODE uint8_t rec_mount(void) {
   FRESULT fr;
 
@@ -1014,21 +1033,7 @@ REC_CODE uint8_t REC_FatFormat(void) {
 }
 
 REC_CODE void REC_FatRelease(void) {
-  if (rec_log_opened) {
-    (void)f_sync(&rec_log_file);
-    (void)f_close(&rec_log_file);
-    rec_log_opened = 0U;
-  }
-
-  if (rec_mounted) {
-    (void)f_mount(0, rec_path, 0U);
-    rec_mounted = 0U;
-  }
-
-  if (rec_driver_linked) {
-    (void)FATFS_UnLinkDriver(rec_path);
-    rec_driver_linked = 0U;
-  }
+  rec_close_fs_keep_card();
 
   if (hsd.Instance == SDIO) {
     (void)HAL_SD_DeInit(&hsd);
@@ -1041,12 +1046,35 @@ REC_CODE const char *REC_FatLastError(void) {
   return rec_last_error[0] ? rec_last_error : rec_err_none;
 }
 
+REC_CODE void REC_MscLogReady(uint32_t block_count) {
+  char msg[64];
+  char *p = msg;
+
+  /* Logging and host access must never overlap on the same FAT volume.  This
+   * snapshot is written while the LUN still reports NO MEDIUM, then FatFs is
+   * fully detached before the raw block device becomes visible to USB. */
+  if (block_count == 0U || !rec_mount()) {
+    rec_close_fs_keep_card();
+    return;
+  }
+
+  p = rec_append_str(p, "MSC USB ready; SD attach blocks=");
+  p = rec_append_u32(p, block_count);
+  *p = 0;
+  rec_log_line("INFO ", "MSC  ", msg);
+  rec_close_fs_keep_card();
+}
+
 REC_CODE uint8_t REC_BlockInit(uint32_t *block_count) {
+  DSTATUS status = 0U;
   if (!rec_buffers_init()) {
     rec_copy_error(rec_err_memory);
     return 0U;
   }
-  if (rec_card_blocks == 0U && rec_disk_initialize_fast(0U) != 0U) {
+  if (rec_card_blocks == 0U) {
+    status = rec_disk_initialize_fast(0U);
+  }
+  if (status != 0U && rec_card_blocks == 0U) {
     return 0U;
   }
   if (rec_card_block_size != 512U || rec_card_blocks == 0U) {
@@ -1056,6 +1084,10 @@ REC_CODE uint8_t REC_BlockInit(uint32_t *block_count) {
   }
   if (block_count) {
     *block_count = rec_card_blocks;
+  }
+  if (!rec_wait_ready(20U)) {
+    rec_copy_error(rec_err_card_ready);
+    return 0U;
   }
   return 1U;
 }

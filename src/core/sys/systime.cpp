@@ -392,6 +392,33 @@ static bool query_sntp(TimeSample *sample) {
   return false;
 }
 
+/* -- Bounded SNTP query for post-UI background sync ---------------- */
+
+static bool query_sntp_quick(TimeSample *sample) {
+  char *buf = at_rx_buf();
+  SysDateTime dt;
+  uint32_t rx_tick = 0U;
+
+  /* Keep this path short: the normal UI loop calls it synchronously.  A
+   * failed/1970 sample is harmless because TosApi schedules another attempt. */
+  if (!raw_at_command("AT+CIPSNTPCFG=1,8", "OK", 1000U, 25U,
+                      buf, AT_RX_SIZE)) {
+    log_response_summary("SNTP quick cfg", buf);
+    return false;
+  }
+  if (!raw_at_command("AT+CIPSNTPTIME?", "OK", 1200U, 25U,
+                      buf, AT_RX_SIZE, &rx_tick) ||
+      !parse_any_datetime(buf, &dt)) {
+    log_response_summary("SNTP quick query", buf);
+    return false;
+  }
+
+  sample->dt = dt;
+  sample->tick_ms = rx_tick ? rx_tick : HAL_GetTick();
+  sample->precise_tick = false;
+  return true;
+}
+
 /* ── HTTP fallback time query (via network_manager) ───────────── */
 
 static bool query_http_time(TimeSample *sample) {
@@ -419,7 +446,7 @@ static bool query_http_time(TimeSample *sample) {
       sample->dt           = dt;
       sample->tick_ms      = HAL_GetTick();
       sample->precise_tick = false;
-      LOG_I("SYTM", "HTTP response parsed �?time from Date header");
+      LOG_I("SYTM", "HTTP response parsed  - time from Date header");
       return true;
     }
 
@@ -436,6 +463,33 @@ extern "C" void time_fmt(char *buf, int sz, int h24, int m) {
   else { int h12 = h24 % 12; if (h12 == 0) h12 = 12; snprintf(buf, sz, "%02d:%02d", h12, m); }
 }
 
+bool SysTime_SyncQuick(void) {
+  TimeSample sample;
+  SysDateTime synced;
+
+  LOG_I("SYTM", "Quick background time sync...");
+  if (ESP8266_IsHardDisabled() || !ESP8266_IsConnected()) {
+    return false;
+  }
+
+  Net_PrepareClient();
+  if (!Net_HasStationIP()) {
+    LOG_W("SYTM", "Quick sync skipped: no STA IP");
+    return false;
+  }
+  if (!query_sntp_quick(&sample)) {
+    LOG_W("SYTM", "Quick SNTP sample unavailable");
+    return false;
+  }
+
+  synced = align_and_apply_sample(sample);
+  LOG_I("SYTM", "Quick synced: %04d-%02d-%02d %02d:%02d:%02d",
+        synced.year, synced.month, synced.day,
+        synced.hour, synced.minute, synced.second);
+  Net_LedSuccess();
+  return true;
+}
+
 bool SysTime_Sync(void) {
   TimeSample sample;
   SysDateTime synced;
@@ -444,7 +498,7 @@ bool SysTime_Sync(void) {
 
   /* ── Pre-checks ─────────────────────────────────────── */
   if (ESP8266_IsHardDisabled()) {
-    LOG_W("SYTM", "ESP8266 is hard-disabled �?cannot sync");
+    LOG_W("SYTM", "ESP8266 is hard-disabled  - cannot sync");
     Net_LedFailure();
     return false;
   }
@@ -472,7 +526,7 @@ bool SysTime_Sync(void) {
   }
 
   if (!ok) {
-    LOG_E("SYTM", "Time sync failed �?SNTP and HTTP both unavailable");
+    LOG_E("SYTM", "Time sync failed  - SNTP and HTTP both unavailable");
     Net_LedFailure();
     return false;
   }
