@@ -13,8 +13,7 @@ venv/
 build/
 
 # Generated executables
-dist/*.exe
-dist/platform-tools/*.exe
+dist/
 
 # Editor / OS
 .vs/
