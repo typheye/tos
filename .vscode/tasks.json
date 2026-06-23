@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build (factory)",
+      "label": "Build",
       "type": "shell",
       "icon": {
         "id": "build",
@@ -30,30 +30,6 @@
       }
     },
     {
-      "label": "Build (system)",
-      "type": "shell",
-      "icon": {
-        "id": "build",
-        "tooltip": "Build system partitions"
-      },
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/build/Release",
-        "--target",
-        "system",
-        "-j",
-        "24"
-      ],
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
       "label": "Flash (system)",
       "type": "shell",
       "icon": {
@@ -64,6 +40,12 @@
       "args": [
         "system"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "OPENOCD_SPEED": "16000"
+        }
+      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"
@@ -80,6 +62,12 @@
       "args": [
         "runtime"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "OPENOCD_SPEED": "16000"
+        }
+      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"
@@ -96,6 +84,12 @@
       "args": [
         "factory"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "OPENOCD_SPEED": "16000"
+        }
+      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"

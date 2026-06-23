@@ -197,7 +197,7 @@ void i2c_scan_activity_gui(void) {
     return;
   }
 
-  /* 4. Results page 鈥?scrollable device list */
+  /* 4. Results page scrollable device list */
   int sel = 1;
   uint8_t le = 0;
 

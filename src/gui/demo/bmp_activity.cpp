@@ -20,7 +20,6 @@
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
-
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram")))
 #endif
@@ -122,10 +121,11 @@ static void reset_chart(void) {
 
 static void draw_chart_axes(int x, int y, int w, int h, float mx, float mn,
                             const char *unit) {
-  PD_SetColor(TOS_GREY);
+  PD_SetColor(LV_PRIMARY);
   PD_DrawRect(x, y, w, h);
   for (int i = 1; i <= 3; i++) {
     int ly = y + (h * i / 4);
+    PD_SetColor(LV_BG_DARK);
     PD_DrawLine(x, ly, x + w, ly);
   }
 }
@@ -350,7 +350,7 @@ void bmp180_chart_activity(void) {
         draw_chart_line(cdata, chart_x, chart_y, chart_w, chart_h, mx, mn,
                         lcol);
 
-        /* Legend 鈥?colored fill rectangles with text labels */
+        /* Legend colored fill rectangles with text labels */
         PD_SetFont(FONT_ASCII_12);
 
         PD_FillRect(10, 148, 10, 8, TOS_RED);

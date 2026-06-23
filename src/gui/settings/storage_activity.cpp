@@ -130,7 +130,8 @@ static void refresh(void) {
   builtin_used_pct = 31; // flash
   builtin_cap_kb = 1024; // 1MB
 
-  /* If SD card is hard-disabled, skip probing entirely 鈥?   * avoids triggering SysHandle_Exception. */
+  /* If SD card is hard-disabled, skip probing entirely    * avoids triggering
+   * SysHandle_Exception. */
   if (TSDIO_IsHardDisabled()) {
     sd_present = false;
     sd_cap_kb = 0;

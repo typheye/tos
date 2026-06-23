@@ -91,11 +91,11 @@ static void update_chart_data(float v0, float v1, float v2) {
 
 static void draw_chart_axes(int x, int y, int width, int height,
                             float max_val) {
-  PD_SetColor(TOS_TEXT_SEC);
+  PD_SetColor(LV_PRIMARY);
   PD_DrawRect(x, y, width, height);
   for (int i = 1; i <= 3; i++) {
     int line_y = y + (height * i / 4);
-    PD_SetColor(TOS_TEXT_SEC);
+    PD_SetColor(LV_BG_DARK);
     PD_DrawLine(x, line_y, x + width, line_y);
   }
   PD_SetFont(FONT_ASCII_12);
@@ -445,7 +445,7 @@ static void jyro_chart_subpage(void) {
       LCD_FLUSH({
         UI_DrawFrameTitle("DEMO");
 
-        /* Group name 鈥?left-aligned at x=16 with TOS_TEXT */
+        /* Group name left-aligned at x=16 with TOS_TEXT */
         PD_SetFont(FONT_ASCII_12);
         PD_SetColor(TOS_TEXT);
         char title[32];
@@ -453,12 +453,12 @@ static void jyro_chart_subpage(void) {
                  group_names[chart_param_group]);
         PD_DrawString(16, 33, title);
 
-        /* Chart 鈥?shifted down: chart_y = 50 */
+        /* Chart shifted down: chart_y = 50 */
         int chart_x = 10, chart_y = 50, chart_w = 220, chart_h = 90;
         draw_chart_axes(chart_x, chart_y, chart_w, chart_h, chart_max_value);
         draw_chart_all(chart_x, chart_y, chart_w, chart_h, chart_max_value);
 
-        /* Color legend 鈥?small filled rectangles with abbreviated labels */
+        /* Color legend small filled rectangles with abbreviated labels */
         const char *lnames[3];
         switch (chart_param_group) {
         case 0:

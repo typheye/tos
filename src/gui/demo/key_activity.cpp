@@ -19,7 +19,6 @@
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
-
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
@@ -75,7 +74,7 @@ void key_test_activity(void) {
       bool s12 = keyManager.sw12_B12.isOn();
       bool s13 = keyManager.sw13_B14.isOn();
 
-      /* Build value strings & colors 鈥?ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
+      /* Build value strings & colors ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
       char key_vals[KEY_N][8];
       key_vals[0][0] = '\0';
 
@@ -85,7 +84,7 @@ void key_test_activity(void) {
       snprintf(key_vals[3], 8, "%s", s3 ? "ON" : "OFF");
       snprintf(key_vals[4], 8, "%s", s4 ? "ON" : "OFF");
 
-      // Group 2: SW5-SW9 (inverted logic 鈥?true=OFF, false=ON)
+      // Group 2: SW5-SW9 (inverted logic true=OFF, false=ON)
       snprintf(key_vals[5], 8, "%s", s5 ? "ON" : "OFF");
       snprintf(key_vals[6], 8, "%s", s6 ? "ON" : "OFF");
       snprintf(key_vals[7], 8, "%s", s7 ? "ON" : "OFF");
@@ -117,7 +116,8 @@ void key_test_activity(void) {
           if (idx == 0)
             UI_DrawMenuCard(idx, sel, cy, key_labels[idx]);
           else
-            UI_DrawMenuValue(idx, sel, cy, key_labels[idx], key_vals[idx], false);
+            UI_DrawMenuValue(idx, sel, cy, key_labels[idx], key_vals[idx],
+                             false);
         }
 
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");

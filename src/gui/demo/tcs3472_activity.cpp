@@ -20,7 +20,6 @@
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
-
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern TCS3472 boardTCS3472;
@@ -104,11 +103,12 @@ static void update_chart_data(uint16_t r, uint16_t g, uint16_t b) {
 }
 
 static void draw_chart_axes(int x, int y, int w, int h, uint16_t max_val) {
-  PD_SetColor(TOS_GREY);
+  PD_SetColor(LV_PRIMARY);
   PD_DrawRect(x, y, w, h);
   for (int i = 1; i <= 3; i++) {
-    int line_y = y + (h * i / 4);
-    PD_DrawLine(x, line_y, x + w, line_y);
+    int ly = y + (h * i / 4);
+    PD_SetColor(LV_BG_DARK);
+    PD_DrawLine(x, ly, x + w, ly);
   }
 }
 
@@ -238,7 +238,7 @@ static void tcs3472_color_subpage(void) {
       LCD_FLUSH({
         UI_DrawFrameTitle("DEMO");
 
-        /* Left-aligned text values at (16, 33) 鈥?alert.cpp style */
+        /* Left-aligned text values at (16, 33) alert.cpp style */
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         char buf[64];
@@ -246,7 +246,7 @@ static void tcs3472_color_subpage(void) {
                  raw.green, raw.blue, raw.clear);
         PD_DrawString(16, 33, buf);
 
-        /* Color block inside a card 鈥?much smaller, about 80px tall */
+        /* Color block inside a card much smaller, about 80px tall */
         PD_DrawAngledCard(20, 80, 200, 80, 6, TOS_CARD_BG);
         uint32_t display_color =
             ((raw.red >> 8) << 16) | ((raw.green >> 8) << 8) | (raw.blue >> 8);
@@ -410,7 +410,7 @@ static void tcs3472_chart_subpage(void) {
       LCD_FLUSH({
         UI_DrawFrameTitle("DEMO");
 
-        /* Left-aligned chart title 鈥?jyro chart 03 style */
+        /* Left-aligned chart title jyro chart 03 style */
         PD_SetFont(FONT_ASCII_12);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(16, 33, "Chart: RGB");
@@ -426,7 +426,7 @@ static void tcs3472_chart_subpage(void) {
         PD_SetColor(TOS_TEXT);
         PD_DrawString(176, 149, "LED");
 
-        /* Legend 鈥?colored fill rectangles with R/G/B labels (jyro style) */
+        /* Legend colored fill rectangles with R/G/B labels (jyro style) */
         PD_FillRect(10, 148, 10, 8, 0xFF0000);
         PD_SetColor(TOS_TEXT);
         PD_DrawString(23, 147, "R");

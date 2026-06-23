@@ -20,7 +20,6 @@
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
-
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern ESP8266 esp8266;
@@ -576,7 +575,7 @@ static void saved_net_action(int idx) {
         PD_SetFont(FONT_ASCII_16);
         for (int i = 0; i < 4; i++) {
           if (i == 2 && is_current) {
-            /* Grey out "02 Connect" 鈥?currently connected to this network */
+            /* Grey out "02 Connect" currently connected to this network */
             bool s = (i == sel);
             uint32_t cc = s ? TOS_ACCENT : TOS_CARD_BG;
             PD_DrawAngledCard(14, 33 + i * 25, 212, 20, 5, cc);

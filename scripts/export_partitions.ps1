@@ -12,6 +12,7 @@ if ([IO.Path]::IsPathRooted($BuildDir)) {
 $cachePath = Join-Path $buildPath "CMakeCache.txt"
 $distDir = Join-Path $root "dist"
 $firmwareDir = Join-Path $distDir "firmware"
+$flashDir = Join-Path $distDir "flash"
 $factoryDir = Join-Path $distDir "factory"
 
 if (!(Test-Path -LiteralPath $cachePath)) {
@@ -43,11 +44,29 @@ if (-not $objcopyPath) {
 }
 
 New-Item -ItemType Directory -Force -Path $firmwareDir | Out-Null
+New-Item -ItemType Directory -Force -Path $flashDir | Out-Null
 New-Item -ItemType Directory -Force -Path $factoryDir | Out-Null
 Get-ChildItem -LiteralPath $firmwareDir -Filter "*.bin" -ErrorAction SilentlyContinue |
   Remove-Item -Force
+Get-ChildItem -LiteralPath $flashDir -Filter "*.bin" -ErrorAction SilentlyContinue |
+  Remove-Item -Force
 Get-ChildItem -LiteralPath $factoryDir -Filter "*.elf" -ErrorAction SilentlyContinue |
   Remove-Item -Force
+
+function Pad-File4 {
+  param([string]$Path)
+  $item = Get-Item -LiteralPath $Path
+  $pad = [int](($item.Length % 4))
+  if ($pad -eq 0) { return }
+  $bytes = New-Object byte[] (4 - $pad)
+  for ($i = 0; $i -lt $bytes.Length; $i++) { $bytes[$i] = 0xFF }
+  $stream = [IO.File]::Open($Path, [IO.FileMode]::Append, [IO.FileAccess]::Write)
+  try {
+    $stream.Write($bytes, 0, $bytes.Length)
+  } finally {
+    $stream.Dispose()
+  }
+}
 
 function Export-Partition {
   param(
@@ -59,6 +78,16 @@ function Export-Partition {
   $elf = Join-Path $buildPath ($Target + ".elf")
   if (!(Test-Path -LiteralPath $elf)) { throw "ELF not found: $elf" }
   $path = Join-Path $firmwareDir $Output
+  $flashPath = Join-Path $flashDir $Output
+
+  & $objcopyPath -O binary --gap-fill 0xFF $elf $flashPath
+  if ($LASTEXITCODE -ne 0) { throw "objcopy failed for compact $Target" }
+  Pad-File4 -Path $flashPath
+  $flashActual = (Get-Item -LiteralPath $flashPath).Length
+  if ($flashActual -le 0 -or $flashActual -gt $Size) {
+    throw "$Output compact size invalid: partition max $Size, got $flashActual"
+  }
+
   $padTo = $Address + $Size
   & $objcopyPath -O binary --gap-fill 0xFF --pad-to ("0x{0:X8}" -f $padTo) $elf $path
   if ($LASTEXITCODE -ne 0) { throw "objcopy failed for $Target" }
@@ -97,7 +126,12 @@ Set-Content -LiteralPath $csvPath -Value $csv -Encoding ASCII
 
 Write-Host "Export complete (ELF stage intentionally omitted from BIN output):"
 Write-Host ("  {0,-12} {1,8} bytes" -f "elf_stage.elf", (Get-Item -LiteralPath (Join-Path $factoryDir "elf_stage.elf")).Length)
+Write-Host "  firmware/ full partition images:"
 Get-ChildItem -LiteralPath $firmwareDir -Filter "*.bin" | ForEach-Object {
+  Write-Host ("  {0,-12} {1,8} bytes" -f $_.Name, $_.Length)
+}
+Write-Host "  flash/ compact host-flash images:"
+Get-ChildItem -LiteralPath $flashDir -Filter "*.bin" | ForEach-Object {
   Write-Host ("  {0,-12} {1,8} bytes" -f $_.Name, $_.Length)
 }
 Write-Host "  partitions.csv"
