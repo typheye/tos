@@ -24,8 +24,8 @@ typedef struct {
 } REC_Command;
 
 static const char rec_title[] REC_CONST = "Recovery Mode";
-static const char rec_tdb_ready[] REC_CONST = "TDB bridge ready";
-static const char rec_tdb_hint[] REC_CONST = "Connect with tdb.py";
+static const char rec_tdb_ready[] REC_CONST = "TDB was ready";
+static const char rec_tdb_hint[] REC_CONST = "Connect with computer";
 static const char rec_tdb_fail[] REC_CONST = "TDB USB init failed";
 static const char rec_format[] REC_CONST = "Formatting userdata...";
 static const char rec_format_done[] REC_CONST = "Format completed";

@@ -157,11 +157,11 @@ int UI_MenuLoop(const char *title, const char **items, int count,
 
     if (keyManager.collision_A8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % count;
-      JPDelay(45);
+      JPDelay(80);
     }
     if (keyManager.collision_D0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + count) % count;
-      JPDelay(45);
+      JPDelay(80);
     }
 
     uint8_t enter = (keyManager.btn_enter.getState() == KEY_PRESSED);
