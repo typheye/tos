@@ -6,17 +6,33 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$SourceRoot = Join-Path $ProjectRoot "src"
 $BuildRoot = Join-Path $ProjectRoot "build"
 $DistRoot = Join-Path $ProjectRoot "dist"
 $PlatformTools = Join-Path $DistRoot "platform-tools"
+$SourceRoot = Join-Path $ProjectRoot "src"
 
-function Invoke-PyInstaller {
-    param([string[]]$Arguments)
-    Write-Host "python -m PyInstaller $($Arguments -join ' ')" -ForegroundColor Cyan
-    & python -m PyInstaller @Arguments
+function Invoke-PyInstallerSpec {
+    param(
+        [Parameter(Mandatory = $true)][string]$SpecPath,
+        [Parameter(Mandatory = $true)][string]$DistPath,
+        [Parameter(Mandatory = $true)][string]$WorkName
+    )
+
+    $WorkPath = Join-Path (Join-Path $BuildRoot "pyinstaller") $WorkName
+    New-Item -ItemType Directory -Path $WorkPath -Force | Out-Null
+
+    $Arguments = @(
+        "-m", "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--distpath", $DistPath,
+        "--workpath", $WorkPath,
+        $SpecPath
+    )
+    Write-Host "python $($Arguments -join ' ')" -ForegroundColor Cyan
+    & python @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "PyInstaller failed with exit code $LASTEXITCODE"
+        throw "PyInstaller failed for $SpecPath with exit code $LASTEXITCODE"
     }
 }
 
@@ -33,42 +49,21 @@ try {
         Remove-Item $DistRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Path $PlatformTools -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $BuildRoot "spec") -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $BuildRoot "pyinstaller") -Force | Out-Null
 
-    $Common = @(
-        "--noconfirm",
-        "--clean",
-        "--onefile",
-        "--noupx",
-        "--paths", $SourceRoot,
-        "--specpath", (Join-Path $BuildRoot "spec"),
-        "--workpath", (Join-Path $BuildRoot "pyinstaller")
-    )
+    Invoke-PyInstallerSpec `
+        -SpecPath (Join-Path $SourceRoot "tos_helper\tos_helper.spec") `
+        -DistPath $DistRoot `
+        -WorkName "tos_helper"
 
-    Invoke-PyInstaller ($Common + @(
-        "--windowed",
-        "--name", "TOS Helper",
-        "--distpath", $DistRoot,
-        "--hidden-import", "hid",
-        (Join-Path $SourceRoot "tos_helper\__main__.py")
-    ))
+    Invoke-PyInstallerSpec `
+        -SpecPath (Join-Path $SourceRoot "tsblboot\tsblboot.spec") `
+        -DistPath $PlatformTools `
+        -WorkName "tsblboot"
 
-    Invoke-PyInstaller ($Common + @(
-        "--console",
-        "--name", "tsblboot",
-        "--distpath", $PlatformTools,
-        "--hidden-import", "serial.tools.list_ports",
-        (Join-Path $SourceRoot "tsblboot\__main__.py")
-    ))
-
-    Invoke-PyInstaller ($Common + @(
-        "--console",
-        "--name", "tdb",
-        "--distpath", $PlatformTools,
-        "--hidden-import", "serial.tools.list_ports",
-        (Join-Path $SourceRoot "tdb\__main__.py")
-    ))
+    Invoke-PyInstallerSpec `
+        -SpecPath (Join-Path $SourceRoot "tdb\tdb.spec") `
+        -DistPath $PlatformTools `
+        -WorkName "tdb"
 
     $Expected = @(
         (Join-Path $DistRoot "TOS Helper.exe"),
@@ -81,6 +76,10 @@ try {
         }
     }
 
+    & (Join-Path $PlatformTools "tsblboot.exe") --version | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "tsblboot version test failed."
+    }
     & (Join-Path $PlatformTools "tsblboot.exe") partitions | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "tsblboot smoke test failed."
@@ -101,7 +100,7 @@ try {
         Write-Host "Installed tsblboot.exe and tdb.exe to $ScriptsDir" -ForegroundColor Green
     }
 
-    Write-Host "" 
+    Write-Host ""
     Write-Host "Build complete:" -ForegroundColor Green
     Write-Host "  dist\TOS Helper.exe"
     Write-Host "  dist\platform-tools\tsblboot.exe"

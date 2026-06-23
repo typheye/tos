@@ -7,6 +7,11 @@ import sys
 import time
 import zlib
 
+try:
+    from . import __version__
+except ImportError:  # direct script execution
+    __version__ = "1.0.0"
+
 
 VID = 0x0483
 PID = 0x5751
@@ -296,6 +301,7 @@ def print_examples():
 
 def main():
     parser = argparse.ArgumentParser(prog="tsblboot", description="Talk to TOS SBL FASTBOOT CDC.")
+    parser.add_argument("--version", action="version", version=f"tsblboot {__version__}")
     parser.add_argument("-p", "--port", help="COM port, e.g. COM8")
     parser.add_argument("-b", "--baud", type=int, default=115200)
     parser.add_argument(

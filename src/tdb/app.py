@@ -13,6 +13,11 @@ import zlib
 from dataclasses import dataclass
 from typing import BinaryIO, Optional
 
+try:
+    from . import __version__
+except ImportError:  # direct script execution
+    __version__ = "1.0.0"
+
 VID = 0x0483
 PID = 0x5756
 DEFAULT_BAUD = 115200
@@ -489,7 +494,7 @@ def command_pull(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdb", description="TOS Debug Bridge for REC")
-    parser.add_argument("--version", action="version", version="tdb 1.0")
+    parser.add_argument("--version", action="version", version=f"tdb {__version__}")
     sub = parser.add_subparsers(dest="subcommand", required=True)
 
     p = sub.add_parser("devices", help="list serial ports")

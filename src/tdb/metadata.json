@@ -1,0 +1,8 @@
+{
+  "name": "tdb",
+  "display_name": "TOS Debug Bridge",
+  "version": "1.0.0",
+  "developer": "Typheye",
+  "description": "REC USB CDC bridge for TOS filesystem, settings and diagnostics",
+  "executable": "tdb.exe"
+}

@@ -38,3 +38,18 @@ After `--install`, the two CLI tools are available directly while the `tos` envi
 tsblboot partitions
 tdb --version
 ```
+
+## Package metadata
+
+Each executable keeps its PyInstaller spec and Windows version resource beside its source package:
+
+```text
+src/tos_helper/tos_helper.spec
+src/tos_helper/version_info.txt
+src/tsblboot/tsblboot.spec
+src/tsblboot/version_info.txt
+src/tdb/tdb.spec
+src/tdb/version_info.txt
+```
+
+`TOS Helper.exe` uses a Per-Monitor-V2 DPI manifest and the Typheye application icon from `src/tos_helper/assets/`.

@@ -17,6 +17,7 @@ CLI examples:
 from __future__ import annotations
 
 import argparse
+import ctypes
 import binascii
 import queue
 import sys
@@ -24,7 +25,13 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+
+try:
+    from . import __version__
+except ImportError:  # direct script execution
+    __version__ = "1.0.0"
 
 try:
     import hid  # type: ignore
@@ -39,6 +46,48 @@ DEFAULT_PID = 0x5750
 REPORT_ID_VENDOR = 0x10
 REPORT_SIZE = 64
 PAYLOAD_SIZE = REPORT_SIZE - 1
+
+
+def enable_windows_high_dpi() -> None:
+    """Enable native DPI rendering before Tk creates any windows."""
+    if sys.platform != "win32":
+        return
+
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        shcore = ctypes.WinDLL("shcore", use_last_error=True)
+        if shcore.SetProcessDpiAwareness(2) in (0, 1):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        ctypes.WinDLL("user32", use_last_error=True).SetProcessDPIAware()
+    except (AttributeError, OSError):
+        pass
+
+
+def package_resource(*parts: str) -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS).joinpath("tos_helper", *parts)
+    return Path(__file__).resolve().parent.joinpath(*parts)
+
+
+def configure_tk_dpi(root) -> float:
+    """Set Tk's point scaling from the monitor DPI and return a geometry scale."""
+    try:
+        dpi = float(root.winfo_fpixels("1i"))
+    except Exception:
+        dpi = 96.0
+    dpi = min(max(dpi, 96.0), 384.0)
+    root.tk.call("tk", "scaling", dpi / 72.0)
+    return dpi / 96.0
 
 
 @dataclass
@@ -169,6 +218,7 @@ def cli_main(args: argparse.Namespace) -> int:
 
 
 def gui_main() -> int:
+    enable_windows_high_dpi()
     try:
         import tkinter as tk
         from tkinter import messagebox, ttk
@@ -180,9 +230,18 @@ def gui_main() -> int:
     stop_event = threading.Event()
 
     root = tk.Tk()
-    root.title("TOS HID Tool")
-    root.geometry("980x660")
-    root.minsize(900, 600)
+    root.title("TOS Helper")
+    dpi_scale = configure_tk_dpi(root)
+    root.geometry(f"{round(980 * dpi_scale)}x{round(660 * dpi_scale)}")
+    root.minsize(round(900 * dpi_scale), round(600 * dpi_scale))
+
+    try:
+        icon_path = package_resource("assets", "typheye_rounded.png")
+        app_icon = tk.PhotoImage(file=str(icon_path))
+        root.iconphoto(True, app_icon)
+        root._tos_app_icon = app_icon
+    except Exception:
+        pass
 
     style = ttk.Style(root)
     try:
@@ -475,6 +534,7 @@ def gui_main() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="TOS Helper", description="TOS Custom HID host tool")
+    parser.add_argument("--version", action="version", version=f"TOS Helper {__version__}")
     parser.add_argument("--vid", type=lambda x: int(x, 16), default=DEFAULT_VID)
     parser.add_argument("--pid", type=lambda x: int(x, 16), default=DEFAULT_PID)
     parser.add_argument("--list", action="store_true", help="list matching HID collections")

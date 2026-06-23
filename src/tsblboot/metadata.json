@@ -1,0 +1,8 @@
+{
+  "name": "tsblboot",
+  "display_name": "TOS SBL Boot Tool",
+  "version": "1.0.0",
+  "developer": "Typheye",
+  "description": "Host utility for the TOS SBL USB CDC flash protocol",
+  "executable": "tsblboot.exe"
+}

@@ -11,10 +11,10 @@ venv/
 
 # PyInstaller
 build/
-*.spec
 
 # Generated executables
-dist/
+dist/*.exe
+dist/platform-tools/*.exe
 
 # Editor / OS
 .vs/
