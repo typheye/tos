@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build",
+      "type": "shell",
+      "icon": {
+        "id": "build",
+        "tooltip": "Build TOS Windows tools"
+      },
+      "command": "${workspaceFolder}/scripts/build.bat",
+      "args": [
+        "--install"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Flash (system)",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Flash system partitions"
+      },
+      "command": "${workspaceFolder}/scripts/flash-system.bat",
+      "args": [
+        "${input:tosPort}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run TOS Helper",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Run TOS Helper"
+      },
+      "command": "\"${workspaceFolder}/dist/TOS Helper.exe\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Clean",
+      "type": "shell",
+      "icon": {
+        "id": "trash",
+        "tooltip": "Clean the project"
+      },
+      "command": "${workspaceFolder}/scripts/clean.bat",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "tosPort",
+      "type": "promptString",
+      "description": "TOS SBL COM port",
+      "default": "COM8"
+    }
+  ]
+}
