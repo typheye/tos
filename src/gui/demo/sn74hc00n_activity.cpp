@@ -19,13 +19,12 @@
 #include "library/include/libdly.h"
 #include "library/include/libui.h"
 
-
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern SN74HC00N boardHC00N;
 
-/* 鈹€鈹€ Standard template functions (exact copy from key_test) 鈹€鈹€ */
-/* 鈹€鈹€ 01 Monitor sub-page (scrollable menu, key_test pattern) 鈹€鈹€ */
+/* Standard template functions (exact copy from key_test) */
+/* 01 Monitor sub-page (scrollable menu, key_test pattern) */
 static void hc00n_monitor_subpage(void) {
   int sel = 0;
   uint8_t le = 0;
@@ -85,7 +84,7 @@ static void hc00n_monitor_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 02 Truth Table sub-page (scrollable menu, key_test pattern) 鈹€鈹€ */
+/* 02 Truth Table sub-page (scrollable menu, key_test pattern) */
 static void hc00n_truth_subpage(void) {
   /*
    * NAND truth table (Y = NOT (A AND B)):
@@ -155,7 +154,8 @@ static void hc00n_truth_subpage(void) {
         /* Items 1-4: NAND truth table rows */
         for (int i = 0; i < 4; i++) {
           cy += 25;
-          UI_DrawMenuValue(i + 1, sel, cy, tt_items[i].label, tt_items[i].value, false);
+          UI_DrawMenuValue(i + 1, sel, cy, tt_items[i].label, tt_items[i].value,
+                           false);
         }
 
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
@@ -165,7 +165,7 @@ static void hc00n_truth_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 03 Logic Test sub-page (scrollable menu, key_test pattern) 鈹€鈹€ */
+/* 03 Logic Test sub-page (scrollable menu, key_test pattern) */
 static void hc00n_test_subpage(void) {
   int sel = 0;
   uint8_t le = 0;
@@ -231,7 +231,7 @@ static void hc00n_test_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ Main activity (standard menu loop, key_test pattern) 鈹€鈹€ */
+/* Main activity (standard menu loop, key_test pattern) */
 #define HC00N_N 4
 void hc00n_activity(void) {
   boardHC00N.init();

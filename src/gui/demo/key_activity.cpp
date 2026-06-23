@@ -22,7 +22,7 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-/* 鈹€鈹€ Standard template functions (exact copy from about-page) 鈹€鈹€ */
+/* Standard template functions (exact copy from about-page) */
 #define KEY_N 14
 #define KEY_VIS 7
 

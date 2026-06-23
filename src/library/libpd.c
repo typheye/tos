@@ -671,7 +671,7 @@ void PD_DrawEthIcon(int16_t x, int16_t y, bool connected) {
 }
 
 void PD_DrawSignalIcon(int16_t x, int16_t y, int signal) {
-  /* 2x scale of Python (10x8 �?20x16) */
+  /* 2x scale of Python (10x8 -> 20x16) */
   uint32_t c = signal > 0 ? TOS_ACCENT : TOS_CARD_BG;
   int16_t h = 16;
 
@@ -689,7 +689,7 @@ void PD_DrawSignalIcon(int16_t x, int16_t y, int signal) {
   };
   PD_DrawPolygon(tri, 7, c);
 
-  /* 5 signal bars (right side) �?2px wide, 1px gap */
+  /* 5 signal bars (right side) - 2px wide, 1px gap */
   int bars_on = signal > 0 ? ((signal - 1) / 20 + 1) : 0;
   if (bars_on > 5) bars_on = 5;
   PD_SetFill(true);

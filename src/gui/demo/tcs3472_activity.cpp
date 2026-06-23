@@ -28,7 +28,7 @@ extern TCS3472 boardTCS3472;
 #define CCMRAM __attribute__((section(".ccmram")))
 #endif
 
-/* 鈹€鈹€ Chart state 鈹€鈹€ */
+/* Chart state */
 #define CHART_HISTORY 240
 static uint16_t *chart_r = nullptr;
 static uint16_t *chart_g = nullptr;
@@ -62,8 +62,8 @@ static void chart_free(void) {
   chart_b = nullptr;
 }
 
-/* 鈹€鈹€ Standard template functions (exact copy from about-page) 鈹€鈹€ */
-/* 鈹€鈹€ Chart helper functions 鈹€鈹€ */
+/* Standard template functions (exact copy from about-page) */
+/* Chart helper functions */
 static void reset_chart(void) {
   if (!chart_r || !chart_g || !chart_b)
     return;
@@ -136,7 +136,7 @@ static void draw_chart_all(int x, int y, int w, int h, uint16_t max_val) {
   draw_chart_line(chart_b, CHART_HISTORY, x, y, w, h, max_val, 0x0000FF);
 }
 
-/* 鈹€鈹€ 01 Read Raw sub-page (scrollable menu) 鈹€鈹€ */
+/* 01 Read Raw sub-page (scrollable menu) */
 static void tcs3472_read_subpage(void) {
   int sel = 0;
   uint8_t le = 0;
@@ -219,7 +219,7 @@ static void tcs3472_read_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 02 Color Demo sub-page 鈹€鈹€ */
+/* 02 Color Demo sub-page */
 static void tcs3472_color_subpage(void) {
   boardTCS3472.ledOn();
   uint32_t lu = 0;
@@ -264,7 +264,7 @@ static void tcs3472_color_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 03 CCT & Lux sub-page 鈹€鈹€ */
+/* 03 CCT & Lux sub-page */
 static void tcs3472_cct_subpage(void) {
   /* Sampling phase */
   LCD_FLUSH({
@@ -357,7 +357,7 @@ static void tcs3472_cct_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 04 Chart sub-page 鈹€鈹€ */
+/* 04 Chart sub-page */
 static void tcs3472_chart_subpage(void) {
   if (!chart_alloc()) {
     alert_show("ALERT", "Chart memory failed");
@@ -460,7 +460,7 @@ static void tcs3472_chart_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ Main activity (standard menu loop) 鈹€鈹€ */
+/* Main activity (standard menu loop) */
 #define TCS3472_N 5
 void tcs3472_activity(void) {
   if (!boardTCS3472.isInitialized()) {

@@ -13,7 +13,6 @@ $cachePath = Join-Path $buildPath "CMakeCache.txt"
 $distDir = Join-Path $root "dist"
 $firmwareDir = Join-Path $distDir "firmware"
 $flashDir = Join-Path $distDir "flash"
-$factoryDir = Join-Path $distDir "factory"
 
 if (!(Test-Path -LiteralPath $cachePath)) {
   throw "CMake cache not found: $cachePath"
@@ -45,12 +44,12 @@ if (-not $objcopyPath) {
 
 New-Item -ItemType Directory -Force -Path $firmwareDir | Out-Null
 New-Item -ItemType Directory -Force -Path $flashDir | Out-Null
-New-Item -ItemType Directory -Force -Path $factoryDir | Out-Null
+Remove-Item -LiteralPath (Join-Path $distDir "factory") -Recurse -Force -ErrorAction SilentlyContinue
 Get-ChildItem -LiteralPath $firmwareDir -Filter "*.bin" -ErrorAction SilentlyContinue |
   Remove-Item -Force
 Get-ChildItem -LiteralPath $flashDir -Filter "*.bin" -ErrorAction SilentlyContinue |
   Remove-Item -Force
-Get-ChildItem -LiteralPath $factoryDir -Filter "*.elf" -ErrorAction SilentlyContinue |
+Get-ChildItem -LiteralPath $flashDir -Filter "*.elf" -ErrorAction SilentlyContinue |
   Remove-Item -Force
 
 function Pad-File4 {
@@ -78,15 +77,8 @@ function Export-Partition {
   $elf = Join-Path $buildPath ($Target + ".elf")
   if (!(Test-Path -LiteralPath $elf)) { throw "ELF not found: $elf" }
   $path = Join-Path $firmwareDir $Output
-  $flashPath = Join-Path $flashDir $Output
-
-  & $objcopyPath -O binary --gap-fill 0xFF $elf $flashPath
-  if ($LASTEXITCODE -ne 0) { throw "objcopy failed for compact $Target" }
-  Pad-File4 -Path $flashPath
-  $flashActual = (Get-Item -LiteralPath $flashPath).Length
-  if ($flashActual -le 0 -or $flashActual -gt $Size) {
-    throw "$Output compact size invalid: partition max $Size, got $flashActual"
-  }
+  $flashPath = Join-Path $flashDir ($Target + ".elf")
+  Copy-Item -LiteralPath $elf -Destination $flashPath -Force
 
   $padTo = $Address + $Size
   & $objcopyPath -O binary --gap-fill 0xFF --pad-to ("0x{0:X8}" -f $padTo) $elf $path
@@ -98,11 +90,11 @@ function Export-Partition {
 }
 
 # ELF (sector 0) is intentionally not exported as a BIN. It is factory-only
-# and must be programmed from elf_stage.elf so normal update packages cannot
+# and must be programmed from flash/factory.elf so normal update packages cannot
 # accidentally contain or overwrite the immutable root loader.
 $elfStage = Join-Path $buildPath "elf_stage.elf"
 if (!(Test-Path -LiteralPath $elfStage)) { throw "ELF stage not found: $elfStage" }
-Copy-Item -LiteralPath $elfStage -Destination (Join-Path $factoryDir "elf_stage.elf") -Force
+Copy-Item -LiteralPath $elfStage -Destination (Join-Path $flashDir "factory.elf") -Force
 
 Export-Partition -Target "sbl"    -Address 0x08004000 -Size 0x00008000 -Output "sbl.bin"
 Export-Partition -Target "tee"    -Address 0x0800C000 -Size 0x00004000 -Output "tee.bin"
@@ -125,13 +117,12 @@ $csv = @(
 Set-Content -LiteralPath $csvPath -Value $csv -Encoding ASCII
 
 Write-Host "Export complete (ELF stage intentionally omitted from BIN output):"
-Write-Host ("  {0,-12} {1,8} bytes" -f "elf_stage.elf", (Get-Item -LiteralPath (Join-Path $factoryDir "elf_stage.elf")).Length)
 Write-Host "  firmware/ full partition images:"
 Get-ChildItem -LiteralPath $firmwareDir -Filter "*.bin" | ForEach-Object {
   Write-Host ("  {0,-12} {1,8} bytes" -f $_.Name, $_.Length)
 }
-Write-Host "  flash/ compact host-flash images:"
-Get-ChildItem -LiteralPath $flashDir -Filter "*.bin" | ForEach-Object {
+Write-Host "  flash/ host-flash ELF images:"
+Get-ChildItem -LiteralPath $flashDir -Filter "*.elf" | ForEach-Object {
   Write-Host ("  {0,-12} {1,8} bytes" -f $_.Name, $_.Length)
 }
 Write-Host "  partitions.csv"

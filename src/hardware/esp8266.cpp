@@ -18,20 +18,15 @@
 #include "include/esp8266.hpp"
 #include "library/include/libdly.h"
 
-
 #ifndef CCMRAM
 #define CCMRAM __attribute__((section(".ccmram"), aligned(4)))
 #endif
 
 extern USART boardSerial;
 
-static void esp_led_success(void) {
-  LED_EspCommSuccess();
-}
+static void esp_led_success(void) { LED_EspCommSuccess(); }
 
-static void esp_led_failure(void) {
-  LED_EspCommFailure();
-}
+static void esp_led_failure(void) { LED_EspCommFailure(); }
 
 extern "C" {
 extern uint8_t esp8266_global_buffer[];
@@ -40,10 +35,10 @@ extern uint8_t esp8266_data_ready;
 extern volatile uint32_t uart2_rx_count;
 }
 
-#define ESP8266_EN_PORT  GPIOF
-#define ESP8266_EN_PIN   GPIO_PIN_0
+#define ESP8266_EN_PORT GPIOF
+#define ESP8266_EN_PIN GPIO_PIN_0
 #define ESP8266_RST_PORT GPIOF
-#define ESP8266_RST_PIN  GPIO_PIN_1
+#define ESP8266_RST_PIN GPIO_PIN_1
 
 // Global instance
 CCMRAM ESP8266 esp8266(&huart2);
@@ -64,15 +59,18 @@ ESP8266::ESP8266(UART_HandleTypeDef *huart) {
 }
 
 void ESP8266::serviceUartRx(void) {
-  if (!_huart || !_huart->Instance) return;
+  if (!_huart || !_huart->Instance)
+    return;
 
   USART_TypeDef *uart = _huart->Instance;
   uint32_t sr = uart->SR;
-  bool error = (sr & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE)) != 0U;
+  bool error =
+      (sr & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE)) != 0U;
   bool rx_irq_off = (uart->CR1 & USART_CR1_RXNEIE) == 0U;
   bool err_irq_off = (uart->CR3 & USART_CR3_EIE) == 0U;
 
-  if (!error && !rx_irq_off && !err_irq_off) return;
+  if (!error && !rx_irq_off && !err_irq_off)
+    return;
 
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
@@ -89,12 +87,14 @@ void ESP8266::serviceUartRx(void) {
   __HAL_UART_ENABLE_IT(_huart, UART_IT_RXNE);
   __HAL_UART_ENABLE_IT(_huart, UART_IT_ERR);
 
-  if (primask == 0U) __enable_irq();
+  if (primask == 0U)
+    __enable_irq();
 
-  if (_uart_rearms < 0xFFFFU) _uart_rearms++;
+  if (_uart_rearms < 0xFFFFU)
+    _uart_rearms++;
   LOG_W("ESP", "UART2 RX rearmed #%u sr=0x%08lX cr1=0x%08lX cr3=0x%08lX",
-        (unsigned)_uart_rearms, (unsigned long)sr,
-        (unsigned long)uart->CR1, (unsigned long)uart->CR3);
+        (unsigned)_uart_rearms, (unsigned long)sr, (unsigned long)uart->CR1,
+        (unsigned long)uart->CR3);
 }
 
 void ESP8266::clearRxBuffer(void) {
@@ -106,7 +106,8 @@ void ESP8266::clearRxBuffer(void) {
   esp8266_global_index = 0;
   esp8266_data_ready = 0;
   memset(esp8266_global_buffer, 0, 2048);
-  if (primask == 0U) __enable_irq();
+  if (primask == 0U)
+    __enable_irq();
 }
 
 void ESP8266::processPendingData(void) {
@@ -116,7 +117,8 @@ void ESP8266::processPendingData(void) {
   __disable_irq();
 
   if (!esp8266_data_ready || esp8266_global_index == 0U) {
-    if (primask == 0U) __enable_irq();
+    if (primask == 0U)
+      __enable_irq();
     return;
   }
 
@@ -129,7 +131,8 @@ void ESP8266::processPendingData(void) {
   esp8266_data_ready = 0;
   esp8266_global_buffer[0] = '\0';
 
-  if (primask == 0U) __enable_irq();
+  if (primask == 0U)
+    __enable_irq();
 }
 
 void ESP8266::resetRxBuffer(void) { clearRxBuffer(); }
@@ -153,8 +156,7 @@ void ESP8266::driveControlPins(bool en_high, bool rst_high) {
 }
 
 void ESP8266::hardwareReset(bool cycle_en, uint32_t boot_wait_ms) {
-  LOG_W("ESP", "Hardware reset via EN/RST%s",
-        cycle_en ? " (power-cycle)" : "");
+  LOG_W("ESP", "Hardware reset via EN/RST%s", cycle_en ? " (power-cycle)" : "");
 
   _state = 0;
   clearRxBuffer();
@@ -176,7 +178,8 @@ void ESP8266::hardwareReset(bool cycle_en, uint32_t boot_wait_ms) {
 }
 
 bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
-  if (_hard_disabled) return false;
+  if (_hard_disabled)
+    return false;
 
   uint32_t start = HAL_GetTick();
 
@@ -248,7 +251,8 @@ bool ESP8266::tryRecover(bool force) {
   }
 
   _last_recover_ms = now;
-  if (_recover_attempts < 0xFFU) _recover_attempts++;
+  if (_recover_attempts < 0xFFU)
+    _recover_attempts++;
   LOG_W("ESP", "Bounded recovery attempt #%u, uart_rx=%lu",
         (unsigned)_recover_attempts, (unsigned long)uart2_rx_count);
 
@@ -275,7 +279,8 @@ bool ESP8266::tryRecover(bool force) {
     return true;
   }
 
-  if (_recover_failures < 0xFFFFU) _recover_failures++;
+  if (_recover_failures < 0xFFFFU)
+    _recover_failures++;
   _hard_disabled = true;
   _state = 4;
   LOG_E("ESP", "ESP8266 recovery failed, uart_rx=%lu",
@@ -377,14 +382,14 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
           esp_led_success();
           return true;
         }
-        /* Buffer nearly full â€?search for partial match */
+        /* Buffer nearly full search for partial match */
         if (!near_full_logged && _rx_index >= sizeof(_rx_buffer) - 64) {
           near_full_logged = true;
           LOG_W("ESP", "Rx buffer nearly full (%u/%u), searching for '%s'",
                 _rx_index, (unsigned)sizeof(_rx_buffer), expected_response);
         }
       } else {
-        /* No expected response specified â€?any data counts as success */
+        /* No expected response specified any data counts as success */
         esp_led_success();
         return true;
       }
@@ -403,16 +408,16 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
       if (timeout_ms > 3000 && HAL_GetTick() - last_dbg > 2000) {
         last_dbg = HAL_GetTick();
         LOG_D("ESP", "Waiting... %lums, rx=%u/%u bytes",
-              (unsigned long)(HAL_GetTick() - start),
-              _rx_index, (unsigned)sizeof(_rx_buffer));
+              (unsigned long)(HAL_GetTick() - start), _rx_index,
+              (unsigned)sizeof(_rx_buffer));
       }
     }
     JPDelay(10);
     SysWatchdog_Tick();
   }
 
-  LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes",
-        (unsigned long)timeout_ms, _rx_index);
+  LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes", (unsigned long)timeout_ms,
+        _rx_index);
   /* Communication failure: blink warn LED without blocking */
   clearRxBuffer();
   esp_led_failure();
@@ -548,7 +553,8 @@ bool ESP8266::scanNetworks(void) {
 }
 
 bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
-  if (!ip_buffer || buffer_size == 0U) return false;
+  if (!ip_buffer || buffer_size == 0U)
+    return false;
   ip_buffer[0] = '\0';
 
   clearRxBuffer();
@@ -568,7 +574,8 @@ bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
         if (len < buffer_size && len > 0U) {
           strncpy(ip_buffer, ip_start, len);
           ip_buffer[len] = '\0';
-          if (strcmp(ip_buffer, "0.0.0.0") == 0) return false;
+          if (strcmp(ip_buffer, "0.0.0.0") == 0)
+            return false;
           return true;
         }
       }
@@ -577,14 +584,16 @@ bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
   return false;
 }
 
-
 static bool esp_parse_rssi_from_cwjap(const char *rx, int *rssi) {
-  if (!rx || !rssi) return false;
+  if (!rx || !rssi)
+    return false;
   const char *p = strstr(rx, "+CWJAP:");
-  if (!p) return false;
+  if (!p)
+    return false;
 
   const char *line_end = strpbrk(p, "\r\n");
-  if (!line_end) line_end = p + strlen(p);
+  if (!line_end)
+    line_end = p + strlen(p);
 
   /* ESP AT variants differ.  Some return:
    *   +CWJAP:"ssid","bssid",channel,rssi
@@ -595,9 +604,11 @@ static bool esp_parse_rssi_from_cwjap(const char *rx, int *rssi) {
   const char *q = p;
   while (q && q < line_end) {
     q = strchr(q, ',');
-    if (!q || q >= line_end) break;
+    if (!q || q >= line_end)
+      break;
     q++;
-    while (q < line_end && (*q == ' ' || *q == '\t' || *q == '"')) q++;
+    while (q < line_end && (*q == ' ' || *q == '\t' || *q == '"'))
+      q++;
     char *endp = NULL;
     long v = strtol(q, &endp, 10);
     if (endp && endp > q) {
@@ -611,20 +622,24 @@ static bool esp_parse_rssi_from_cwjap(const char *rx, int *rssi) {
     }
   }
 
-  if (!found) return false;
+  if (!found)
+    return false;
   *rssi = best;
   return true;
 }
 
 bool ESP8266::getRSSI(int *rssi) {
-  if (!rssi) return false;
-  if (_hard_disabled) return false;
+  if (!rssi)
+    return false;
+  if (_hard_disabled)
+    return false;
 
   const char *cmds[] = {"AT+CWJAP?", "AT+CWJAP_CUR?"};
   for (unsigned i = 0; i < sizeof(cmds) / sizeof(cmds[0]); ++i) {
     char tx[24];
     int n = snprintf(tx, sizeof(tx), "%s\r\n", cmds[i]);
-    if (n <= 0 || n >= (int)sizeof(tx)) continue;
+    if (n <= 0 || n >= (int)sizeof(tx))
+      continue;
 
     clearRxBuffer();
     HAL_UART_Transmit(_huart, (uint8_t *)tx, (uint16_t)n, 300);
@@ -633,7 +648,8 @@ bool ESP8266::getRSSI(int *rssi) {
     while (HAL_GetTick() - start < 900U) {
       processPendingData();
       const char *rx = (const char *)_rx_buffer;
-      if (_rx_overflow) break;
+      if (_rx_overflow)
+        break;
       if (strstr(rx, "OK")) {
         int v = 0;
         if (esp_parse_rssi_from_cwjap(rx, &v)) {
@@ -644,7 +660,8 @@ bool ESP8266::getRSSI(int *rssi) {
         }
         break;
       }
-      if (strstr(rx, "ERROR") || strstr(rx, "FAIL")) break;
+      if (strstr(rx, "ERROR") || strstr(rx, "FAIL"))
+        break;
       JPDelay(10);
       SysWatchdog_Tick();
     }
@@ -667,8 +684,12 @@ bool ESP8266_IsHardDisabled(void) { return esp8266.isHardDisabled(); }
 bool ESP8266_TryRecover(bool force) { return esp8266.tryRecover(force); }
 void ESP8266_ServiceUartRx(void) { esp8266.serviceUartRx(); }
 uint32_t ESP8266_GetUartRxCount(void) { return uart2_rx_count; }
-uint16_t ESP8266_GetRecoveryFailureCount(void) { return esp8266.recoveryFailureCount(); }
-void ESP8266_ClearRecoveryFailureCount(void) { esp8266.clearRecoveryFailureCount(); }
+uint16_t ESP8266_GetRecoveryFailureCount(void) {
+  return esp8266.recoveryFailureCount();
+}
+void ESP8266_ClearRecoveryFailureCount(void) {
+  esp8266.clearRecoveryFailureCount();
+}
 
 bool ESP8266_SendCommand(const char *cmd, const char *expected_response,
                          uint32_t timeout_ms) {
@@ -704,26 +725,31 @@ bool ESP8266_StartTCP(const char *host, uint16_t port) {
 }
 
 int ESP8266_GetState(void) {
-  if (esp8266.isHardDisabled()) return 4; // 4 = error / hard-disabled
+  if (esp8266.isHardDisabled())
+    return 4; // 4 = error / hard-disabled
   return esp8266.getState();
 }
 
 bool ESP8266_IsConnected(void) {
-  if (esp8266.isHardDisabled()) return false;
+  if (esp8266.isHardDisabled())
+    return false;
   return esp8266.isConnected();
 }
 
 void ESP8266_Disconnect(void) {
-  if (esp8266.isHardDisabled()) return;
+  if (esp8266.isHardDisabled())
+    return;
   esp8266.disconnect();
 }
 
 bool ESP8266_GetIP(char *buf, uint16_t sz) {
-  if (esp8266.isHardDisabled()) return false;
+  if (esp8266.isHardDisabled())
+    return false;
   return esp8266.getIP(buf, sz);
 }
 
 bool ESP8266_GetRSSI(int *rssi) {
-  if (esp8266.isHardDisabled()) return false;
+  if (esp8266.isHardDisabled())
+    return false;
   return esp8266.getRSSI(rssi);
 }

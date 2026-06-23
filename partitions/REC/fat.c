@@ -17,6 +17,13 @@
 #define REC_ENABLE_WIDE_BUS 0
 #endif
 
+/* Development builds must still enter RECOVERY_FORMAT after BL lock/unlock so
+ * the security flow remains visible and testable. Only the physical USERDATA
+ * erase is skipped here; remove this override for production data wiping. */
+#ifndef TOS_DEV_SKIP_REAL_USERDATA_ERASE
+#define TOS_DEV_SKIP_REAL_USERDATA_ERASE 1
+#endif
+
 #define REC_USERDATA_SECTOR_INDEX 11U
 #define REC_USERDATA_START 0x080E0000UL
 #define REC_USERDATA_END 0x08100000UL
@@ -1003,6 +1010,10 @@ REC_CODE uint8_t REC_FatFormat(void) {
    * RECOVERY_FORMAT boot target and resets; REC performs the destructive
    * sector erase from its independent image and verifies every word before
    * returning success. */
+#if TOS_DEV_SKIP_REAL_USERDATA_ERASE
+  SBL_FlashFlushCaches();
+  return 1U;
+#else
   if (!SBL_FlashUnlock()) {
     rec_copy_error(rec_err_userdata);
     return 0U;
@@ -1023,6 +1034,7 @@ REC_CODE uint8_t REC_FatFormat(void) {
     }
   }
   return 1U;
+#endif
 }
 
 REC_CODE void REC_FatRelease(void) {

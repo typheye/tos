@@ -28,7 +28,7 @@ extern LCD boardLCD;
 extern JY901S boardJY901S;
 extern KeyManager keyManager;
 
-/* 鈹€鈹€ Shared chart state 鈹€鈹€ */
+/* Shared chart state */
 #define CHART_HISTORY 240
 static float (*chart_data)[CHART_HISTORY] = nullptr;
 static CCMRAM int chart_index = 0;
@@ -51,8 +51,8 @@ static void chart_free(void) {
   chart_data = nullptr;
 }
 
-/* 鈹€鈹€ Standard template functions 鈹€鈹€ */
-/* 鈹€鈹€ Chart helper functions 鈹€鈹€ */
+/* Standard template functions */
+/* Chart helper functions */
 static void reset_chart(void) {
   if (!chart_data)
     return;
@@ -144,7 +144,7 @@ static void draw_chart_all(int x, int y, int width, int height, float max_val) {
   }
 }
 
-/* 鈹€鈹€ 01 3D Cube sub-page 鈹€鈹€ */
+/* 01 3D Cube sub-page */
 static void jyro_cube_subpage(void) {
   /* Loading screen */
   LCD_FLUSH({
@@ -241,7 +241,7 @@ static void jyro_cube_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 02 Text Data sub-page (scrollable menu) 鈹€鈹€ */
+/* 02 Text Data sub-page (scrollable menu) */
 #define TEXT_N 10
 static const char *text_labels[TEXT_N] = {
     "00 Return", "01 Acc X", "   Acc Y", "   Acc Z", "02 Gyr X",
@@ -357,7 +357,7 @@ static void jyro_text_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ 03 Chart sub-page 鈹€鈹€ */
+/* 03 Chart sub-page */
 static void jyro_chart_subpage(void) {
   if (!chart_alloc()) {
     LCD_FLUSH({
@@ -493,7 +493,7 @@ static void jyro_chart_subpage(void) {
   }
 }
 
-/* 鈹€鈹€ Main activity (standard menu loop) 鈹€鈹€ */
+/* Main activity (standard menu loop) */
 #define JYRO_N 4
 void jyro_activity(void) {
   const char *items[JYRO_N] = {"00 Return", "01 3D Cube", "02 Text Data",

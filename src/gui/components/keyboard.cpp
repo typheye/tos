@@ -18,7 +18,6 @@
 #include "include/keyboard.hpp"
 #include "library/include/libdly.h"
 
-
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern Potentiometer boardPot;
@@ -56,8 +55,8 @@ static const KbKey row3[] = {
 };
 static const KbKey row4[] = {
     KL(".", ".", '.', '.'), KL("-", "-", '-', '-'), KL("_", "_", '_', '_'),
-    KL("/", "/", '/', '/'), KL(":", ":", ':', ':'),
-    KL(" ", " ", ' ', ' '), KS("OK", "OK"),
+    KL("/", "/", '/', '/'), KL(":", ":", ':', ':'), KL(" ", " ", ' ', ' '),
+    KS("OK", "OK"),
 };
 
 struct KbRow {
@@ -118,7 +117,7 @@ static void draw_kb(const char *pwd, int len, int sel, bool shift) {
     PD_DrawRect(lmargin, 50, 240 - lmargin - rmargin, 2);
     PD_SetFill(false);
 
-    // Key grid �?symmetric margins
+    // Key grid symmetric margins
     int base_y = 56, row_h = 28, margin = 8;
     int flat_idx = 0;
     for (int r = 0; r < N_ROWS; r++) {

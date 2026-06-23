@@ -26,6 +26,11 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
+static void pet_launcher_drain_nav_keys(void) {
+  (void)keyManager.collision_A8.getState();
+  (void)keyManager.collision_D0.getState();
+}
+
 // ============ Animation state (CCMRAM to save main RAM) ============
 static CCMRAM float pet_blink_l = 0.0f;
 static CCMRAM float pet_blink_r = 0.0f;
@@ -221,7 +226,7 @@ static void reset_pose_soft(void) {
   pet_brow_y = lerp(pet_brow_y, 0.0f, 0.16f);
 }
 
-// ============ Sensor â†?expression mapping ============
+// ============ Sensor expression mapping ============
 
 static int expr_to_anim(EHW_Expr_t e) {
   switch (e) {
@@ -318,7 +323,7 @@ static void release_sensor_expression(uint32_t now) {
   int was_motion = is_motion_anim(pet_state);
   // Capture current face parameters for smooth recovery blend.
   // This prevents the jarring jump from dizzy/petted straight into
-  // the idle blink cycle â€?the face eases back to neutral instead.
+  // the idle blink cycle - the face eases back to neutral instead.
   recover_from_blink_l = pet_blink_l;
   recover_from_blink_r = pet_blink_r;
   recover_from_mouth   = pet_mouth;
@@ -943,6 +948,7 @@ void pet_launcher_run(void) {
     // --- Input: triple-press ENTER to exit ---
     // Use edge detection. The old logic counted a long hold as multiple presses.
     keyManager.tick();
+    pet_launcher_drain_nav_keys();
     uint8_t enter_pressed = (keyManager.btn_enter.getState() == KEY_PRESSED);
     if (enter_pressed && !last_enter_pressed) {
       mark_activity(now, "enter", true);
@@ -953,6 +959,7 @@ void pet_launcher_run(void) {
         uint32_t t2 = enter_tm[(enter_idx - 1) % 3];
         if (t2 - t0 < TRIPLE_WINDOW) {
           LOG_I("PET", "Triple ENTER - returning to menu");
+          pet_launcher_drain_nav_keys();
           LCD_FLUSH({
             EMO_FillScreen(EMO_BLACK);
           });

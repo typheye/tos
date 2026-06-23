@@ -18,7 +18,6 @@
 #include "include/alert.hpp"
 #include "library/include/libdly.h"
 
-
 extern KeyManager keyManager;
 extern LCD boardLCD;
 extern TRTC boardTRTC;
@@ -30,16 +29,19 @@ void alert_show(const char *title, const char *msg) {
     SysWatchdog_Tick();
     TosApi_Tick();
     keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED) return;
+    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+      return;
 
     if (HAL_GetTick() - lu > 16) {
       lu = HAL_GetTick();
 
       LCD_FLUSH({
         /* Update header time */
-        Time_t now; Date_t today;
+        Time_t now;
+        Date_t today;
         boardTRTC.getDateTime(&now, &today);
-        char ts[8]; time_fmt(ts, sizeof(ts), now.hours, now.minutes);
+        char ts[8];
+        time_fmt(ts, sizeof(ts), now.hours, now.minutes);
         PD_SetHeaderTime(ts);
 
         PD_Init();
@@ -50,7 +52,7 @@ void alert_show(const char *title, const char *msg) {
         PD_SetColor(TOS_ACCENT);
         PD_DrawString(22, 5, title);
 
-        // Message �?split on \n, draw each line
+        // Message split on \n, draw each line
         PD_SetFont(FONT_ASCII_16);
         PD_SetColor(TOS_TEXT);
         int msg_y = 33;
@@ -58,27 +60,34 @@ void alert_show(const char *title, const char *msg) {
         while (*p && msg_y < 200) {
           /* Find end of this segment (\n or \0) */
           const char *eol = p;
-          while (*eol && *eol != '\n') eol++;
-          while (*p == ' ') p++;
+          while (*eol && *eol != '\n')
+            eol++;
+          while (*p == ' ')
+            p++;
 
           while (p < eol && msg_y < 200) {
             int len = (int)(eol - p);
             if (len > 22) {
               /* Word-wrap: find last space before the 22-char limit */
               int brk = 22;
-              while (brk > 0 && p[brk] != ' ') brk--;
-              if (brk == 0) brk = 22;
+              while (brk > 0 && p[brk] != ' ')
+                brk--;
+              if (brk == 0)
+                brk = 22;
               len = brk;
             }
             char line[24];
-            memcpy(line, p, len); line[len] = '\0';
+            memcpy(line, p, len);
+            line[len] = '\0';
             PD_DrawString(16, msg_y, line);
             msg_y += 20;
             p += len;
-            while (*p == ' ') p++;
+            while (*p == ' ')
+              p++;
           }
 
-          if (*p == '\n') p++;
+          if (*p == '\n')
+            p++;
         }
 
         PD_DrawFooterCenter("ENTER", NULL, NULL);
