@@ -29,7 +29,6 @@
 
 /* USER CODE BEGIN Includes */
 
-#include "hardware/include/flash_diskio.h"
 
 /* USER CODE END Includes */
 

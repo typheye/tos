@@ -28,16 +28,16 @@
 #include "fatfs.h"
 #include "ff.h"
 #include "core/include/syshandle.h"
-#include "tos_partitions.h"
+#include "manifest.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
-#define FLASH_DATA_SECTOR    FLASH_SECTOR_11   
-#define FLASH_DATA_ADDR      TOS_PART_USERDATA_ADDRESS
-#define FLASH_DATA_SIZE      TOS_USERDATA_SETTINGS_SIZE
+#define FLASH_DATA_SECTOR    FLASH_SECTOR_11
+#define FLASH_DATA_ADDR      (TOS_PART_SYSTEM_ADDRESS + TOS_PART_SYSTEM_SIZE - 0x20000UL)
+#define FLASH_DATA_SIZE      0x00020000UL
 #define FLASH_BL_STATE_ADDR  TOS_TEE_STATE_ADDRESS
 #define FLASH_BL_STATE_SIZE  TOS_TEE_STATE_SIZE
 

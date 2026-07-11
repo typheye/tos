@@ -25,6 +25,7 @@
 #include "iwdg.h"
 #include "rtc.h"
 #include "sdio.h"
+#include "settings_manager.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -40,7 +41,7 @@
 #include <stdio.h>                      // 添加这个头文件 for printf
 #include "core/sys/include/syswatchdog.h"
 #include "init.h"
-#include "tos_partitions.h"
+#include "manifest.h"
 
 /* USER CODE END Includes */
 

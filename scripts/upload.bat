@@ -22,6 +22,15 @@ set "BUILD_OC=%ROOT_OC%/build/Release"
 set "FW_OC=%ROOT_OC%/dist/firmware"
 set "FLASH_OC=%ROOT_OC%/dist/flash"
 
+if not exist "%BUILD_WIN%\CMakeCache.txt" (
+  echo [INFO] First-time setup: running cmake configure...
+  cmake -B "%BUILD_WIN%" -DCMAKE_BUILD_TYPE=Release
+  if errorlevel 1 (
+    echo [ERROR] CMake configure failed.
+    exit /b 4
+  )
+)
+
 if not exist "%OPENOCD%" (
   echo [ERROR] OpenOCD not found:
   echo         %OPENOCD%
@@ -58,7 +67,7 @@ echo [FLASH] SYSTEM %FLASH_OC%/system.elf
   -c "adapter speed %OPENOCD_SPEED%" ^
   -c "init" ^
   -c "reset halt" ^
-  -c "flash write_image erase {%FLASH_OC%/system.elf}" ^
+  -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"
@@ -67,23 +76,19 @@ goto finish
 :runtime
 call :require_file "%FLASH_WIN%\rec.elf"
 if errorlevel 1 exit /b 3
-call :require_file "%FLASH_WIN%\sah.elf"
-if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\system.elf"
 if errorlevel 1 exit /b 3
 
 echo [INFO] Flashing REC + SAH + SYSTEM...
 echo [INFO] OpenOCD adapter speed: %OPENOCD_SPEED% kHz
 echo [FLASH] REC    %FLASH_OC%/rec.elf
-echo [FLASH] SAH    %FLASH_OC%/sah.elf
 echo [FLASH] SYSTEM %FLASH_OC%/system.elf
 "%OPENOCD%" -f interface/cmsis-dap.cfg -f target/stm32f4x.cfg ^
   -c "adapter speed %OPENOCD_SPEED%" ^
   -c "init" ^
   -c "reset halt" ^
-  -c "flash write_image erase {%FLASH_OC%/rec.elf}" ^
-  -c "flash write_image erase {%FLASH_OC%/sah.elf}" ^
-  -c "flash write_image erase {%FLASH_OC%/system.elf}" ^
+  -c "flash write_image erase {%FW_OC%/rec.bin} 0x08010000 bin" ^
+  -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"
@@ -91,16 +96,12 @@ goto finish
 
 :factory
 echo [WARNING] Factory mode writes immutable ELF and the complete boot layout.
-echo [WARNING] Use this once when migrating from the old 64KB-SBL layout.
 call :require_file "%FLASH_WIN%\factory.elf"
 if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\sbl.elf"
 if errorlevel 1 exit /b 3
-call :require_file "%FLASH_WIN%\tee.elf"
 if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\rec.elf"
-if errorlevel 1 exit /b 3
-call :require_file "%FLASH_WIN%\sah.elf"
 if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\system.elf"
 if errorlevel 1 exit /b 3
@@ -108,9 +109,7 @@ if errorlevel 1 exit /b 3
 echo [INFO] Flashing complete factory image set...
 echo [INFO] OpenOCD adapter speed: %OPENOCD_SPEED% kHz
 echo [FLASH] SBL    %FLASH_OC%/sbl.elf
-echo [FLASH] TEE    %FLASH_OC%/tee.elf
 echo [FLASH] REC    %FLASH_OC%/rec.elf
-echo [FLASH] SAH    %FLASH_OC%/sah.elf
 echo [FLASH] SYSTEM %FLASH_OC%/system.elf
 echo [FLASH] ELF    %FLASH_OC%/factory.elf
 rem Program ELF last so an interrupted migration cannot boot a partial new layout.
@@ -118,11 +117,9 @@ rem Program ELF last so an interrupted migration cannot boot a partial new layou
   -c "adapter speed %OPENOCD_SPEED%" ^
   -c "init" ^
   -c "reset halt" ^
-  -c "flash write_image erase {%FLASH_OC%/sbl.elf}" ^
-  -c "flash write_image erase {%FLASH_OC%/tee.elf}" ^
-  -c "flash write_image erase {%FLASH_OC%/rec.elf}" ^
-  -c "flash write_image erase {%FLASH_OC%/sah.elf}" ^
-  -c "flash write_image erase {%FLASH_OC%/system.elf}" ^
+  -c "flash write_image erase {%FW_OC%/sbl.bin} 0x08004000 bin" ^
+  -c "flash write_image erase {%FW_OC%/rec.bin} 0x08010000 bin" ^
+  -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
   -c "flash write_image erase {%FLASH_OC%/factory.elf}" ^
   -c "reset run" ^
   -c "shutdown"

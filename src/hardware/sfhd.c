@@ -16,7 +16,6 @@
  */
 
 #include "include/sfhd.h"
-#include "hardware/include/flash_diskio.h"
 #include "tee_format.h"
 
 
@@ -162,7 +161,7 @@ bool Flash_BL_RecoveryAvailable(void) {
 static Flash_Status_t erase_data_sector_preserve_bl(void) {
   Flash_Status_t st = erase_sector(FLASH_DATA_SECTOR);
   if (st != FLASH_OK) return st;
-  return FlashDiskIO_RebuildUserdataAfterErase() ? FLASH_OK : FLASH_ERR_PROGRAM;
+  return FLASH_OK;
 }
 
 

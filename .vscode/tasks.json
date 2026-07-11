@@ -2,28 +2,40 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build",
+      "label": "cmake configure",
+      "detail": "Run CMake configure step. Required once after checkout or build dir cleanup.",
       "type": "shell",
-      "icon": {
-        "id": "build",
-        "tooltip": "Build all partitions"
-      },
       "command": "cmake",
       "args": [
-        "--build",
+        "-B",
         "${workspaceFolder}/build/Release",
-        "--target",
-        "factory_images",
-        "-j",
-        "24"
+        "-DCMAKE_BUILD_TYPE=Release"
       ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build & Flash (factory)",
+      "detail": "Build ALL partitions, sign them, then flash the complete boot chain (ELF+SBL+TEE+REC+SAH+SYSTEM) via OpenOCD.",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "Build, sign, and flash all partitions"
+      },
+      "command": "${workspaceFolder}/scripts/upload_factory.bat",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "OPENOCD_SPEED": "16000"
+        }
+      },
       "group": {
         "kind": "build",
         "isDefault": true
       },
-      "problemMatcher": [
-        "$gcc"
-      ],
       "presentation": {
         "reveal": "always",
         "panel": "shared"
@@ -31,6 +43,7 @@
     },
     {
       "label": "Flash (system)",
+      "detail": "Flash only SYSTEM partition. SBL/REC/ELF unchanged.",
       "type": "shell",
       "icon": {
         "id": "play",
@@ -53,6 +66,7 @@
     },
     {
       "label": "Flash (runtime)",
+      "detail": "Flash REC + SAH + SYSTEM. ELF/SBL/TEE unchanged.",
       "type": "shell",
       "icon": {
         "id": "play",
@@ -74,29 +88,33 @@
       }
     },
     {
-      "label": "Flash (factory)",
+      "label": "Build (factory images only)",
+      "detail": "Build and sign all partitions, output to dist/. Does NOT flash.",
       "type": "shell",
       "icon": {
-        "id": "play",
-        "tooltip": "Flash all partitions"
+        "id": "build",
+        "tooltip": "Build all partitions"
       },
-      "command": "${workspaceFolder}/scripts/upload.bat",
+      "command": "cmake",
       "args": [
-        "factory"
+        "--build",
+        "${workspaceFolder}/build/Release",
+        "--target",
+        "factory_images",
+        "-j",
+        "24"
       ],
-      "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "OPENOCD_SPEED": "16000"
-        }
-      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"
-      }
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
     },
     {
       "label": "Clean",
+      "detail": "Remove build artifacts.",
       "type": "shell",
       "icon": {
         "id": "trash",

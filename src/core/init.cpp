@@ -17,9 +17,11 @@
 
 #include "include/init.hpp"
 #include "library/include/libdly.h"
+#include "core/manager/include/settings_manager.h"
+#include "components/include/alert.hpp"
 #include "core/manager/include/file_manager.h"
 #include "hardware/include/sfhd.h"
-#include "tos_partitions.h"
+#include "manifest.h"
 
 
 extern "C" {
@@ -342,6 +344,7 @@ void TOS::init() {
 
   boardSDIO.init();
   request_rec_init_if_needed();
+  SM_Mount();
   if (!TSDIO_IsHardDisabled()) {
     cleanup_sd_root_whitelist();
     cleanup_legacy_storage_dirs();
@@ -470,6 +473,11 @@ void TOS::init() {
   JPDelay(50);
 
   PD_SplashFinish(100);
+
+  if (!SM_SdAvailable()) {
+    alert_show("Warn", "No SD card detected.\nUsing default settings.");
+  }
+
   boardLCD.setRotation(SM_Disp_Dir());
   boardLCD.setAutoBrightness(SM_Disp_Auto());
   if (!SM_Disp_Auto()) {

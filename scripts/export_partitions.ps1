@@ -67,12 +67,29 @@ function Pad-File4 {
   }
 }
 
+$signScript = Join-Path $root "scripts\sign_image.ps1"
+$verifyScript = Join-Path $root "scripts\verify_image.ps1"
+$keyPathFile = Join-Path $buildPath "secure-boot\signing-key.path"
+if (!(Test-Path -LiteralPath $keyPathFile)) {
+  throw "Secure boot signing key path not found: $keyPathFile"
+}
+$signingKeyPath = (Get-Content -LiteralPath $keyPathFile -Raw).Trim()
+if (!(Test-Path -LiteralPath $signingKeyPath)) {
+  throw "Secure boot signing key not found: $signingKeyPath"
+}
+$imageVersion = 1
+$versionLine = $cache | Where-Object { $_ -like "TOS_IMAGE_VERSION:STRING=*" } | Select-Object -First 1
+if ($versionLine) {
+  $imageVersion = [UInt32]$versionLine.Substring($versionLine.IndexOf("=") + 1)
+}
 function Export-Partition {
   param(
     [string]$Target,
     [UInt32]$Address,
     [UInt32]$Size,
-    [string]$Output
+    [string]$Output,
+    [UInt32]$ImageType = 0,
+    [UInt32]$SignedSize = 0
   )
   $elf = Join-Path $buildPath ($Target + ".elf")
   if (!(Test-Path -LiteralPath $elf)) { throw "ELF not found: $elf" }
@@ -87,6 +104,18 @@ function Export-Partition {
   if ($actual -ne $Size) {
     throw "$Output size mismatch: expected $Size, got $actual"
   }
+
+  Copy-Item -LiteralPath $elf -Destination $flashPath -Force
+  if ($ImageType -ne 0) {
+    if ($SignedSize -eq 0) { $SignedSize = $Size }
+    $headerPath = Join-Path $buildPath ("secure-boot\" + $Target + ".header.bin")
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $signScript -ImagePath $path -HeaderPath $headerPath -KeyPath $signingKeyPath -ImageType $ImageType -LoadAddress $Address -SignedSize $SignedSize -ImageVersion $imageVersion
+    if ($LASTEXITCODE -ne 0) { throw "Signing failed for $Target" }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verifyScript -ImagePath $path -PublicKeyPath ($signingKeyPath + ".pub") -ExpectedType $ImageType -ExpectedAddress $Address -ExpectedSize $SignedSize -MinimumVersion $imageVersion
+    if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $Target" }
+    & $objcopyPath --update-section (".tos_image_header=" + $headerPath) $flashPath
+    if ($LASTEXITCODE -ne 0) { throw "ELF header update failed for $Target" }
+  }
 }
 
 # ELF (sector 0) is intentionally not exported as a BIN. It is factory-only
@@ -96,23 +125,18 @@ $elfStage = Join-Path $buildPath "elf_stage.elf"
 if (!(Test-Path -LiteralPath $elfStage)) { throw "ELF stage not found: $elfStage" }
 Copy-Item -LiteralPath $elfStage -Destination (Join-Path $flashDir "factory.elf") -Force
 
-Export-Partition -Target "sbl"    -Address 0x08004000 -Size 0x00008000 -Output "sbl.bin"
-Export-Partition -Target "tee"    -Address 0x0800C000 -Size 0x00004000 -Output "tee.bin"
-Export-Partition -Target "rec"    -Address 0x08010000 -Size 0x00010000 -Output "rec.bin"
-Export-Partition -Target "sah"    -Address 0x08020000 -Size 0x00020000 -Output "sah.bin"
-Export-Partition -Target "system" -Address 0x08040000 -Size 0x00080000 -Output "system.bin"
+Export-Partition -Target "sbl"    -Address 0x08004000 -Size 0x0000C000 -Output "sbl.bin" -ImageType 1 -SignedSize 0x0000C000
+Export-Partition -Target "rec"    -Address 0x08010000 -Size 0x00010000 -Output "rec.bin" -ImageType 2 -SignedSize 0x0000FC00
+Export-Partition -Target "system" -Address 0x08040000 -Size 0x000C0000 -Output "system.bin" -ImageType 3 -SignedSize 0x000C0000
 
 $csvPath = Join-Path $distDir "partitions.csv"
 $csv = @(
   "Name,Offset,Size,Image,Policy"
   "elf,0x00000000,0x00004000,,factory-elf-only"
-  "sbl,0x00004000,0x00008000,sbl.bin,staged-via-tmp"
-  "tee,0x0000C000,0x00004000,tee.bin,factory-security-state"
+  "sbl,0x00004000,0x0000C000,sbl.bin,staged-via-tmp"
   "rec,0x00010000,0x00010000,rec.bin,staged-via-tmp"
-  "sah,0x00020000,0x00020000,sah.bin,direct"
-  "system,0x00040000,0x00080000,system.bin,direct"
-  "tmp,0x000C0000,0x00020000,,runtime-cache"
-  "userdata,0x000E0000,0x00020000,,persistent-data"
+  "tmp,0x00020000,0x00020000,,runtime-cache"
+  "system,0x00040000,0x000C0000,system.bin,direct"
 )
 Set-Content -LiteralPath $csvPath -Value $csv -Encoding ASCII
 

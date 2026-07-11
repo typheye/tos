@@ -7,8 +7,7 @@
  */
 
 #include "include/file_manager.h"
-#include "hardware/include/flash_diskio.h"
-#include "tos_partitions.h"
+#include "manifest.h"
 
 extern bool TSDIO_IsHardDisabled(void);
 extern bool TSDIO_IsInitialized(void);

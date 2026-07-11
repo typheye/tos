@@ -11,7 +11,13 @@ _Min_Heap_Size = 0x200;
 _Min_Stack_Size = 0x1000;
 SECTIONS
 {
-  .isr_vector : { . = ALIGN(4); KEEP(*(.isr_vector)) . = ALIGN(4); } > FLASH
+  .isr_vector : { . = ALIGN(4); KEEP(*(.isr_vector)); . = ORIGIN(FLASH) + 0x200; } > FLASH
+  .tos_image_header :
+  {
+    KEEP(*(.tos_image_header))
+  } > FLASH
+  ASSERT(SIZEOF(.isr_vector) <= 0x200, "Vector table overlaps secure image header")
+  ASSERT(SIZEOF(.tos_image_header) == 0x80, "Secure image header must be 128 bytes")
   .text :
   {
     . = ALIGN(4);

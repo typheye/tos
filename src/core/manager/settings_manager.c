@@ -2,7 +2,7 @@
  ******************************************************************************
  * @file    settings_manager.c
  * @author  Typheye
- * @brief   Settings Manager implementation.
+ * @brief   Settings Manager implementation (SD card storage).
  ******************************************************************************
  * @attention
  *
@@ -16,12 +16,13 @@
  */
 
 #include "include/settings_manager.h"
+#include "ff.h"
 #include <stddef.h>
-
 
 #define CCMRAM __attribute__((section(".ccmram")))
 
 static CCMRAM Settings_t g_settings;
+static bool g_sd_available = false;
 
 static void copy_str(char *dst, const char *src, size_t cap) {
   if (!dst || cap == 0) return;
@@ -93,7 +94,7 @@ static void defaults(void) {
   g_settings.wlan_on        = false;
   g_settings.wlan_auto_conn = false;
   g_settings.debug_dashboard = false;
-  g_settings.debug_log_com   = false;
+  g_settings.debug_log_com   = true;
   g_settings.saved_count    = 0;
   g_settings.time_auto_sync     = true;
   g_settings.time_style_24h     = true;
@@ -103,13 +104,21 @@ static void defaults(void) {
   LOG_D("SMGR", "Defaults loaded");
 }
 
-/* ========== Load from Flash ========== */
+/* ========== Load from SD card ========== */
 static bool load(void) {
+  FIL file;
+  UINT br;
   Settings_t tmp;
-  uint32_t out_size = 0;
+
+  if (f_open(&file, "0:/settings.bin", FA_READ) != FR_OK) {
+    return false;
+  }
   memset(&tmp, 0, sizeof(tmp));
-  Flash_Status_t st = Flash_Rolling_Read((uint32_t *)&tmp, sizeof(tmp), &out_size);
-  if (st != FLASH_OK) return false;
+  if (f_read(&file, &tmp, sizeof(tmp), &br) != FR_OK) {
+    f_close(&file);
+    return false;
+  }
+  f_close(&file);
 
   if (!sm_magic_compatible(tmp.magic)) {
     LOG_W("SMGR", "Bad magic 0x%08lX", (unsigned long)tmp.magic);
@@ -118,65 +127,79 @@ static bool load(void) {
 
   defaults();
   {
-    uint32_t copy_size = out_size;
+    uint32_t copy_size = br;
     if (copy_size > sizeof(g_settings)) {
       copy_size = sizeof(g_settings);
     }
     memcpy(&g_settings, &tmp, copy_size);
   }
-  if (out_size < (uint32_t)(offsetof(Settings_t, boot_gfx) + sizeof(g_settings.boot_gfx))) {
+  if (br < (uint32_t)(offsetof(Settings_t, boot_gfx) + sizeof(g_settings.boot_gfx))) {
     g_settings.boot_gfx = true;
   }
-  if (out_size < (uint32_t)(offsetof(Settings_t, debug_log_com) + sizeof(g_settings.debug_log_com))) {
+  if (br < (uint32_t)(offsetof(Settings_t, debug_log_com) + sizeof(g_settings.debug_log_com))) {
     g_settings.debug_log_com = 0U;
   }
   g_settings.magic = SM_MAGIC;
   sanitize();
-  LOG_I("SMGR", "Loaded from Flash OK (%luB)", (unsigned long)out_size);
+  LOG_I("SMGR", "Loaded from SD OK (%luB)", (unsigned long)br);
   return true;
 }
 
 /* ========== Public ========== */
 
+bool SM_SdAvailable(void) { return g_sd_available; }
+
 void SM_Init(void) {
-  Flash_Check_Backup();
+  defaults();
+}
+
+void SM_Mount(void) {
+  FIL file;
+  FRESULT res;
+
+  for (int retry = 0; retry < 3; ++retry) {
+    res = f_open(&file, "0:/settings.bin", FA_OPEN_EXISTING);
+    if (res == FR_OK) { g_sd_available = true; f_close(&file); break; }
+    if (res != FR_NOT_READY) break;
+    JPDelay(200);
+  }
+
+  if (!g_sd_available) {
+    res = f_open(&file, "0:/settings.bin", FA_CREATE_NEW);
+    if (res == FR_OK) { g_sd_available = true; f_close(&file); }
+  }
+
+  if (!g_sd_available) { LOG_W("SMGR", "SD not available"); return; }
+
   if (!load()) {
-    LOG_W("SMGR", "Load failed - using defaults");
-    defaults();
+    LOG_W("SMGR", "Load failed — using defaults");
     SM_Save();
   }
 }
 
 void SM_Save(void) {
-  Settings_t verify;
-  uint32_t verify_size;
-  Flash_Status_t st = FLASH_ERR_PROGRAM;
+  FIL file;
+  UINT bw;
+  FRESULT res;
 
-  g_settings.magic = SM_MAGIC;
-  g_settings.crc = 0;
+  /* Always attempt SD write; set available flag on success so
+   * late-init or delayed-mount paths still persist settings.   */
   sanitize();
-
-  for (uint8_t attempt = 0U; attempt < 2U; ++attempt) {
-    st = Flash_Rolling_Write((uint32_t *)&g_settings, sizeof(g_settings));
-    if (st == FLASH_OK) {
-      memset(&verify, 0, sizeof(verify));
-      verify_size = 0U;
-      st = Flash_Rolling_Read((uint32_t *)&verify, sizeof(verify),
-                              &verify_size);
-      if (st == FLASH_OK && verify_size == sizeof(verify) &&
-          memcmp(&verify, &g_settings, sizeof(verify)) == 0) {
-        LOG_I("SMGR", "Save verified (%luB, try %u)",
-              (unsigned long)sizeof(g_settings), (unsigned)(attempt + 1U));
-        return;
-      }
-      st = FLASH_ERR_CRC;
+  res = f_open(&file, "0:/settings.bin", FA_CREATE_ALWAYS | FA_WRITE);
+  if (res == FR_OK) {
+    g_sd_available = true;
+    if (f_write(&file, &g_settings, sizeof(g_settings), &bw) == FR_OK &&
+        bw == sizeof(g_settings)) {
+      f_sync(&file);
+      LOG_I("SMGR", "Saved to SD OK (%luB)", (unsigned long)sizeof(g_settings));
+    } else {
+      LOG_E("SMGR", "Save: write failed (%lu/%lu)",
+            (unsigned long)bw, (unsigned long)sizeof(g_settings));
     }
-    LOG_W("SMGR", "Save attempt %u failed (%d)",
-          (unsigned)(attempt + 1U), (int)st);
+    f_close(&file);
+  } else {
+    LOG_W("SMGR", "Save: open failed (%d)", (int)res);
   }
-
-  LOG_E("SMGR", "Save failed after retry (%luB, status=%d)",
-        (unsigned long)sizeof(g_settings), (int)st);
 }
 
 Settings_t *SM_Get(void) { return &g_settings; }
@@ -263,7 +286,6 @@ bool SM_Saved_Find(const char *ssid) {
 
 bool SM_Saved_Add(const char *ssid, const char *pwd) {
   if (!ssid || !ssid[0]) return false;
-  /* Update existing entry only when the password actually changed. */
   for (uint8_t i = 0; i < g_settings.saved_count; i++) {
     if (strcmp(g_settings.saved[i].ssid, ssid) == 0) {
       if (!str_same(g_settings.saved[i].pwd, pwd,
@@ -361,8 +383,6 @@ void SM_SetBootGfx(bool v) {
 
 /* --- Status icon helpers (C-callable) --- */
 bool esp_wlan_is_on(void) {
-  /* If ESP8266 is hard-disabled, report WLAN as OFF regardless of Flash
-   * setting — the icon in the status bar should show grey. */
   if (ESP8266_IsHardDisabled()) return false;
   return SM_Wlan_On();
 }

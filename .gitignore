@@ -2,3 +2,7 @@ build
 dist
 mx.scratch
 !.settings
+
+# Local signing keys and derived public blobs
+sign/*
+!sign/README.md

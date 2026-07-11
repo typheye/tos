@@ -1,6 +1,7 @@
 # User include directories
 set(USER_Include_Dirs
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/common/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/ELF/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/SBL/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/
@@ -19,11 +20,11 @@ set(USER_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/miniapp/hid_tools/
 )
 
-# 列出所有需要编译的自定义源文件
+# 列出扢�有需要编译的臄1�7��义源文件
 set(USER_Application_Src
     # 核心系统文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/tos.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/SBL/dram.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../partitions/SBL/source/dram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/init.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/sysfonts.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/syscalls_override.c
@@ -38,7 +39,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sys/systime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/core/sdk/tos_api.cpp
     
-    # 硬件驱动文件
+    # 硄1�7��驱动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/led.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/usart.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/buzzer.cpp
@@ -53,7 +54,6 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sn74hc00n.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/pot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/sfhd.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/flash_diskio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/hardware/thid.cpp
     
     # Library files
@@ -111,7 +111,7 @@ target_include_directories(stm32cubemx INTERFACE ${USER_Include_Dirs})
 # Add user sources to the main target.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_Application_Src})
 
-# 编译器优化选项
+# 编译器优化��项
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math -fsingle-precision-constant")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fsingle-precision-constant")
 
@@ -119,13 +119,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fsingle-precision-const
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=hard -mfpu=fpv4-sp-d16")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=hard -mfpu=fpv4-sp-d16")
 
-# 可选：添加调试符号（开发时使用�?# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+# 叄1�7��：添加调试符号（开发时使用�?# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
-# 可选：启用更多警告
+# 叄1�7��：各1�7��更�1�7警告
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 
-# 可选：禁用特定的警告（根据需要）
+# 叄1�7��：禁用特定的�1�7告（根据霢�要）
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-parameter")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")

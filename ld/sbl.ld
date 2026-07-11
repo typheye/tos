@@ -2,7 +2,7 @@
 ENTRY(Reset_Handler)
 MEMORY
 {
-  FLASH  (rx)  : ORIGIN = 0x08004000, LENGTH = 0x8000
+  FLASH  (rx)  : ORIGIN = 0x08004000, LENGTH = 0xC000
   RAM    (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
   CCMRAM (rwx) : ORIGIN = 0x10000000, LENGTH = 64K
 }
@@ -11,7 +11,13 @@ _Min_Heap_Size = 0x200;
 _Min_Stack_Size = 0x1000;
 SECTIONS
 {
-  .isr_vector : { . = ALIGN(4); KEEP(*(.isr_vector)) . = ALIGN(4); } > FLASH
+  .isr_vector : { . = ALIGN(4); KEEP(*(.isr_vector)); . = ORIGIN(FLASH) + 0x200; } > FLASH =0xFF
+  .tos_image_header :
+  {
+    KEEP(*(.tos_image_header))
+  } > FLASH
+  ASSERT(SIZEOF(.isr_vector) <= 0x200, "Vector table overlaps secure image header")
+  ASSERT(SIZEOF(.tos_image_header) == 0x80, "Secure image header must be 128 bytes")
   .text :
   {
     . = ALIGN(4);

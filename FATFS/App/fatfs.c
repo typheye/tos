@@ -25,7 +25,6 @@ FIL SDFile;       /* File object for SD */
 
 /* USER CODE BEGIN Variables */
 
-#include "hardware/include/flash_diskio.h"
 
 /* USER CODE END Variables */
 
@@ -36,7 +35,7 @@ void MX_FATFS_Init(void)
 
   /* USER CODE BEGIN Init */
   /* Keep SD as drive 0. Internal TMP and USERDATA are linked as drives 1/2. */
-  (void)FlashDiskIO_LinkVolumes();
+  
   /* USER CODE END Init */
 }
 
