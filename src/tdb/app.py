@@ -1,5 +1,26 @@
 #!/usr/bin/env python3
-"""TOS Debug Bridge host client for the REC CDC interface."""
+"""
+ ******************************************************************************
+ * @file    tdb/app.py
+ * @author  Typheye
+ * @brief   TOS Debug Bridge REC CDC host implementation.
+ ******************************************************************************
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ ******************************************************************************
+ """
 
 from __future__ import annotations
 
@@ -13,10 +34,7 @@ import zlib
 from dataclasses import dataclass
 from typing import BinaryIO, Optional
 
-try:
-    from . import __version__
-except ImportError:  # direct script execution
-    __version__ = "1.0.0"
+__version__ = "1.0.1"
 
 VID = 0x0483
 PID = 0x5756
@@ -97,12 +115,13 @@ def resolve_port(requested: Optional[str], list_ports) -> str:
     if requested:
         return requested
     saved = load_saved_port()
-    if saved:
+    available = {port.device.upper() for port in list_ports.comports()}
+    if saved and saved.upper() in available:
         return saved
     detected = find_port(list_ports)
     if detected:
         return detected
-    raise TDBError("No TOS Debug Bridge COM port found. Use --port COMx.")
+    raise TDBError("no matching TDB device")
 
 
 @dataclass
@@ -356,14 +375,33 @@ class TDBClient:
 
 
 def add_connection_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("-p", "--port", help="COM port, for example COM8")
+    parser.add_argument("-p", "--port", help=argparse.SUPPRESS)
     parser.add_argument("-b", "--baud", type=int, default=DEFAULT_BAUD)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
 
 
 def open_client(args) -> TDBClient:
     _, list_ports = import_serial()
-    port = resolve_port(getattr(args, "port", None), list_ports)
+    requested_serial = getattr(args, "serial", None)
+    port = getattr(args, "port", None)
+    if requested_serial and not port:
+        for candidate in list_ports.comports():
+            probe = None
+            try:
+                probe = TDBClient(candidate.device, getattr(args, "baud", DEFAULT_BAUD),
+                                  min(getattr(args, "timeout", DEFAULT_TIMEOUT), 0.6))
+                response = probe.handshake()
+                fields = response.message.split()
+                if len(fields) >= 3 and fields[2].upper() == requested_serial.upper():
+                    port = candidate.device
+                    break
+            except TDBError:
+                continue
+            finally:
+                if probe is not None:
+                    probe.close()
+    if not port:
+        port = resolve_port(None, list_ports)
     client = TDBClient(port, getattr(args, "baud", DEFAULT_BAUD), getattr(args, "timeout", DEFAULT_TIMEOUT))
     try:
         client.handshake()
@@ -373,19 +411,24 @@ def open_client(args) -> TDBClient:
     return client
 
 
-def command_devices(_args) -> int:
+def command_devices(args) -> int:
     _, list_ports = import_serial()
-    found = False
+    print("List of devices attached")
     for port in list_ports.comports():
-        text = " ".join(str(v or "") for v in (port.description, port.product, port.hwid))
-        marker = "TDB" if port.vid == VID and port.pid == PID else ""
-        print(
-            f"{port.device:10} vid={str(port.vid):>6} pid={str(port.pid):>6} "
-            f"{marker:3} {text}"
-        )
-        found = True
-    if not found:
-        print("No serial ports found.")
+        client = None
+        try:
+            client = TDBClient(port.device, args.baud, args.timeout)
+            response = client.handshake()
+            fields = response.message.split()
+            serial_number = fields[2] if len(fields) >= 3 else port.device
+            if len(serial_number) != 24:
+                continue
+            print(f"{serial_number}\tdevice")
+        except TDBError:
+            continue
+        finally:
+            if client is not None:
+                client.close()
     return 0
 
 
@@ -433,6 +476,30 @@ def command_shell(args) -> int:
                 cwd = response.data.decode("utf-8", errors="replace").strip() or cwd
         except TDBError:
             pass
+        try:
+            import readline
+            completion_matches = []
+            def complete_remote(text, state):
+                nonlocal completion_matches
+                if state == 0:
+                    try:
+                        listing = client.shell("ls")
+                        names = []
+                        if listing.ok:
+                            for row in listing.data.decode("utf-8", errors="replace").splitlines():
+                                name = row.split("\t", 1)[0].strip()
+                                if name:
+                                    names.append(name)
+                        completion_matches = [name for name in names if name.startswith(text)]
+                    except TDBError:
+                        completion_matches = []
+                return completion_matches[state] if state < len(completion_matches) else None
+            readline.set_completer_delims(" \t")
+            readline.set_completer(complete_remote)
+            readline.parse_and_bind("tab: complete")
+        except ImportError:
+            pass
+
         print(f"TOS Debug Bridge shell on {client.port}. Type 'help' or 'exit'.")
         while True:
             try:
@@ -495,9 +562,12 @@ def command_pull(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdb", description="TOS Debug Bridge for REC")
     parser.add_argument("--version", action="version", version=f"tdb {__version__}")
-    sub = parser.add_subparsers(dest="subcommand", required=True)
+    parser.add_argument("-s", "--serial", help="target device serial number")
+    sub = parser.add_subparsers(dest="subcommand")
 
-    p = sub.add_parser("devices", help="list serial ports")
+    p = sub.add_parser("devices", help="list attached devices")
+    p.add_argument("-b", "--baud", type=int, default=DEFAULT_BAUD)
+    p.add_argument("--timeout", type=float, default=0.6)
     p.set_defaults(func=command_devices)
 
     p = sub.add_parser("connect", help="connect and remember a TDB COM port")
@@ -531,6 +601,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    if not hasattr(args, "func"):
+        parser.print_help()
+        return 0
     try:
         return int(args.func(args))
     except TDBError as exc:

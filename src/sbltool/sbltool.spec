@@ -5,7 +5,7 @@ package_dir = Path(SPECPATH)
 source_root = package_dir.parent
 
 a = Analysis(
-    [str(package_dir / "__main__.py")],
+    [str(package_dir / "app.py")],
     pathex=[str(source_root)],
     binaries=[],
     datas=[],
@@ -24,7 +24,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="tsblboot",
+    name="sbltool",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

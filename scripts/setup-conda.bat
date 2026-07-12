@@ -16,10 +16,10 @@ if errorlevel 1 (
 )
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-call conda run --no-capture-output -n tos powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\build.ps1" -Install
+call conda run --no-capture-output -n tos powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\build.ps1"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 echo.
 echo Ready. Run: conda activate tos
-echo Then use: tsblboot partitions
+echo Then use: sbltool devices
 echo           tdb --version

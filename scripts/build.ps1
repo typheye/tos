@@ -11,6 +11,19 @@ $DistRoot = Join-Path $ProjectRoot "dist"
 $PlatformTools = Join-Path $DistRoot "platform-tools"
 $SourceRoot = Join-Path $ProjectRoot "src"
 
+# Auto-activate 'tos' conda environment if not already active
+if ($env:CONDA_DEFAULT_ENV -ne "tos") {
+    $conda = Get-Command conda.exe -ErrorAction SilentlyContinue
+    if (-not $conda) {
+        Write-Error "Conda not found. Open Anaconda Prompt or run scripts\setup-conda.bat first."
+        exit 1
+    }
+    Write-Host "Activating 'tos' conda environment..." -ForegroundColor Yellow
+    $installArg = if ($Install) { "-Install" } else { "" }
+    & conda run --no-capture-output -n tos powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\build.ps1" $installArg
+    exit $LASTEXITCODE
+}
+
 function Invoke-PyInstallerSpec {
     param(
         [Parameter(Mandatory = $true)][string]$SpecPath,
@@ -50,24 +63,24 @@ try {
     }
     New-Item -ItemType Directory -Path $PlatformTools -Force | Out-Null
 
-    Invoke-PyInstallerSpec `
-        -SpecPath (Join-Path $SourceRoot "tos_helper\tos_helper.spec") `
-        -DistPath $DistRoot `
-        -WorkName "tos_helper"
+    # Build all three tools
+    $Jobs = @(
+        @{ Spec = "tos_helper\tos_helper.spec"; Dist = $DistRoot; Name = "tos_helper" },
+        @{ Spec = "sbltool\sbltool.spec";      Dist = $PlatformTools; Name = "sbltool" },
+        @{ Spec = "tdb\tdb.spec";              Dist = $PlatformTools; Name = "tdb" }
+    )
 
-    Invoke-PyInstallerSpec `
-        -SpecPath (Join-Path $SourceRoot "tsblboot\tsblboot.spec") `
-        -DistPath $PlatformTools `
-        -WorkName "tsblboot"
+    foreach ($Job in $Jobs) {
+        Invoke-PyInstallerSpec `
+            -SpecPath (Join-Path $SourceRoot $Job.Spec) `
+            -DistPath $Job.Dist `
+            -WorkName $Job.Name
+    }
 
-    Invoke-PyInstallerSpec `
-        -SpecPath (Join-Path $SourceRoot "tdb\tdb.spec") `
-        -DistPath $PlatformTools `
-        -WorkName "tdb"
-
+    # Smoke test
     $Expected = @(
         (Join-Path $DistRoot "TOS Helper.exe"),
-        (Join-Path $PlatformTools "tsblboot.exe"),
+        (Join-Path $PlatformTools "sbltool.exe"),
         (Join-Path $PlatformTools "tdb.exe")
     )
     foreach ($File in $Expected) {
@@ -75,18 +88,11 @@ try {
             throw "Expected output was not generated: $File"
         }
     }
-
-    & (Join-Path $PlatformTools "tsblboot.exe") --version | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "tsblboot version test failed."
-    }
-    & (Join-Path $PlatformTools "tsblboot.exe") partitions | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "tsblboot smoke test failed."
-    }
-    & (Join-Path $PlatformTools "tdb.exe") --version | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "tdb smoke test failed."
+    foreach ($File in $Expected) {
+        & $File --version | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "$File version test failed."
+        }
     }
 
     if ($Install) {
@@ -95,15 +101,15 @@ try {
         }
         $ScriptsDir = Join-Path $env:CONDA_PREFIX "Scripts"
         New-Item -ItemType Directory -Path $ScriptsDir -Force | Out-Null
-        Copy-Item (Join-Path $PlatformTools "tsblboot.exe") $ScriptsDir -Force
+        Copy-Item (Join-Path $PlatformTools "sbltool.exe") $ScriptsDir -Force
         Copy-Item (Join-Path $PlatformTools "tdb.exe") $ScriptsDir -Force
-        Write-Host "Installed tsblboot.exe and tdb.exe to $ScriptsDir" -ForegroundColor Green
+        Write-Host "Installed sbltool.exe and tdb.exe to $ScriptsDir" -ForegroundColor Green
     }
 
     Write-Host ""
     Write-Host "Build complete:" -ForegroundColor Green
     Write-Host "  dist\TOS Helper.exe"
-    Write-Host "  dist\platform-tools\tsblboot.exe"
+    Write-Host "  dist\platform-tools\sbltool.exe"
     Write-Host "  dist\platform-tools\tdb.exe"
 }
 catch {

@@ -6,7 +6,7 @@ source_root = package_dir.parent
 assets_dir = package_dir / "assets"
 
 a = Analysis(
-    [str(package_dir / "__main__.py")],
+    [str(package_dir / "app.py")],
     pathex=[str(source_root)],
     binaries=[],
     datas=[(str(assets_dir / "typheye_rounded.png"), "tos_helper/assets")],

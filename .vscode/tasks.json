@@ -1,82 +1,33 @@
 {
   "version": "2.0.0",
   "tasks": [
+
+    /* ============================ Build ============================ */
+
     {
       "label": "Build",
+      "group": { "kind": "build", "isDefault": true },
+      "detail": "Build TOS Helper + sbltool + tdb in one go.",
       "type": "shell",
-      "icon": {
-        "id": "build",
-        "tooltip": "Build TOS Windows tools"
-      },
-      "command": "${workspaceFolder}/scripts/build.bat",
+      "icon": { "id": "build", "tooltip": "Build all" },
+      "command": "powershell",
       "args": [
-        "--install"
+        "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/scripts/build.ps1"
       ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
     },
-    {
-      "label": "Flash (system)",
-      "type": "shell",
-      "icon": {
-        "id": "play",
-        "tooltip": "Flash system partitions"
-      },
-      "command": "${workspaceFolder}/scripts/flash-system.bat",
-      "args": [
-        "${input:tosPort}"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Run TOS Helper",
-      "type": "shell",
-      "icon": {
-        "id": "play",
-        "tooltip": "Run TOS Helper"
-      },
-      "command": "\"${workspaceFolder}/dist/TOS Helper.exe\"",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "never",
-        "panel": "shared"
-      }
-    },
+
+    /* ============================ Clean ============================ */
+
     {
       "label": "Clean",
+      "detail": "Remove build/, dist/ and Python cache files.",
       "type": "shell",
-      "icon": {
-        "id": "trash",
-        "tooltip": "Clean the project"
-      },
+      "icon": { "id": "trash", "tooltip": "Clean all" },
       "command": "${workspaceFolder}/scripts/clean.bat",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    }
-  ],
-  "inputs": [
-    {
-      "id": "tosPort",
-      "type": "promptString",
-      "description": "TOS SBL COM port",
-      "default": "COM8"
+      "presentation": { "reveal": "always", "panel": "shared" }
     }
   ]
 }

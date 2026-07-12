@@ -1,3 +1,4 @@
 hidapi>=0.14.0,<0.15
 pyserial>=3.5,<4
 pyinstaller>=6.3,<7
+pyreadline3>=3.5,<4

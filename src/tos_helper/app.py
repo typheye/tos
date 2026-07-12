@@ -1,10 +1,28 @@
 #!/usr/bin/env python3
 """
-TOS Helper: Custom HID host GUI and diagnostics tool.
+ ******************************************************************************
+ * @file    tos_helper/app.py
+ * @author  Typheye
+ * @brief   TOS Helper HID host GUI and diagnostics tool.
+ ******************************************************************************
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ ******************************************************************************
 
 Default device: VID 0x0483, PID 0x5750, Vendor Report ID 0x10.
-Install dependency:
-    python -m pip install hidapi
+Install dependency: python -m pip install hidapi
 
 Run GUI:
     "TOS Helper.exe"
@@ -28,10 +46,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-try:
-    from . import __version__
-except ImportError:  # direct script execution
-    __version__ = "1.0.0"
+__version__ = "1.0.1"
 
 try:
     import hid  # type: ignore

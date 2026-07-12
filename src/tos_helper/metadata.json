@@ -1,7 +1,7 @@
 {
   "name": "tos_helper",
   "display_name": "TOS Helper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "developer": "Typheye",
   "description": "TOS HID host GUI and diagnostics utility",
   "executable": "TOS Helper.exe"

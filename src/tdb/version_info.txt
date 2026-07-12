@@ -4,12 +4,12 @@ VSVersionInfo(
     StringFileInfo([StringTable('040904B0', [
       StringStruct('CompanyName', 'Typheye'),
       StringStruct('FileDescription', 'TOS Debug Bridge'),
-      StringStruct('FileVersion', '1.0.0'),
+      StringStruct('FileVersion', '1.0.1'),
       StringStruct('InternalName', 'tdb'),
-      StringStruct('LegalCopyright', 'Copyright (C) 2026 Typheye'),
+      StringStruct('LegalCopyright', 'Copyright (c) 2021-2026 Typheye'),
       StringStruct('OriginalFilename', 'tdb.exe'),
       StringStruct('ProductName', 'TOS Platform Tools'),
-      StringStruct('ProductVersion', '1.0.0')
+      StringStruct('ProductVersion', '1.0.1')
     ])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
