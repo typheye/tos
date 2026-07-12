@@ -17,13 +17,13 @@
 
 TOS 是一个运行于 **STM32F407ZGT6** 上的嵌入式系统，采用 **ECDSA P-256 + SHA-256 安全启动**、**FASTMAP 5 分区**布局，提供 LCD 图形界面、WiFi 联网（ESP8266）、SD 卡持久化等功能。上位机 PC 工具涵盖 HID 诊断、固件烧录、调试桥接。
 
-项目分为三个仓库：
+项目按分支组织：
 
-| 仓库 | 说明 | 语言 |
+| 分支 | 说明 | 语言 |
 |------|------|------|
-| **[slave-board](slave-board/)** | STM32F407 从板固件：安全启动链、GUI、驱动、文件系统 | C / C++ |
-| **[win-pc](win-pc/)** | Windows 上位机工具：HID 诊断、FASTBOOT 烧录、Debug Bridge | Python |
-| **[esp8266-code](esp8266-code/)** | ESP8266 WiFi AT 固件与集成说明 | — |
+| **[slave-board](https://github.com/typheye/tos/tree/slave-board)** | STM32F407 从板固件：安全启动链、GUI、驱动、文件系统 | C / C++ |
+| **[win-pc](https://github.com/typheye/tos/tree/win-pc)** | Windows 上位机工具：HID 诊断、FASTBOOT 烧录、Debug Bridge | Python |
+| **[esp8266-code](https://github.com/typheye/tos/tree/esp8266-code)** | ESP8266 WiFi AT 固件与集成说明 | — |
 
 ---
 
@@ -103,7 +103,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
 
 ### 烧录 ESP8266 AT 固件
 
-详见 [esp8266-code/README.md](esp8266-code/README.md)。
+详见 [esp8266-code 分支文档](https://github.com/typheye/tos/blob/esp8266-code/README.md)。
 
 ---
 
@@ -113,24 +113,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
 
 | 文档 | 来源 | 说明 |
 |------|------|------|
-| [slave-board/README.md](slave-board/README.md) | slave-board | 固件概述、分区布局、启动链、调试 |
-| [win-pc/README.md](win-pc/README.md) | win-pc | 上位机工具概述、构建、设备发现 |
-| [esp8266-code/README.md](esp8266-code/README.md) | esp8266-code | ESP8266 固件与集成说明 |
+| [README.md](https://github.com/typheye/tos/blob/slave-board/README.md) | slave-board | 固件概述、分区布局、启动链、调试 |
+| [README.md](https://github.com/typheye/tos/blob/win-pc/README.md) | win-pc | 上位机工具概述、构建、设备发现 |
+| [README.md](https://github.com/typheye/tos/blob/esp8266-code/README.md) | esp8266-code | ESP8266 固件与集成说明 |
 
 ### 子项目文档
 
 | 文档 | 来源 | 说明 |
 |------|------|------|
-| [slave-board/docs/technical-docs.md](slave-board/docs/technical-docs.md) | slave-board | 技术路线、启动流程、约束、移植 |
-| [slave-board/docs/partition-docs.md](slave-board/docs/partition-docs.md) | slave-board | FASTMAP 分区布局、写权限 |
-| [slave-board/docs/secure-docs.md](slave-board/docs/secure-docs.md) | slave-board | 安全策略、ECDSA 签名、OEM Lock |
-| [slave-board/docs/syslog-docs.md](slave-board/docs/syslog-docs.md) | slave-board | 日志系统：等级、格式、SD 卡存储 |
-| [slave-board/docs/style-docs.md](slave-board/docs/style-docs.md) | slave-board | C/C++ 代码风格规范 |
-| [slave-board/docs/update-docs.md](slave-board/docs/update-docs.md) | slave-board | 固件更新记录 |
-| [win-pc/docs/technical-docs.md](win-pc/docs/technical-docs.md) | win-pc | PC 工具架构、通信协议、设备发现 |
-| [win-pc/docs/style-docs.md](win-pc/docs/style-docs.md) | win-pc | Python 代码风格规范 |
-| [win-pc/docs/update-docs.md](win-pc/docs/update-docs.md) | win-pc | PC 工具更新记录 |
-| [esp8266-code/docs/technical-docs.md](esp8266-code/docs/technical-docs.md) | esp8266-code | ESP8266 硬件连接、AT 协议、故障恢复 |
+| [technical-docs.md](https://github.com/typheye/tos/blob/slave-board/docs/technical-docs.md) | slave-board | 技术路线、启动流程、约束、移植 |
+| [partition-docs.md](https://github.com/typheye/tos/blob/slave-board/docs/partition-docs.md) | slave-board | FASTMAP 分区布局、写权限 |
+| [secure-docs.md](https://github.com/typheye/tos/blob/slave-board/docs/secure-docs.md) | slave-board | 安全策略、ECDSA 签名、OEM Lock |
+| [syslog-docs.md](https://github.com/typheye/tos/blob/slave-board/docs/syslog-docs.md) | slave-board | 日志系统：等级、格式、SD 卡存储 |
+| [style-docs.md](https://github.com/typheye/tos/blob/slave-board/docs/style-docs.md) | slave-board | C/C++ 代码风格规范 |
+| [update-docs.md](https://github.com/typheye/tos/blob/slave-board/docs/update-docs.md) | slave-board | 固件更新记录 |
+| [technical-docs.md](https://github.com/typheye/tos/blob/win-pc/docs/technical-docs.md) | win-pc | PC 工具架构、通信协议、设备发现 |
+| [style-docs.md](https://github.com/typheye/tos/blob/win-pc/docs/style-docs.md) | win-pc | Python 代码风格规范 |
+| [update-docs.md](https://github.com/typheye/tos/blob/win-pc/docs/update-docs.md) | win-pc | PC 工具更新记录 |
+| [technical-docs.md](https://github.com/typheye/tos/blob/esp8266-code/docs/technical-docs.md) | esp8266-code | ESP8266 硬件连接、AT 协议、故障恢复 |
 
 ---
 
