@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Tsdio interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __TSDIO_HPP
-#define __TSDIO_HPP
+#ifndef TSDIO_HPP
+#define TSDIO_HPP
 
 #include "fatfs.h"
 #include "hardware/include/usart.hpp"
@@ -52,75 +57,75 @@ typedef enum {
 
 
 typedef struct {
-  uint32_t block_size;  
-  uint32_t block_count; 
-  uint32_t capacity_mb; 
-  uint8_t card_type;    
-  uint8_t bus_width;    
+  uint32_t block_size;
+  uint32_t block_count;
+  uint32_t capacity_mb;
+  uint8_t card_type;
+  uint8_t bus_width;
 } SDCard_Info_t;
 
 class TSDIO {
 public:
-  
+
   TSDIO();
 
-  
+
   SDCard_Status_t init(void);
 
-  
+
   SDCard_Status_t getStatus(void);
 
-  
+
   SDCard_Info_t getInfo(void);
 
-  
+
   SDCard_Status_t readSector(uint8_t *buffer, uint32_t sector);
 
-  
+
   SDCard_Status_t writeSector(uint8_t *buffer, uint32_t sector);
 
-  
+
   SDCard_Status_t readMultiSector(uint8_t *buffer, uint32_t sector,
                                   uint32_t count);
 
-  
+
   SDCard_Status_t writeMultiSector(uint8_t *buffer, uint32_t sector,
                                    uint32_t count);
 
-  
+
   SDCard_Status_t eraseBlock(uint32_t start_sector, uint32_t end_sector);
 
-  
-  bool isHardDisabled(void) { return _hard_disabled; }
-  bool isInitialized(void) const { return initialized && !_hard_disabled; }
-  void markHardDisabled(void) { initialized = false; _hard_disabled = true; }
 
-  
+  bool isHardDisabled(void) { return _hardDisabled; }
+  bool isInitialized(void) const { return _initialized && !_hardDisabled; }
+  void markHardDisabled(void) { _initialized = false; _hardDisabled = true; }
+
+
   bool isInserted(void);
 
-  
+
   bool isWriteProtected(void);
 
-  
+
   bool selfTest(void);
 
   bool directWriteTest(void);
   bool simpleWriteTest(void);
 
 private:
-  bool initialized;        
-  bool _hard_disabled;     
-  bool write_protected;    
-  SDCard_Info_t card_info; 
+  bool _initialized;
+  bool _hardDisabled;
+  bool _writeProtected;
+  SDCard_Info_t _cardInfo;
 
-  
+
   bool waitForReady(uint32_t timeout_ms);
 
-  
+
   void updateCardInfo(void);
 };
 
 
 extern TSDIO boardSDIO;
 
-#endif // __TSDIO_HPP
+#endif // TSDIO_HPP

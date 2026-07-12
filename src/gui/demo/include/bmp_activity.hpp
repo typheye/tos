@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Bmp Activity interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __BMP_ACTIVITY_HPP
-#define __BMP_ACTIVITY_HPP
+#ifndef BMP_ACTIVITY_HPP
+#define BMP_ACTIVITY_HPP
 #include "components/include/alert.hpp"
 #include "core/sys/include/systime.h"
 #include "hardware/include/bmp180.hpp"
@@ -47,4 +52,4 @@ void bmp180_calibrate_activity(void);
 }
 #endif
 
-#endif /* __BMP_ACTIVITY_HPP */
+#endif /* BMP_ACTIVITY_HPP */

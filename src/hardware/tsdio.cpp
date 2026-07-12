@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Tsdio implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/tsdio.hpp"
@@ -37,10 +42,10 @@ extern USART boardSerial;
 
 
 TSDIO::TSDIO() {
-  initialized = false;
-  _hard_disabled = false;
-  write_protected = false;
-  memset(&card_info, 0, sizeof(card_info));
+  _initialized = false;
+  _hardDisabled = false;
+  _writeProtected = false;
+  memset(&_cardInfo, 0, sizeof(_cardInfo));
 }
 
 
@@ -66,13 +71,13 @@ void TSDIO::updateCardInfo(void) {
   HAL_SD_CardInfoTypeDef hal_card_info;
 
   if (HAL_SD_GetCardInfo(&hsd, &hal_card_info) == HAL_OK) {
-    card_info.block_size = hal_card_info.BlockSize;
-    card_info.block_count = hal_card_info.BlockNbr;
-    card_info.capacity_mb = (uint32_t)(((uint64_t)hal_card_info.BlockNbr *
+    _cardInfo.block_size = hal_card_info.BlockSize;
+    _cardInfo.block_count = hal_card_info.BlockNbr;
+    _cardInfo.capacity_mb = (uint32_t)(((uint64_t)hal_card_info.BlockNbr *
                                         hal_card_info.BlockSize) /
                                        (1024 * 1024));
-    card_info.card_type = hal_card_info.CardType;
-    card_info.bus_width = 4;
+    _cardInfo.card_type = hal_card_info.CardType;
+    _cardInfo.bus_width = 4;
   }
 }
 
@@ -86,29 +91,29 @@ SDCard_Status_t TSDIO::init(void) {
 
   LOG_I("SDIO", "Starting init...");
 
-  
+
   LOG_I("SDIO", "Calling HAL_SD_Init...");
   if (HAL_SD_Init(&hsd) != HAL_OK) {
     LOG_E("SDIO", "HAL_SD_Init FAILED");
-    _hard_disabled = true;
+    _hardDisabled = true;
     LOG_E("SDIO", "SD card HARD DISABLED â€?init failed");
     return SD_CARD_ERROR;
   }
   LOG_I("SDIO", "HAL_SD_Init OK");
 
-  
+
   SysWatchdog_FeedNow();
   JPDelay(200);
   SysWatchdog_FeedNow();
 
-  
+
   LOG_I("SDIO", "Checking card presence...");
   LOG_I("SDIO", "Card state after init: %ld", (long)HAL_SD_GetCardState(&hsd));
 
-  
+
   LOG_I("SDIO", "Getting card info...");
 
-  
+
   int retry = 5;
   while (retry--) {
     if (HAL_SD_GetCardInfo(&hsd, &hal_card_info) == HAL_OK) {
@@ -126,7 +131,7 @@ SDCard_Status_t TSDIO::init(void) {
             (unsigned long)hal_card_info.CardType, (unsigned long)hal_card_info.BlockSize,
             (unsigned long)hal_card_info.BlockNbr);
     LOG_E("SDIO", "Failed to get valid card info!");
-    _hard_disabled = true;
+    _hardDisabled = true;
     LOG_E("SDIO", "SD card HARD DISABLED â€?invalid card info");
     return SD_CARD_ERROR;
   }
@@ -135,17 +140,17 @@ SDCard_Status_t TSDIO::init(void) {
           (unsigned long)hal_card_info.CardType, (unsigned long)hal_card_info.BlockSize,
           (unsigned long)hal_card_info.BlockNbr);
 
-  
+
   LOG_I("SDIO", "Configuring bus width...");
 
-  
-  card_info.bus_width = 1;
+
+  _cardInfo.bus_width = 1;
 
 
 #if TSDIO_ENABLE_WIDE_BUS && defined(SDIO_BUS_WIDE_4B)
   SysWatchdog_FeedNow();
   if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) == HAL_OK) {
-    card_info.bus_width = 4;
+    _cardInfo.bus_width = 4;
     LOG_I("SDIO", "4-bit mode enabled");
   } else {
     LOG_W("SDIO", "4-bit mode failed, using 1-bit");
@@ -155,33 +160,33 @@ SDCard_Status_t TSDIO::init(void) {
   LOG_I("SDIO", "4-bit mode disabled at boot, using 1-bit");
 #endif
 
-  
-  card_info.block_size = hal_card_info.BlockSize;
-  card_info.block_count = hal_card_info.BlockNbr;
-  card_info.capacity_mb =
+
+  _cardInfo.block_size = hal_card_info.BlockSize;
+  _cardInfo.block_count = hal_card_info.BlockNbr;
+  _cardInfo.capacity_mb =
       (uint32_t)(((uint64_t)hal_card_info.BlockNbr * hal_card_info.BlockSize) /
                  (1024 * 1024));
-  card_info.card_type = hal_card_info.CardType;
+  _cardInfo.card_type = hal_card_info.CardType;
 
-  
+
   SysWatchdog_FeedNow();
   LOG_I("SDIO", "Waiting for card ready...");
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Card ready timeout");
-    _hard_disabled = true;
+    _hardDisabled = true;
     LOG_E("SDIO", "SD card HARD DISABLED â€?not ready");
     return SD_CARD_NOT_READY;
   }
 
-  initialized = true;
-  _hard_disabled = false;
+  _initialized = true;
+  _hardDisabled = false;
   LOG_I("SDIO", "Init complete!");
   return SD_CARD_OK;
 }
 
 
 SDCard_Status_t TSDIO::getStatus(void) {
-  if (!initialized) {
+  if (!_initialized) {
     return SD_CARD_NOT_READY;
   }
 
@@ -198,15 +203,15 @@ SDCard_Status_t TSDIO::getStatus(void) {
 
 
 SDCard_Info_t TSDIO::getInfo(void) {
-  if (!initialized) {
+  if (!_initialized) {
     updateCardInfo();
   }
-  return card_info;
+  return _cardInfo;
 }
 
 
 SDCard_Status_t TSDIO::readSector(uint8_t *buffer, uint32_t sector) {
-  if (!initialized) {
+  if (!_initialized) {
     return SD_CARD_NOT_READY;
   }
 
@@ -224,25 +229,25 @@ SDCard_Status_t TSDIO::readSector(uint8_t *buffer, uint32_t sector) {
 
 
 SDCard_Status_t TSDIO::writeSector(uint8_t *buffer, uint32_t sector) {
-  if (!initialized) {
+  if (!_initialized) {
     return SD_CARD_NOT_READY;
   }
 
-  if (write_protected) {
+  if (_writeProtected) {
     return SD_CARD_WRITE_PROTECT;
   }
 
-  
-  
 
-  
+
+
+
   HAL_SD_CardInfoTypeDef card_info;
   HAL_SD_GetCardInfo(&hsd, &card_info);
 
   LOG_I("SDIO", "Write Card Type: %lu, Sector: %lu",
           (unsigned long)card_info.CardType, (unsigned long)sector);
 
-  
+
   if (card_info.CardType == 1) {
     LOG_I("SDIO", "Write SDHC/SDXC card detected");
   }
@@ -263,7 +268,7 @@ SDCard_Status_t TSDIO::writeSector(uint8_t *buffer, uint32_t sector) {
 
 SDCard_Status_t TSDIO::readMultiSector(uint8_t *buffer, uint32_t sector,
                                        uint32_t count) {
-  if (!initialized) {
+  if (!_initialized) {
     return SD_CARD_NOT_READY;
   }
 
@@ -281,11 +286,11 @@ SDCard_Status_t TSDIO::readMultiSector(uint8_t *buffer, uint32_t sector,
 
 SDCard_Status_t TSDIO::writeMultiSector(uint8_t *buffer, uint32_t sector,
                                         uint32_t count) {
-  if (!initialized) {
+  if (!_initialized) {
     return SD_CARD_NOT_READY;
   }
 
-  if (write_protected) {
+  if (_writeProtected) {
     return SD_CARD_WRITE_PROTECT;
   }
 
@@ -303,11 +308,11 @@ SDCard_Status_t TSDIO::writeMultiSector(uint8_t *buffer, uint32_t sector,
 
 
 SDCard_Status_t TSDIO::eraseBlock(uint32_t start_sector, uint32_t end_sector) {
-  if (!initialized) {
+  if (!_initialized) {
     return SD_CARD_NOT_READY;
   }
 
-  if (write_protected) {
+  if (_writeProtected) {
     return SD_CARD_WRITE_PROTECT;
   }
 
@@ -324,41 +329,41 @@ SDCard_Status_t TSDIO::eraseBlock(uint32_t start_sector, uint32_t end_sector) {
 
 
 bool TSDIO::isInserted(void) {
-  if (_hard_disabled) return false;
+  if (_hardDisabled) return false;
   HAL_SD_CardInfoTypeDef card_info_test;
   return (HAL_SD_GetCardInfo(&hsd, &card_info_test) == HAL_OK);
 }
 
 
-bool TSDIO::isWriteProtected(void) { return write_protected; }
+bool TSDIO::isWriteProtected(void) { return _writeProtected; }
 
 
 bool TSDIO::selfTest(void) {
   uint8_t write_buf[512];
   uint8_t read_buf[512];
 
-  if (!initialized) {
+  if (!_initialized) {
     return false;
   }
 
-  
+
   for (int i = 0; i < 512; i++) {
     write_buf[i] = (uint8_t)(i & 0xFF);
   }
 
   uint32_t test_sector = 0;
 
-  if (card_info.block_count > 100) {
-    test_sector = card_info.block_count - 1;
+  if (_cardInfo.block_count > 100) {
+    test_sector = _cardInfo.block_count - 1;
   } else {
     test_sector = 10;
   }
 
-  
+
   uint8_t backup_buf[512];
   readSector(backup_buf, test_sector);
 
-  
+
   if (writeSector(write_buf, test_sector) != SD_CARD_OK) {
     writeSector(backup_buf, test_sector);
     return false;
@@ -366,16 +371,16 @@ bool TSDIO::selfTest(void) {
 
   JPDelay(10);
 
-  
+
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {
     writeSector(backup_buf, test_sector);
     return false;
   }
 
-  
+
   bool test_passed = (memcmp(write_buf, read_buf, 512) == 0);
 
-  
+
   writeSector(backup_buf, test_sector);
 
   return test_passed;
@@ -386,7 +391,7 @@ bool TSDIO::directWriteTest(void) {
   uint8_t write_buf[512];
   uint8_t read_buf[512];
 
-  
+
   HAL_SD_CardInfoTypeDef card_info;
   if (HAL_SD_GetCardInfo(&hsd, &card_info) != HAL_OK) {
     LOG_E("SDIO", "Direct Test: Cannot get card info");
@@ -397,19 +402,19 @@ bool TSDIO::directWriteTest(void) {
           (unsigned long)card_info.CardType, (unsigned long)card_info.BlockSize,
           (unsigned long)card_info.BlockNbr);
 
-  
-  uint32_t test_sector = 1000; 
+
+  uint32_t test_sector = 1000;
   if (test_sector >= card_info.BlockNbr) {
     test_sector = card_info.BlockNbr - 100;
   }
   LOG_I("SDIO", "Direct Test: Using test sector: %lu", (unsigned long)test_sector);
 
-  
+
   for (int i = 0; i < 512; i++) {
     write_buf[i] = (uint8_t)(i % 256);
   }
 
-  
+
   LOG_I("SDIO", "Direct Test: Checking card state...");
   HAL_SD_CardStateTypeDef state;
   for (int i = 0; i < 1000; i++) {
@@ -424,7 +429,7 @@ bool TSDIO::directWriteTest(void) {
 
   LOG_I("SDIO", "Direct Test: Writing sector...");
 
-  
+
   HAL_StatusTypeDef result =
       HAL_SD_WriteBlocks(&hsd, write_buf, test_sector, 1, HAL_MAX_DELAY);
   LOG_I("SDIO", "Direct Test: HAL_SD_WriteBlocks result: %d", result);
@@ -433,7 +438,7 @@ bool TSDIO::directWriteTest(void) {
     uint32_t error_code = HAL_SD_GetError(&hsd);
     LOG_E("SDIO", "Direct Test: Error code: 0x%08lX", (unsigned long)error_code);
 
-    
+
     LOG_D("SDIO", "Direct Test: Error flags -- checking...");
     if (error_code & HAL_SD_ERROR_NONE)
       LOG_D("SDIO", "  NONE");
@@ -473,7 +478,7 @@ bool TSDIO::directWriteTest(void) {
 
   LOG_I("SDIO", "Direct Test: Write OK, waiting for completion...");
 
-  
+
   if (!waitForReady(5000)) {
     LOG_E("SDIO", "Direct Test: Wait timeout");
     return false;
@@ -495,7 +500,7 @@ bool TSDIO::directWriteTest(void) {
     return false;
   }
 
-  
+
   {
     char hex[128];
     int pos = 0;
@@ -505,7 +510,7 @@ bool TSDIO::directWriteTest(void) {
     LOG_D("SDIO", "Direct Test: first 32 bytes: %s", hex);
   }
 
-  
+
   if (memcmp(write_buf, read_buf, 512) == 0) {
     LOG_I("SDIO", "Direct Test: PASSED!");
     return true;
@@ -522,26 +527,26 @@ bool TSDIO::simpleWriteTest(void) {
 
   LOG_I("SDIO", "Simple Test: Starting...");
 
-  
+
   HAL_SD_CardInfoTypeDef card_info;
   if (HAL_SD_GetCardInfo(&hsd, &card_info) != HAL_OK) {
     LOG_E("SDIO", "Simple Test: Cannot get card info");
     return false;
   }
 
-  
+
   uint32_t test_sector = 100;
   if (test_sector >= card_info.BlockNbr) {
     test_sector = card_info.BlockNbr / 2;
   }
   LOG_I("SDIO", "Simple Test: Using sector %lu", (unsigned long)test_sector);
 
-  
+
   for (int i = 0; i < 512; i++) {
     write_buf[i] = (uint8_t)((i + HAL_GetTick()) & 0xFF);
   }
 
-  
+
   if (writeSector(write_buf, test_sector) != SD_CARD_OK) {
     LOG_E("SDIO", "Simple Test: Write failed");
     return false;
@@ -549,13 +554,13 @@ bool TSDIO::simpleWriteTest(void) {
 
   JPDelay(10);
 
-  
+
   if (readSector(read_buf, test_sector) != SD_CARD_OK) {
     LOG_E("SDIO", "Simple Test: Read failed");
     return false;
   }
 
-  
+
   if (memcmp(write_buf, read_buf, 512) == 0) {
     LOG_I("SDIO", "Simple Test: PASSED");
     return true;

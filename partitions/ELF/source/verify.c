@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   ELF image verification implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "secure_boot.h"
@@ -48,7 +53,7 @@ static uint8_t equal32(const uint8_t a[32], const uint8_t b[32]) {
 
 static void hash_image(uint32_t storage_address, uint32_t size,
                        uint8_t digest[32]) {
-  TosSha256Context sha;
+  TosSha256Context_t sha;
   TosSha256Init(&sha);
   TosSha256Update(&sha, (const void *)(uintptr_t)storage_address,
                   TOS_IMAGE_HEADER_OFFSET);
@@ -61,9 +66,9 @@ static void hash_image(uint32_t storage_address, uint32_t size,
   TosSha256Final(&sha, digest);
 }
 
-static void hash_signature_input(const TosImageHeader *header,
+static void hash_signature_input(const TosImageHeader_t *header,
                                  uint8_t digest[32]) {
-  TosSha256Context sha;
+  TosSha256Context_t sha;
   TosSha256Init(&sha);
   TosSha256Update(&sha, signature_domain, sizeof(signature_domain));
   TosSha256Update(&sha, header, 7U * sizeof(uint32_t));
@@ -76,14 +81,14 @@ SecureBoot_Result_t SecureBoot_Verify(uint32_t storage_address,
                                     uint32_t expected_size,
                                     uint32_t expected_type,
                                     uint32_t minimum_version) {
-  const TosImageHeader *header;
+  const TosImageHeader_t *header;
   uint8_t image_digest[32];
   uint8_t signature_digest[32];
   if (expected_size < TOS_IMAGE_HEADER_OFFSET + TOS_IMAGE_HEADER_SIZE ||
       storage_address + expected_size < storage_address) {
     return SECUREBOOT_VERIFY_BAD_ARGUMENT;
   }
-  header = (const TosImageHeader *)(uintptr_t)(storage_address +
+  header = (const TosImageHeader_t *)(uintptr_t)(storage_address +
                                                TOS_IMAGE_HEADER_OFFSET);
   if (header->magic != TOS_IMAGE_HEADER_MAGIC ||
       header->header_version != TOS_IMAGE_HEADER_VERSION ||
@@ -112,13 +117,13 @@ SecureBoot_Result_t SecureBoot_VerifyHeaderAndHash(
     uint32_t storage_address, uint32_t expected_load_address,
     uint32_t expected_size, uint32_t expected_type,
     uint32_t minimum_version) {
-  const TosImageHeader *header;
+  const TosImageHeader_t *header;
   uint8_t image_digest[32];
   if (expected_size < TOS_IMAGE_HEADER_OFFSET + TOS_IMAGE_HEADER_SIZE ||
       storage_address + expected_size < storage_address) {
     return SECUREBOOT_VERIFY_BAD_ARGUMENT;
   }
-  header = (const TosImageHeader *)(uintptr_t)(storage_address +
+  header = (const TosImageHeader_t *)(uintptr_t)(storage_address +
                                                TOS_IMAGE_HEADER_OFFSET);
   if (header->magic != TOS_IMAGE_HEADER_MAGIC ||
       header->header_version != TOS_IMAGE_HEADER_VERSION ||

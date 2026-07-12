@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   ELF secure boot verification interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef TOS_SECURE_BOOT_H
-#define TOS_SECURE_BOOT_H
+#ifndef SECURE_BOOT_H
+#define SECURE_BOOT_H
 
 #include <stdint.h>
 
@@ -46,4 +51,4 @@ SecureBoot_Result_t SecureBoot_VerifyHeaderAndHash(uint32_t storage_address,
                                     uint32_t expected_type,
                                     uint32_t minimum_version);
 
-#endif /* TOS_SECURE_BOOT_H */
+#endif /* SECURE_BOOT_H */

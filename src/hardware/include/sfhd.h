@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Sfhd interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __SFHD_H
-#define __SFHD_H
+#ifndef SFHD_H
+#define SFHD_H
 
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
@@ -48,27 +53,27 @@ extern "C" {
 #define FLASH_BL_BOOT_RECOVERY_UPGRADE TOS_BOOT_TARGET_RECOVERY_UPGRADE
 #define FLASH_BL_BOOT_RECOVERY_INIT    TOS_BOOT_TARGET_RECOVERY_INIT
 
-#define FLASH_RECORD_MAX     4096u             
-#define FLASH_ROLLING_COUNT  32u               
+#define FLASH_RECORD_MAX     4096u
+#define FLASH_ROLLING_COUNT  32u
 
 
 typedef enum {
-  FLASH_OK = 0,               
-  FLASH_ERR_ALIGN,            
-  FLASH_ERR_SIZE,             
-  FLASH_ERR_ERASE,            
-  FLASH_ERR_PROGRAM,          
-  FLASH_ERR_CRC,              
-  FLASH_ERR_BACKUP_RESTORE,   
-  FLASH_ERR_TIMEOUT,          
+  FLASH_OK = 0,
+  FLASH_ERR_ALIGN,
+  FLASH_ERR_SIZE,
+  FLASH_ERR_ERASE,
+  FLASH_ERR_PROGRAM,
+  FLASH_ERR_CRC,
+  FLASH_ERR_BACKUP_RESTORE,
+  FLASH_ERR_TIMEOUT,
 } Flash_Status_t;
 
 
 typedef struct __attribute__((packed)) {
-  uint32_t magic;             
-  uint32_t crc;               
-  uint32_t datasize;          
-  
+  uint32_t magic;
+  uint32_t crc;
+  uint32_t datasize;
+
 } Flash_Record_Header_t;
 
 #define FLASH_RECORD_MAGIC    0x544F5301u
@@ -130,4 +135,4 @@ void SFHD_SD_DebugProbe(const char *tag);
 }
 #endif
 
-#endif /* __SFHD_H */
+#endif /* SFHD_H */

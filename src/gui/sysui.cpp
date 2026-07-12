@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   System UI registry implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/sysui.hpp"
@@ -24,10 +29,10 @@ extern LCD boardLCD;
 extern TRTC boardTRTC;
 extern KeyManager keyManager;
 
-int SysUI::now_activity = UI_DASHBOARD;
-uint32_t SysUI::last_tick = 0;
-void (*SysUI::current_test_func)(void) = nullptr;
-int SysUI::cpu_usage = 0;
+int SysUI::_nowActivity = UI_DASHBOARD;
+uint32_t SysUI::_lastTick = 0;
+void (*SysUI::_currentTestFunc)(void) = nullptr;
+int SysUI::_cpuUsage = 0;
 
 #define TOS_ITEMS 5
 static const char *tos_m[TOS_ITEMS] = {"00 Return", "01 Settings",
@@ -55,8 +60,8 @@ static void debug_format_lines(void) {
 }
 
 static void debug_sample_memory(void) {
-  SysDram_Stats_t ram;
-  SysDram_Stats_t ccm;
+  SysDramStats_t ram;
+  SysDramStats_t ccm;
   if (!SysDram_GetStats(SYSDRAM_REGION_RAM, &ram) ||
       !SysDram_GetStats(SYSDRAM_REGION_CCM, &ccm)) {
     g_dbg_ram_used = 0;
@@ -151,24 +156,24 @@ extern "C" void SysUI_DebugOverlayDraw(void) {
   PD_DrawString(x + 4, y + 15, g_dbg_line_mem);
 }
 
-void SysUI::init(void) { last_tick = HAL_GetTick(); }
+void SysUI::init(void) { _lastTick = HAL_GetTick(); }
 
 void SysUI::loop(void) {
-  TosApi_SetPaused(now_activity != UI_PET);
+  TosApi_SetPaused(_nowActivity != UI_PET);
   TosApi_Tick();
 
   Time_t now;
   Date_t today;
   boardTRTC.getDateTime(&now, &today);
   char time_str[8];
-  time_fmt(time_str, sizeof(time_str), now.hours, now.minutes);
+  SysTime_Fmt(time_str, sizeof(time_str), now.hours, now.minutes);
   PD_SetHeaderTime(time_str);
 
-  if (now_activity == UI_LAUNCHER) {
+  if (_nowActivity == UI_LAUNCHER) {
     static int sel = 0;
     sel = UI_MenuLoop("TOS", tos_m, TOS_ITEMS, sel);
     if (sel == 0) {
-      now_activity = UI_PET;
+      _nowActivity = UI_PET;
     } else if (sel == 1) {
       settings_run();
     } else if (sel == 2) {
@@ -178,25 +183,25 @@ void SysUI::loop(void) {
     } else if (sel == 4) {
       demo_list_run();
     }
-  } else if (now_activity == UI_RUNNING_TEST) {
+  } else if (_nowActivity == UI_RUNNING_TEST) {
     runCurrentTest();
-  } else if (now_activity == UI_PET) {
-    pet_launcher_run();
-    now_activity = UI_LAUNCHER;
+  } else if (_nowActivity == UI_PET) {
+    petLauncherRun();
+    _nowActivity = UI_LAUNCHER;
     TosApi_SetPaused(true);
   }
 }
 
 void SysUI::runCurrentTest(void) {
-  if (current_test_func) {
-    current_test_func();
+  if (_currentTestFunc) {
+    _currentTestFunc();
   }
-  now_activity = UI_LAUNCHER;
-  current_test_func = nullptr;
+  _nowActivity = UI_LAUNCHER;
+  _currentTestFunc = nullptr;
 }
 
-void SysUI::setActivity(int a) { now_activity = a; }
-int SysUI::getActivity(void) { return now_activity; }
-void SysUI::setCurrentTest(void (*f)(void)) { current_test_func = f; }
+void SysUI::setActivity(int a) { _nowActivity = a; }
+int SysUI::getActivity(void) { return _nowActivity; }
+void SysUI::setCurrentTest(void (*f)(void)) { _currentTestFunc = f; }
 void SysUI::resetMenuPosition(void) {}
-void SysUI::updateCpuUsage(uint32_t w) { cpu_usage = (int)w; }
+void SysUI::updateCpuUsage(uint32_t w) { _cpuUsage = (int)w; }

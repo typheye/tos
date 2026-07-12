@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Lib3Dgyro implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/lib3dgyro.h"
@@ -80,7 +85,7 @@ void gyro_cube_draw(float roll, float pitch, float yaw) {
   int16_t proj_x[8], proj_y[8];
   float scale = g_cube_size / 100.0f;
 
-  
+
   for (int i = 0; i < 8; i++) {
     rotated[i][0] = cube_vertices[i][0] * scale;
     rotated[i][1] = cube_vertices[i][1] * scale;
@@ -92,19 +97,19 @@ void gyro_cube_draw(float roll, float pitch, float yaw) {
   }
 
   if (!first_frame) {
-    
+
     PD_SetColor(LCD_COLOR_BLACK);
     for (int i = 0; i < 12; i++) {
       PD_DrawLine(last_edges[i][0], last_edges[i][1], last_edges[i][2],
                   last_edges[i][3]);
     }
-    
+
     for (int i = 0; i < 8; i++) {
       PD_DrawCircle(last_proj_x[i], last_proj_y[i], 4);
     }
   }
 
-  
+
   PD_SetColor(LCD_COLOR_WHITE);
   for (int i = 0; i < 12; i++) {
     int idx1 = cube_edges[i][0];
@@ -116,7 +121,7 @@ void gyro_cube_draw(float roll, float pitch, float yaw) {
     last_edges[i][3] = proj_y[idx2];
   }
 
-  
+
   PD_SetColor(LCD_COLOR_YELLOW);
   for (int i = 0; i < 8; i++) {
     PD_DrawCircle(proj_x[i], proj_y[i], 3);

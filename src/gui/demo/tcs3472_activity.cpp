@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Tcs3472 Activity implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/tcs3472_activity.hpp"
@@ -143,20 +148,20 @@ static void tcs3472_read_subpage(void) {
   uint32_t lu = 0;
 
   while (1) {
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 7;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 7) % 7;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (sel == 0)
         return;
@@ -225,8 +230,8 @@ static void tcs3472_color_subpage(void) {
   uint32_t lu = 0;
 
   while (1) {
-    keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+    keyManager._btnEnter.tick();
+    if (keyManager._btnEnter.getState() == KEY_PRESSED) {
       boardTCS3472.ledOff();
       return;
     }
@@ -311,8 +316,8 @@ static void tcs3472_cct_subpage(void) {
   /* Results display loop */
   uint32_t lu = 0;
   while (1) {
-    keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+    keyManager._btnEnter.tick();
+    if (keyManager._btnEnter.getState() == KEY_PRESSED)
       return;
 
     if (HAL_GetTick() - lu > 16) {
@@ -372,18 +377,18 @@ static void tcs3472_chart_subpage(void) {
   uint32_t last_led_toggle = 0;
 
   while (1) {
-    keyManager.btn_enter.tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
+    keyManager._btnEnter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
 
-    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+    if (keyManager._btnEnter.getState() == KEY_PRESSED) {
       boardTCS3472.ledOff();
       chart_free();
       return;
     }
 
     /* UP (A8): toggle LED  (300ms debounce) */
-    uint8_t ca8 = (keyManager.collision_A8.getState() == KEY_PRESSED);
+    uint8_t ca8 = (keyManager._collisionA8.getState() == KEY_PRESSED);
     if (ca8 && !last_a8 && (HAL_GetTick() - last_led_toggle > 300)) {
       led_on = !led_on;
       if (led_on)
@@ -395,7 +400,7 @@ static void tcs3472_chart_subpage(void) {
     last_a8 = ca8;
 
     /* DOWN (D0): reset chart */
-    uint8_t cd0 = (keyManager.collision_D0.getState() == KEY_PRESSED);
+    uint8_t cd0 = (keyManager._collisionD0.getState() == KEY_PRESSED);
     if (cd0 && !last_d0) {
       reset_chart();
     }
@@ -479,20 +484,20 @@ void tcs3472_activity(void) {
   uint32_t lu = 0;
 
   while (1) {
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % TCS3472_N;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + TCS3472_N) % TCS3472_N;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       switch (sel) {
       case 0:

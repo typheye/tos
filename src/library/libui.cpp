@@ -34,7 +34,7 @@ void UI_DrawFrameTitle(const char *title) {
     Date_t d;
     boardTRTC.getDateTime(&t, &d);
     char ts[8];
-    time_fmt(ts, sizeof(ts), t.hours, t.minutes);
+    SysTime_Fmt(ts, sizeof(ts), t.hours, t.minutes);
     PD_SetHeaderTime(ts);
   }
 
@@ -151,20 +151,20 @@ int UI_MenuLoop(const char *title, const char **items, int count,
 
   while (1) {
     TosApi_Tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % count;
       JPDelay(80);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + count) % count;
       JPDelay(80);
     }
 
-    uint8_t enter = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t enter = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (enter && !last_enter) {
       return sel;
     }

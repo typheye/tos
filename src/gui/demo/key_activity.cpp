@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Key Activity implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/key_activity.hpp"
@@ -38,20 +43,20 @@ void key_test_activity(void) {
   uint32_t lu = 0;
 
   while (1) {
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % KEY_N;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + KEY_N) % KEY_N;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le)
       return;
     le = ce;
@@ -60,19 +65,19 @@ void key_test_activity(void) {
       lu = HAL_GetTick();
 
       /* Read all states */
-      bool s1 = keyManager.sw1_E0.isOn();
-      bool s2 = keyManager.sw2_G13.isOn();
-      bool s3 = keyManager.sw3_E2.isOn();
-      bool s4 = keyManager.sw4_E4.isOn();
-      bool s5 = keyManager.sw5_D6.isOn();
-      bool s6 = keyManager.sw6_G9.isOn();
-      bool s7 = keyManager.sw7_G11.isOn();
-      bool s8 = keyManager.sw8_G10.isOn();
-      bool s9 = keyManager.sw9_G15.isOn();
-      bool s10 = keyManager.sw10_G3.isOn();
-      bool s11 = keyManager.sw11_D15.isOn();
-      bool s12 = keyManager.sw12_B12.isOn();
-      bool s13 = keyManager.sw13_B14.isOn();
+      bool s1 = keyManager._sw1E0.isOn();
+      bool s2 = keyManager._sw2G13.isOn();
+      bool s3 = keyManager._sw3E2.isOn();
+      bool s4 = keyManager._sw4E4.isOn();
+      bool s5 = keyManager._sw5D6.isOn();
+      bool s6 = keyManager._sw6G9.isOn();
+      bool s7 = keyManager._sw7G11.isOn();
+      bool s8 = keyManager._sw8G10.isOn();
+      bool s9 = keyManager._sw9G15.isOn();
+      bool s10 = keyManager._sw10G3.isOn();
+      bool s11 = keyManager._sw11D15.isOn();
+      bool s12 = keyManager._sw12B12.isOn();
+      bool s13 = keyManager._sw13B14.isOn();
 
       /* Build value strings & colors ON=TOS_TEXT, OFF=TOS_TEXT_SEC */
       char key_vals[KEY_N][8];

@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Dual-region dynamic RAM allocator implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "dram.h"
@@ -47,18 +52,18 @@ typedef struct SysDram_Block {
   uint8_t used;
   uint8_t region;
   uint16_t reserved;
-} SysDram_Block_t;
+} SysDramBlock_t;
 
 typedef struct {
   uint8_t *base;
   uint32_t size;
-  SysDram_Block_t *first;
+  SysDramBlock_t *first;
   uint32_t used;
   uint32_t peak_used;
   uint32_t alloc_count;
-} SysDram_Pool_t;
+} SysDramPool_t;
 
-static SysDram_Pool_t g_pools[2];
+static SysDramPool_t g_pools[2];
 static volatile uint8_t g_inited = 0;
 
 extern uint8_t __sysdram_ram_fixed_end__;
@@ -83,12 +88,12 @@ static SYSDRAM_CODE void irq_restore(uint32_t primask) {
   }
 }
 
-static SYSDRAM_CODE void init_pool(SysDram_Pool_t *pool, uint8_t *base,
+static SYSDRAM_CODE void init_pool(SysDramPool_t *pool, uint8_t *base,
                                    uint32_t size, uint8_t region) {
   uintptr_t start = ((uintptr_t)base + (SYSDRAM_ALIGN - 1U)) &
                     ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
   uintptr_t end = ((uintptr_t)base + size) & ~(uintptr_t)(SYSDRAM_ALIGN - 1U);
-  if (end <= start + sizeof(SysDram_Block_t)) {
+  if (end <= start + sizeof(SysDramBlock_t)) {
     pool->base = NULL;
     pool->size = 0;
     pool->first = NULL;
@@ -100,9 +105,9 @@ static SYSDRAM_CODE void init_pool(SysDram_Pool_t *pool, uint8_t *base,
   pool->used = 0;
   pool->peak_used = 0;
   pool->alloc_count = 0;
-  pool->first = (SysDram_Block_t *)pool->base;
+  pool->first = (SysDramBlock_t *)pool->base;
   pool->first->magic = SYSDRAM_MAGIC_FREE;
-  pool->first->size = pool->size - sizeof(SysDram_Block_t);
+  pool->first->size = pool->size - sizeof(SysDramBlock_t);
   pool->first->next = NULL;
   pool->first->prev = NULL;
   pool->first->used = 0;
@@ -142,16 +147,16 @@ static SYSDRAM_CODE void ensure_init(void) {
   }
 }
 
-static SYSDRAM_CODE void split_block(SysDram_Block_t *block, uint32_t size) {
+static SYSDRAM_CODE void split_block(SysDramBlock_t *block, uint32_t size) {
   uint32_t remain = block->size - size;
-  if (remain < sizeof(SysDram_Block_t) + SYSDRAM_ALIGN) {
+  if (remain < sizeof(SysDramBlock_t) + SYSDRAM_ALIGN) {
     return;
   }
 
-  SysDram_Block_t *next =
-      (SysDram_Block_t *)((uint8_t *)block + sizeof(SysDram_Block_t) + size);
+  SysDramBlock_t *next =
+      (SysDramBlock_t *)((uint8_t *)block + sizeof(SysDramBlock_t) + size);
   next->magic = SYSDRAM_MAGIC_FREE;
-  next->size = remain - sizeof(SysDram_Block_t);
+  next->size = remain - sizeof(SysDramBlock_t);
   next->next = block->next;
   next->prev = block;
   next->used = 0;
@@ -164,13 +169,13 @@ static SYSDRAM_CODE void split_block(SysDram_Block_t *block, uint32_t size) {
   block->size = size;
 }
 
-static SYSDRAM_CODE void *pool_alloc(SysDram_Pool_t *pool, uint32_t size) {
+static SYSDRAM_CODE void *pool_alloc(SysDramPool_t *pool, uint32_t size) {
   if (!pool || !pool->first || size == 0U) {
     return NULL;
   }
 
   uint32_t need = align_up(size);
-  for (SysDram_Block_t *b = pool->first; b; b = b->next) {
+  for (SysDramBlock_t *b = pool->first; b; b = b->next) {
     if (!b->used && b->magic == SYSDRAM_MAGIC_FREE && b->size >= need) {
       split_block(b, need);
       b->used = 1;
@@ -180,26 +185,26 @@ static SYSDRAM_CODE void *pool_alloc(SysDram_Pool_t *pool, uint32_t size) {
         pool->peak_used = pool->used;
       }
       pool->alloc_count++;
-      return (uint8_t *)b + sizeof(SysDram_Block_t);
+      return (uint8_t *)b + sizeof(SysDramBlock_t);
     }
   }
   return NULL;
 }
 
-static SYSDRAM_CODE void merge_next(SysDram_Block_t *block) {
-  SysDram_Block_t *next = block ? block->next : NULL;
+static SYSDRAM_CODE void merge_next(SysDramBlock_t *block) {
+  SysDramBlock_t *next = block ? block->next : NULL;
   if (!next || next->used || next->magic != SYSDRAM_MAGIC_FREE) {
     return;
   }
 
-  block->size += sizeof(SysDram_Block_t) + next->size;
+  block->size += sizeof(SysDramBlock_t) + next->size;
   block->next = next->next;
   if (block->next) {
     block->next->prev = block;
   }
 }
 
-static SYSDRAM_CODE SysDram_Pool_t *ptr_pool(const void *ptr) {
+static SYSDRAM_CODE SysDramPool_t *ptr_pool(const void *ptr) {
   uintptr_t p = (uintptr_t)ptr;
   for (unsigned i = 0; i < 2U; ++i) {
     uintptr_t start = (uintptr_t)g_pools[i].base;
@@ -218,14 +223,14 @@ SYSDRAM_CODE void SysDram_Free(void *ptr) {
   ensure_init();
 
   uint32_t irq = irq_save();
-  SysDram_Pool_t *pool = ptr_pool(ptr);
+  SysDramPool_t *pool = ptr_pool(ptr);
   if (!pool) {
     irq_restore(irq);
     return;
   }
 
-  SysDram_Block_t *block =
-      (SysDram_Block_t *)((uint8_t *)ptr - sizeof(SysDram_Block_t));
+  SysDramBlock_t *block =
+      (SysDramBlock_t *)((uint8_t *)ptr - sizeof(SysDramBlock_t));
   if (block->magic != SYSDRAM_MAGIC_USED || !block->used) {
     irq_restore(irq);
     return;
@@ -309,8 +314,8 @@ SYSDRAM_CODE void *SysDram_Realloc(void *ptr, size_t size) {
   }
 
   ensure_init();
-  SysDram_Block_t *block =
-      (SysDram_Block_t *)((uint8_t *)ptr - sizeof(SysDram_Block_t));
+  SysDramBlock_t *block =
+      (SysDramBlock_t *)((uint8_t *)ptr - sizeof(SysDramBlock_t));
   if (block->magic != SYSDRAM_MAGIC_USED) {
     return NULL;
   }
@@ -337,18 +342,18 @@ SYSDRAM_CODE int SysDram_IsRamPtr(const void *ptr) {
   return ptr_pool(ptr) == &g_pools[SYSDRAM_REGION_RAM];
 }
 
-SYSDRAM_CODE int SysDram_GetStats(SysDram_Region_t region,
-                                  SysDram_Stats_t *out) {
+SYSDRAM_CODE int SysDram_GetStats(SysDramRegion_t region,
+                                  SysDramStats_t *out) {
   ensure_init();
   if (!out || region > SYSDRAM_REGION_CCM) {
     return 0;
   }
 
   uint32_t irq = irq_save();
-  SysDram_Pool_t *pool = &g_pools[region];
+  SysDramPool_t *pool = &g_pools[region];
   uint32_t free_total = 0;
   uint32_t largest = 0;
-  for (SysDram_Block_t *b = pool->first; b; b = b->next) {
+  for (SysDramBlock_t *b = pool->first; b; b = b->next) {
     if (!b->used && b->magic == SYSDRAM_MAGIC_FREE) {
       free_total += b->size;
       if (b->size > largest) {
@@ -368,8 +373,8 @@ SYSDRAM_CODE int SysDram_GetStats(SysDram_Region_t region,
 }
 
 void SysDram_LogStats(void) {
-  SysDram_Stats_t ram;
-  SysDram_Stats_t ccm;
+  SysDramStats_t ram;
+  SysDramStats_t ccm;
   if (SysDram_GetStats(SYSDRAM_REGION_RAM, &ram) &&
       SysDram_GetStats(SYSDRAM_REGION_CCM, &ccm)) {
     uint32_t dyn_total = ram.total + ccm.total;

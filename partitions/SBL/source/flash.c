@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   SBL flash partition management and flashing implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "flash.h"
@@ -27,14 +32,14 @@ typedef struct {
   uint32_t start;
   uint32_t size;
   uint32_t index;
-} SBL_SectorInfo;
+} SBL_SectorInfo_t;
 
 static const char part_sbl[] SBL_CONST = "sbl";
 static const char part_rec[] SBL_CONST = "rec";
 static const char part_system[] SBL_CONST = "system";
 static const char part_tmp[] SBL_CONST = "tmp";
 
-static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
+static const SBL_FlashPartition_t sbl_partitions[] SBL_CONST = {
     {part_sbl, TOS_PART_SBL_OFFSET, TOS_PART_SBL_ADDRESS,
      TOS_TMP_STAGE_ADDRESS, TOS_PART_SBL_SIZE, 1U, 1U, 0U, 0U},
     {part_rec, TOS_PART_REC_OFFSET, TOS_PART_REC_ADDRESS,
@@ -45,7 +50,7 @@ static const SBL_FlashPartition sbl_partitions[] SBL_CONST = {
      TOS_PART_TMP_ADDRESS, TOS_PART_TMP_SIZE, 0U, 0U, 1U, 0U},
 };
 
-static const SBL_SectorInfo sectors[] SBL_CONST = {
+static const SBL_SectorInfo_t sectors[] SBL_CONST = {
     {0x08000000UL, 0x4000UL, 0U}, {0x08004000UL, 0x4000UL, 1U},
     {0x08008000UL, 0x4000UL, 2U}, {0x0800C000UL, 0x4000UL, 3U},
     {0x08010000UL, 0x10000UL, 4U}, {0x08020000UL, 0x20000UL, 5U},
@@ -68,7 +73,7 @@ static SBL_CODE uint8_t ascii_equal(const char *a, const char *b) {
   return a[i] == 0 && b[i] == 0 ? 1U : 0U;
 }
 
-static SBL_CODE const SBL_SectorInfo *sector_at(uint32_t address) {
+static SBL_CODE const SBL_SectorInfo_t *sector_at(uint32_t address) {
   for (uint32_t i = 0U; i < sizeof(sectors) / sizeof(sectors[0]); ++i) {
     if (sectors[i].start == address) return &sectors[i];
   }
@@ -79,7 +84,7 @@ static SBL_CODE uint8_t erase_range(uint32_t address, uint32_t size) {
   uint32_t end = address + size;
   if (end < address || !SBL_FlashUnlock()) return 0U;
   while (address < end) {
-    const SBL_SectorInfo *s = sector_at(address);
+    const SBL_SectorInfo_t *s = sector_at(address);
     if (!s || address + s->size > end || !SBL_FlashEraseSectorIndex(s->index)) {
       SBL_FlashLock();
       return 0U;
@@ -109,7 +114,7 @@ static SBL_CODE uint8_t program_words(uint32_t address,
   return 1U;
 }
 
-SBL_CODE const SBL_FlashPartition *SBL_FlashFindPartition(const char *name) {
+SBL_CODE const SBL_FlashPartition_t *SBL_FlashFindPartition(const char *name) {
   for (uint32_t i = 0U; i < sizeof(sbl_partitions) / sizeof(sbl_partitions[0]); ++i) {
     if (ascii_equal(name, sbl_partitions[i].name)) return &sbl_partitions[i];
   }
@@ -119,7 +124,7 @@ SBL_CODE uint32_t SBL_FlashPartitionCount(void) {
   return sizeof(sbl_partitions) / sizeof(sbl_partitions[0]);
 }
 
-SBL_CODE const SBL_FlashPartition *SBL_FlashPartitionAt(uint32_t index) {
+SBL_CODE const SBL_FlashPartition_t *SBL_FlashPartitionAt(uint32_t index) {
   return index < SBL_FlashPartitionCount() ? &sbl_partitions[index] : NULL;
 }
 
@@ -140,8 +145,8 @@ SBL_CODE uint32_t SBL_FlashCrc32Update(uint32_t crc, const uint8_t *data,
 
 SBL_CODE uint32_t SBL_FlashCrc32Finish(uint32_t crc) { return ~crc; }
 
-SBL_CODE uint8_t SBL_FlashBegin(SBL_FlashSession *session,
-                                const SBL_FlashPartition *part,
+SBL_CODE uint8_t SBL_FlashBegin(SBL_FlashSession_t *session,
+                                const SBL_FlashPartition_t *part,
                                 uint32_t size, uint32_t expected_crc) {
   if (!session || !part || !part->allow_flash || size > part->size ||
       expected_crc == 0xFFFFFFFFUL) return 0U;
@@ -163,20 +168,20 @@ SBL_CODE uint8_t SBL_FlashBegin(SBL_FlashSession *session,
   return 1U;
 }
 
-SBL_CODE void SBL_FlashSetPostBootTarget(SBL_FlashSession *session,
+SBL_CODE void SBL_FlashSetPostBootTarget(SBL_FlashSession_t *session,
                                          uint32_t target) {
   if (session && session->active) {
     session->post_boot_target = target;
   }
 }
 
-SBL_CODE uint8_t SBL_FlashErasePartition(const SBL_FlashPartition *part) {
+SBL_CODE uint8_t SBL_FlashErasePartition(const SBL_FlashPartition_t *part) {
   if (!part || !part->allow_erase) return 0U;
   if (part->staged && part->address != TOS_PART_REC_ADDRESS) return 0U;
   return erase_range(part->address, part->size);
 }
 
-SBL_CODE uint8_t SBL_FlashWriteChunk(SBL_FlashSession *session,
+SBL_CODE uint8_t SBL_FlashWriteChunk(SBL_FlashSession_t *session,
                                      uint32_t offset, const uint8_t *data,
                                      uint32_t len, uint32_t chunk_crc) {
   uint32_t calc;
@@ -195,7 +200,7 @@ SBL_CODE uint8_t SBL_FlashWriteChunk(SBL_FlashSession *session,
 }
 
 static SBL_CODE uint8_t signed_partition_valid(
-    const SBL_FlashPartition *part, uint32_t storage_address) {
+    const SBL_FlashPartition_t *part, uint32_t storage_address) {
   uint32_t type;
   uint32_t signed_size;
   if (SBL_StateUnlocked())
@@ -218,7 +223,7 @@ static SBL_CODE uint8_t signed_partition_valid(
              : 0U;
 }
 
-SBL_CODE uint8_t SBL_FlashFinalize(SBL_FlashSession *session) {
+SBL_CODE uint8_t SBL_FlashFinalize(SBL_FlashSession_t *session) {
   uint32_t crc;
   uint32_t kind;
   if (!session || !session->active || !session->part ||
@@ -251,7 +256,7 @@ SBL_CODE uint8_t SBL_FlashFinalize(SBL_FlashSession *session) {
   return 1U;
 }
 
-SBL_CODE void SBL_FlashAbort(SBL_FlashSession *session) {
+SBL_CODE void SBL_FlashAbort(SBL_FlashSession_t *session) {
   if (!session) return;
   session->part = NULL;
   session->expected_size = 0U;

@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   REC FatFS and SD card implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "rec.h"
@@ -642,12 +647,12 @@ static REC_CODE uint8_t rec_file_exists(const char *path, FRESULT *out_fr) {
 
 typedef struct {
   uint32_t crc;
-} REC_CrcCtx;
+} REC_CrcCtx_t;
 
 static REC_CODE uint8_t rec_crc_file(FIL *file, uint32_t *crc_out) {
   UINT br;
   FRESULT fr;
-  REC_CrcCtx ctx;
+  REC_CrcCtx_t ctx;
   ctx.crc = SBL_FlashCrc32Seed();
   fr = f_lseek(file, 0U);
   if (fr != FR_OK) {
@@ -677,8 +682,8 @@ static REC_CODE uint8_t rec_flash_file(const char *part_name, const char *path,
   FRESULT fr;
   uint32_t offset = 0U;
   uint32_t image_crc = 0U;
-  const SBL_FlashPartition *part;
-  SBL_FlashSession session;
+  const SBL_FlashPartition_t *part;
+  SBL_FlashSession_t session;
   uint32_t image_size;
 
   fr = f_open(&file, path, FA_READ);

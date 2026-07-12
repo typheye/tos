@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   ELF SHA-256 hash interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef TOS_SHA256_H
-#define TOS_SHA256_H
+#ifndef SHA256_H
+#define SHA256_H
 
 #include <stdint.h>
 
@@ -25,10 +30,10 @@ typedef struct {
   uint64_t total_size;
   uint8_t block[64];
   uint32_t block_size;
-} TosSha256Context;
+} TosSha256Context_t;
 
-void TosSha256Init(TosSha256Context *ctx);
-void TosSha256Update(TosSha256Context *ctx, const void *data, uint32_t size);
-void TosSha256Final(TosSha256Context *ctx, uint8_t digest[32]);
+void TosSha256Init(TosSha256Context_t *ctx);
+void TosSha256Update(TosSha256Context_t *ctx, const void *data, uint32_t size);
+void TosSha256Final(TosSha256Context_t *ctx, uint8_t digest[32]);
 
-#endif /* TOS_SHA256_H */
+#endif /* SHA256_H */

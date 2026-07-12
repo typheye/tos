@@ -4,29 +4,35 @@
  * @author  Typheye
  * @brief   File Manager interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __CORE_FILE_MANAGER_H
-#define __CORE_FILE_MANAGER_H
+#ifndef FILE_MANAGER_H
+#define FILE_MANAGER_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
 #include "ff.h"
 #include "core/include/syshandle.h"
 #include "core/sys/include/syslog.h"
 #include "core/sys/include/syswatchdog.h"
-#include <stdio.h>
-#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -77,4 +83,4 @@ bool FMCore_JoinPath(const char *base, const char *name, char *out, size_t out_s
 }
 #endif
 
-#endif /* __CORE_FILE_MANAGER_H */
+#endif /* FILE_MANAGER_H */

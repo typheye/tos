@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   TOS Debug Bridge USB CDC shell and file transfer implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 #include "rec_tdb.h"
 
@@ -68,7 +73,7 @@ typedef struct {
   volatile uint8_t tx_busy;
   uint8_t cmd_opcode;
   uint8_t line_coding[7];
-} TDB_CDC_Handle;
+} TDB_CDC_Handle_t;
 
 typedef struct {
   FIL file;
@@ -84,18 +89,18 @@ typedef struct {
   uint32_t chunk_offset;
   uint8_t active;
   volatile uint8_t rx_raw;
-} TDB_PushContext;
+} TDB_PushContext_t;
 
 typedef struct __attribute__((packed, aligned(4))) {
   uint32_t magic;
   uint32_t crc;
   uint32_t datasize;
-} TDB_FlashRecordHeader;
+} TDB_FlashRecordHeader_t;
 
 typedef struct __attribute__((packed)) {
   char ssid[24];
   char pwd[32];
-} TDB_SavedNet;
+} TDB_SavedNet_t;
 
 typedef struct __attribute__((packed, aligned(4))) {
   uint32_t magic;
@@ -113,20 +118,20 @@ typedef struct __attribute__((packed, aligned(4))) {
   uint8_t debug_log_com;
   uint8_t pad1[1];
   uint8_t saved_count;
-  TDB_SavedNet saved[10];
+  TDB_SavedNet_t saved[10];
   uint8_t time_auto_sync;
   uint8_t time_style_24h;
   uint8_t hotspot_auto_close;
   uint8_t boot_gfx;
   uint8_t pad2[2];
   char hotspot_ip[16];
-} TDB_Settings;
+} TDB_Settings_t;
 
-_Static_assert(sizeof(TDB_Settings) == 712U, "TDB settings layout mismatch");
+_Static_assert(sizeof(TDB_Settings_t) == 712U, "TDB settings layout mismatch");
 
 static USBD_HandleTypeDef tdb_usb_dev;
-static TDB_CDC_Handle tdb_cdc;
-static TDB_PushContext tdb_push;
+static TDB_CDC_Handle_t tdb_cdc;
+static TDB_PushContext_t tdb_push;
 static uint8_t tdb_raw_buf[TDB_RAW_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint8_t tdb_file_buf[TDB_FILE_BUFFER_SIZE] __attribute__((aligned(4)));
 static char tdb_output[TDB_OUTPUT_SIZE];
@@ -1163,12 +1168,12 @@ static uint8_t tdb_shell_df(void) {
 }
 
 static uint8_t tdb_settings_header_valid(uint32_t addr,
-                                         TDB_FlashRecordHeader **out) {
-  TDB_FlashRecordHeader *hdr;
+                                         TDB_FlashRecordHeader_t **out) {
+  TDB_FlashRecordHeader_t *hdr;
   uint32_t total;
   if (addr > TOS_PART_USERDATA_ADDRESS + TDB_SETTINGS_AREA_SIZE -
-                 sizeof(TDB_FlashRecordHeader)) return 0U;
-  hdr = (TDB_FlashRecordHeader *)addr;
+                 sizeof(TDB_FlashRecordHeader_t)) return 0U;
+  hdr = (TDB_FlashRecordHeader_t *)addr;
   if (hdr->magic != TDB_FLASH_RECORD_MAGIC || hdr->datasize == 0U ||
       hdr->datasize > TDB_SETTINGS_MAX_RECORD) return 0U;
   total = sizeof(*hdr) + hdr->datasize;
@@ -1180,23 +1185,23 @@ static uint8_t tdb_settings_header_valid(uint32_t addr,
   return 1U;
 }
 
-static uint32_t tdb_settings_find_last(TDB_FlashRecordHeader **out_hdr) {
+static uint32_t tdb_settings_find_last(TDB_FlashRecordHeader_t **out_hdr) {
   uint32_t addr = TOS_PART_USERDATA_ADDRESS;
   uint32_t last = 0U;
-  TDB_FlashRecordHeader *hdr = NULL;
+  TDB_FlashRecordHeader_t *hdr = NULL;
   while (addr < TOS_PART_USERDATA_ADDRESS + TDB_SETTINGS_AREA_SIZE -
-                    sizeof(TDB_FlashRecordHeader)) {
+                    sizeof(TDB_FlashRecordHeader_t)) {
     if (!tdb_settings_header_valid(addr, &hdr)) break;
     last = addr;
     addr += TDB_ALIGN4(sizeof(*hdr) + hdr->datasize);
   }
   if (out_hdr) {
-    *out_hdr = last ? (TDB_FlashRecordHeader *)last : NULL;
+    *out_hdr = last ? (TDB_FlashRecordHeader_t *)last : NULL;
   }
   return last;
 }
 
-static void tdb_settings_defaults(TDB_Settings *s) {
+static void tdb_settings_defaults(TDB_Settings_t *s) {
   tdb_memzero(s, sizeof(*s));
   s->magic = TDB_SETTINGS_MAGIC;
   s->disp_auto = 1U;
@@ -1210,7 +1215,7 @@ static void tdb_settings_defaults(TDB_Settings *s) {
   tdb_strcopy(s->hotspot_ip, "192.168.4.1", sizeof(s->hotspot_ip));
 }
 
-static void tdb_settings_sanitize(TDB_Settings *s) {
+static void tdb_settings_sanitize(TDB_Settings_t *s) {
   s->wlan_ssid[sizeof(s->wlan_ssid) - 1U] = 0;
   s->wlan_pwd[sizeof(s->wlan_pwd) - 1U] = 0;
   s->hs_ssid[sizeof(s->hs_ssid) - 1U] = 0;
@@ -1232,8 +1237,8 @@ static void tdb_settings_sanitize(TDB_Settings *s) {
   s->crc = 0U;
 }
 
-static uint8_t tdb_settings_load(TDB_Settings *s) {
-  TDB_FlashRecordHeader *hdr = NULL;
+static uint8_t tdb_settings_load(TDB_Settings_t *s) {
+  TDB_FlashRecordHeader_t *hdr = NULL;
   uint32_t addr = tdb_settings_find_last(&hdr);
   uint32_t copy;
   if (!s) return 0U;
@@ -1255,9 +1260,9 @@ static uint8_t tdb_flash_range_erased(uint32_t addr, uint32_t len) {
   return 1U;
 }
 
-static uint8_t tdb_settings_append(TDB_Settings *s) {
-  TDB_FlashRecordHeader *last_hdr = NULL;
-  TDB_FlashRecordHeader hdr;
+static uint8_t tdb_settings_append(TDB_Settings_t *s) {
+  TDB_FlashRecordHeader_t *last_hdr = NULL;
+  TDB_FlashRecordHeader_t hdr;
   uint32_t last = tdb_settings_find_last(&last_hdr);
   uint32_t next = TOS_PART_USERDATA_ADDRESS;
   uint32_t slot = TDB_ALIGN4(sizeof(hdr) + sizeof(*s));
@@ -1313,7 +1318,7 @@ static void tdb_settings_output_bool(const char *key, uint8_t value) {
   tdb_settings_output_pair(key, value ? "true" : "false");
 }
 
-static uint8_t tdb_settings_get_value(TDB_Settings *s, const char *key) {
+static uint8_t tdb_settings_get_value(TDB_Settings_t *s, const char *key) {
   if (tdb_ascii_equal(key, "disp.auto")) tdb_settings_output_bool(key, s->disp_auto);
   else if (tdb_ascii_equal(key, "disp.bright")) {
     tdb_output_text(key); tdb_output_text("="); tdb_output_u32(s->disp_bright); tdb_output_text("\r\n");
@@ -1338,7 +1343,7 @@ static uint8_t tdb_settings_get_value(TDB_Settings *s, const char *key) {
   return 1U;
 }
 
-static uint8_t tdb_settings_set_value(TDB_Settings *s, const char *key,
+static uint8_t tdb_settings_set_value(TDB_Settings_t *s, const char *key,
                                       const char *value) {
   uint8_t b;
   uint32_t n;
@@ -1367,8 +1372,8 @@ static uint8_t tdb_settings_set_value(TDB_Settings *s, const char *key,
 }
 
 static uint8_t tdb_shell_settings(uint8_t argc, char *argv[]) {
-  TDB_Settings current;
-  TDB_Settings before;
+  TDB_Settings_t current;
+  TDB_Settings_t before;
   uint8_t found = tdb_settings_load(&current);
   if (argc < 2U || tdb_ascii_equal(argv[1], "list")) {
     if (!found) tdb_output_text("warning: no valid settings record; showing defaults\r\n");

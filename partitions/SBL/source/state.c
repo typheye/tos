@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   SBL TEE state ring read/write implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 #include "state.h"
 
@@ -21,7 +26,7 @@
 
 #include "tee_format.h"
 
-static SBL_CODE uint8_t sbl_state_erased(const TosTeeStateRecord *r) {
+static SBL_CODE uint8_t sbl_state_erased(const TosTeeStateRecord_t *r) {
   const uint32_t *w = (const uint32_t *)r;
   for (uint32_t i = 0U; i < sizeof(*r) / sizeof(uint32_t); ++i) {
     if (w[i] != 0xFFFFFFFFUL) return 0U;
@@ -29,12 +34,12 @@ static SBL_CODE uint8_t sbl_state_erased(const TosTeeStateRecord *r) {
   return 1U;
 }
 
-static SBL_CODE const TosTeeStateRecord *sbl_state_latest(void) {
-  const TosTeeStateRecord *latest = NULL;
-  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord) <= TOS_TEE_STATE_SIZE;
-       off += sizeof(TosTeeStateRecord)) {
-    const TosTeeStateRecord *r =
-        (const TosTeeStateRecord *)(TOS_TEE_STATE_ADDRESS + off);
+static SBL_CODE const TosTeeStateRecord_t *sbl_state_latest(void) {
+  const TosTeeStateRecord_t *latest = NULL;
+  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord_t) <= TOS_TEE_STATE_SIZE;
+       off += sizeof(TosTeeStateRecord_t)) {
+    const TosTeeStateRecord_t *r =
+        (const TosTeeStateRecord_t *)(TOS_TEE_STATE_ADDRESS + off);
     if (sbl_state_erased(r)) break;
     if (TosTeeStateRecordValid(r) && (!latest || r->sequence >= latest->sequence)) {
       latest = r;
@@ -44,17 +49,17 @@ static SBL_CODE const TosTeeStateRecord *sbl_state_latest(void) {
 }
 
 static SBL_CODE uint32_t sbl_state_free_address(void) {
-  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord) <= TOS_TEE_STATE_SIZE;
-       off += sizeof(TosTeeStateRecord)) {
-    const TosTeeStateRecord *r =
-        (const TosTeeStateRecord *)(TOS_TEE_STATE_ADDRESS + off);
+  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord_t) <= TOS_TEE_STATE_SIZE;
+       off += sizeof(TosTeeStateRecord_t)) {
+    const TosTeeStateRecord_t *r =
+        (const TosTeeStateRecord_t *)(TOS_TEE_STATE_ADDRESS + off);
     if (sbl_state_erased(r)) return TOS_TEE_STATE_ADDRESS + off;
   }
   return 0U;
 }
 
 static SBL_CODE uint8_t sbl_state_program(uint32_t address,
-                                           const TosTeeStateRecord *r) {
+                                           const TosTeeStateRecord_t *r) {
   const uint32_t *w = (const uint32_t *)r;
   if (!address || !r || !SBL_FlashUnlock()) return 0U;
   for (uint32_t i = 0U; i < sizeof(*r) / sizeof(uint32_t); ++i) {
@@ -64,7 +69,7 @@ static SBL_CODE uint8_t sbl_state_program(uint32_t address,
     }
   }
   SBL_FlashLock();
-  return TosTeeStateRecordValid((const TosTeeStateRecord *)address);
+  return TosTeeStateRecordValid((const TosTeeStateRecord_t *)address);
 }
 
 static SBL_CODE uint8_t sbl_state_append(uint8_t unlocked,
@@ -75,8 +80,8 @@ static SBL_CODE uint8_t sbl_state_append(uint8_t unlocked,
                                           uint32_t image_size,
                                           uint32_t image_crc32,
                                           uint32_t post_boot_target) {
-  TosTeeStateRecord r;
-  const TosTeeStateRecord *latest = sbl_state_latest();
+  TosTeeStateRecord_t r;
+  const TosTeeStateRecord_t *latest = sbl_state_latest();
   uint32_t address = sbl_state_free_address();
   if (!address) return 0U;
 
@@ -101,7 +106,7 @@ static SBL_CODE uint8_t sbl_state_append(uint8_t unlocked,
 }
 
 SBL_CODE uint8_t SBL_StateUnlocked(void) {
-  const TosTeeStateRecord *r = sbl_state_latest();
+  const TosTeeStateRecord_t *r = sbl_state_latest();
   return r && r->unlocked ? 1U : 0U;
 }
 
@@ -152,7 +157,7 @@ SBL_CODE uint8_t SBL_StateScheduleUpdatePost(uint32_t update_kind,
 }
 
 SBL_CODE uint32_t SBL_StatePeekBootTarget(void) {
-  const TosTeeStateRecord *r = sbl_state_latest();
+  const TosTeeStateRecord_t *r = sbl_state_latest();
   if (!r || r->txn_state == TOS_TXN_STATE_PENDING) return SBL_BOOT_TARGET_NONE;
   if (r->boot_target == SBL_BOOT_TARGET_FASTBOOT ||
       r->boot_target == SBL_BOOT_TARGET_RECOVERY ||
@@ -165,7 +170,7 @@ SBL_CODE uint32_t SBL_StatePeekBootTarget(void) {
 }
 
 SBL_CODE uint32_t SBL_StateConsumeBootTarget(void) {
-  const TosTeeStateRecord *r = sbl_state_latest();
+  const TosTeeStateRecord_t *r = sbl_state_latest();
   uint32_t target;
   if (!r || r->txn_state == TOS_TXN_STATE_PENDING) return SBL_BOOT_TARGET_NONE;
   target = r->boot_target;

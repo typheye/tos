@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Sn74Hc00N implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/sn74hc00n.hpp"
@@ -31,19 +36,19 @@ SN74HC00N::SN74HC00N() {
 
 
 uint8_t SN74HC00N::nandGate(uint8_t a, uint8_t b) {
-  
-  
+
+
   if (a && b) {
     return HC00N_HIGH; // 1 AND 1 = 1
   } else {
-    return HC00N_LOW; 
+    return HC00N_LOW;
   }
 }
 
 
 
 uint8_t SN74HC00N::calculateNANDOutput(uint8_t switches) {
-  
+
   uint8_t raw1A = (switches >> 0) & 0x01;
   uint8_t raw1B = (switches >> 1) & 0x01;
   uint8_t raw2A = (switches >> 2) & 0x01;
@@ -53,10 +58,10 @@ uint8_t SN74HC00N::calculateNANDOutput(uint8_t switches) {
   uint8_t raw4A = (switches >> 6) & 0x01;
   uint8_t raw4B = (switches >> 7) & 0x01;
 
-  
-  
-  
-  
+
+
+
+
   uint8_t sw1A = raw1A ? HC00N_LOW : HC00N_HIGH;
   uint8_t sw1B = raw1B ? HC00N_LOW : HC00N_HIGH;
   uint8_t sw2A = raw2A ? HC00N_LOW : HC00N_HIGH;
@@ -66,10 +71,10 @@ uint8_t SN74HC00N::calculateNANDOutput(uint8_t switches) {
   uint8_t sw4A = raw4A ? HC00N_LOW : HC00N_HIGH;
   uint8_t sw4B = raw4B ? HC00N_LOW : HC00N_HIGH;
 
-  
+
   uint8_t out = 0;
   if (nandGate(sw1A, sw1B))
-    out |= 0x01; 
+    out |= 0x01;
   if (nandGate(sw2A, sw2B))
     out |= 0x02; // bit1 = 2Y
   if (nandGate(sw3A, sw3B))
@@ -149,7 +154,7 @@ void SN74HC00N::init(void) {
   LOG_I("HC00", "Logic: Y = NOT (A AND B)");
   LOG_I("HC00", "Note: Input logic flipped for your hardware");
 
-  
+
   _lastOutputs = readOutputs();
 }
 
@@ -157,10 +162,10 @@ void SN74HC00N::init(void) {
 void SN74HC00N::updateFromSwitches(uint8_t switchStates) {
   _lastSwitches = switchStates;
 
-  
+
   uint8_t expected = calculateNANDOutput(switchStates);
 
-  
+
   uint8_t actual = readOutputByte();
 
   _lastOutputs.output1 = (actual >> 0) & 0x01;
@@ -168,7 +173,7 @@ void SN74HC00N::updateFromSwitches(uint8_t switchStates) {
   _lastOutputs.output3 = (actual >> 2) & 0x01;
   _lastOutputs.output4 = (actual >> 3) & 0x01;
 
-  
+
   if (expected != actual) {
     LOG_W("HC00", "Mismatch! Expected: 0x%02X, Actual: 0x%02X", expected,
            actual);

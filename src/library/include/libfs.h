@@ -4,26 +4,32 @@
  * @author  Typheye
  * @brief   Libfs interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __LIBFS_H
-#define __LIBFS_H
+#ifndef LIBFS_H
+#define LIBFS_H
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "diskio.h"
-#include "ff.h"
 #include <stdlib.h>
 #include <string.h>
+
+#include "diskio.h"
+#include "ff.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,20 +37,20 @@ extern "C" {
 
 
 typedef enum {
-  FS_MODE_READ = 0x01,          
-  FS_MODE_WRITE = 0x02,         
-  FS_MODE_READ_WRITE = 0x03,    
-  FS_MODE_CREATE_ALWAYS = 0x04, 
-  FS_MODE_CREATE_NEW = 0x08,    
-  FS_MODE_OPEN_ALWAYS = 0x10,   
-  FS_MODE_APPEND = 0x20         
+  FS_MODE_READ = 0x01,
+  FS_MODE_WRITE = 0x02,
+  FS_MODE_READ_WRITE = 0x03,
+  FS_MODE_CREATE_ALWAYS = 0x04,
+  FS_MODE_CREATE_NEW = 0x08,
+  FS_MODE_OPEN_ALWAYS = 0x10,
+  FS_MODE_APPEND = 0x20
 } FS_Mode_t;
 
 
 typedef enum {
-  FS_SEEK_SET = 0, 
-  FS_SEEK_CUR = 1, 
-  FS_SEEK_END = 2  
+  FS_SEEK_SET = 0,
+  FS_SEEK_CUR = 1,
+  FS_SEEK_END = 2
 } FS_Seek_t;
 
 
@@ -76,11 +82,11 @@ typedef enum {
 
 
 typedef struct {
-  uint32_t size;  
-  uint16_t date;  
-  uint16_t time;  
-  uint8_t attrib; 
-  char name[256]; 
+  uint32_t size;
+  uint16_t date;
+  uint16_t time;
+  uint8_t attrib;
+  char name[256];
 } FS_FileInfo_t;
 
 
@@ -217,4 +223,4 @@ const char *FS_ErrorToString(FS_Status_t error);
 }
 #endif
 
-#endif // __LIBFS_H
+#endif // LIBFS_H

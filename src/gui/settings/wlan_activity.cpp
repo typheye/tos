@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Wlan Activity implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/wlan_activity.hpp"
@@ -329,23 +334,23 @@ static void scaning_run(void) {
   while (1) {
     SysWatchdog_Tick();
     TosApi_Tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
     int n = 2 + ap_count;
     if (sel >= n)
       sel = n - 1;
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % n;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + n) % n;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (sel == 0)
         return;
@@ -398,8 +403,8 @@ static void scaning_run(void) {
     }
     le = ce;
 
-    bool up = keyManager.collision_A8.isPressed(),
-         down = keyManager.collision_D0.isPressed();
+    bool up = keyManager._collisionA8.isPressed(),
+         down = keyManager._collisionD0.isPressed();
     static uint32_t et = 0;
     static bool ea = false;
     if (up && down && !ea) {
@@ -441,20 +446,20 @@ static void connected_page(void) {
   while (1) {
     SysWatchdog_Tick();
     TosApi_Tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 3;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 3) % 3;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       switch (sel) {
       case 0:
@@ -506,19 +511,19 @@ static void saved_net_action(int idx) {
   while (1) {
     SysWatchdog_Tick();
     TosApi_Tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % 4;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + 4) % 4;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       switch (sel) {
       case 0:
@@ -600,18 +605,18 @@ static void saved_networks_page(void) {
   while (1) {
     SysWatchdog_Tick();
     TosApi_Tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % total;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + total) % total;
       JPDelay(45);
     }
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (sel == 0)
         return;
@@ -719,11 +724,11 @@ static int wlan_main_loop(void) {
   while (1) {
     SysWatchdog_Tick();
     TosApi_Tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       if (wlan_edit) {
         if (sel == 1) {
           wlan_on = !wlan_on;
@@ -742,7 +747,7 @@ static int wlan_main_loop(void) {
       }
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       if (wlan_edit) {
         if (sel == 1) {
           wlan_on = !wlan_on;
@@ -762,7 +767,7 @@ static int wlan_main_loop(void) {
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (wlan_edit) {
         wlan_edit = false;

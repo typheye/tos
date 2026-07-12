@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   SBL USB CDC fastboot protocol implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 #include "usb.h"
 
@@ -54,11 +59,11 @@ typedef struct {
   volatile uint8_t tx_busy;
   uint8_t cmd_opcode;
   uint8_t line_coding[7];
-} SBL_USB_CDC_Handle;
+} SBL_USB_CDC_Handle_t;
 
 typedef struct {
-  SBL_FlashSession session;
-  const SBL_FlashPartition *part;
+  SBL_FlashSession_t session;
+  const SBL_FlashPartition_t *part;
   uint8_t *chunk_buf;
   uint32_t chunk_len;
   uint32_t chunk_received;
@@ -66,22 +71,14 @@ typedef struct {
   uint32_t chunk_offset;
   uint8_t rx_raw;
   uint8_t active;
-} SBL_USB_FlashContext;
+} SBL_USB_FlashContext_t;
 
 static USBD_HandleTypeDef sbl_usb_dev;
-static SBL_USB_CDC_Handle sbl_cdc;
-static SBL_USB_FlashContext sbl_flash_ctx;
+static SBL_USB_CDC_Handle_t sbl_cdc;
+static SBL_USB_FlashContext_t sbl_flash_ctx;
 static uint8_t sbl_flash_chunk[SBL_FLASH_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint8_t sbl_usb_started;
 static uint8_t sbl_usb_banner_sent;
-
-/* ── OEM unlock token (32 bytes) ─────────────────────────────────── */
-static const uint8_t sbl_unlock_token[32] = {
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
 
 static uint8_t SBL_USBD_CDC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t SBL_USBD_CDC_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
@@ -433,7 +430,7 @@ static SBL_CODE uint8_t sbl_flash_parse_erase(const uint8_t *line) {
   const uint8_t *name_start;
   uint32_t name_len = 0U;
   char part_name[16];
-  const SBL_FlashPartition *part;
+  const SBL_FlashPartition_t *part;
 
   if (!SBL_StateUnlocked()) {
     SBL_USB_WriteText("FAIL bootloader locked\r\n");
@@ -849,7 +846,7 @@ static SBL_CODE void sbl_serial(char serial[25]) {
   serial[24] = '\0';
 }
 
-static SBL_CODE void sbl_send_partition_info(const SBL_FlashPartition *part) {
+static SBL_CODE void sbl_send_partition_info(const SBL_FlashPartition_t *part) {
   char size[11] = "0x00000000";
   sbl_hex32(size + 2, part->size);
   SBL_USB_WriteTextWait("INFOpartition:");
@@ -888,7 +885,7 @@ static SBL_CODE void sbl_send_getvar(const char *name) {
     uint32_t i = 0U;
     while (prefix[i] && name[i] == prefix[i]) ++i;
     if (!prefix[i]) {
-      const SBL_FlashPartition *part = SBL_FlashFindPartition(name + i);
+      const SBL_FlashPartition_t *part = SBL_FlashFindPartition(name + i);
       if (part) {
         char size[11] = "0x00000000";
         sbl_hex32(size + 2, part->size); sbl_send_value(size); return;

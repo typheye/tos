@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Jy901S interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __JY901S_HPP
-#define __JY901S_HPP
+#ifndef JY901S_HPP
+#define JY901S_HPP
 
 #include "main.h"
 #include "stm32f4xx_hal.h"
@@ -25,24 +30,24 @@
 
 
 
-#define JY901S_ADDR_7BIT 0x50   
-#define JY901S_ADDR (0x50 << 1) 
+#define JY901S_ADDR_7BIT 0x50
+#define JY901S_ADDR (0x50 << 1)
 
 
-#define JY901S_ACC_X 0x34   
-#define JY901S_ACC_Y 0x36   
-#define JY901S_ACC_Z 0x38   
-#define JY901S_GYRO_X 0x3A  
-#define JY901S_GYRO_Y 0x3C  
-#define JY901S_GYRO_Z 0x3E  
-#define JY901S_ANGLE_X 0x40 
-#define JY901S_ANGLE_Y 0x42 
-#define JY901S_ANGLE_Z 0x44 
-#define JY901S_MAG_X 0x46   
-#define JY901S_MAG_Y 0x48   
-#define JY901S_MAG_Z 0x4A   
-#define JY901S_TEMP 0x52    
-#define JY901S_VERSION 0x5C 
+#define JY901S_ACC_X 0x34
+#define JY901S_ACC_Y 0x36
+#define JY901S_ACC_Z 0x38
+#define JY901S_GYRO_X 0x3A
+#define JY901S_GYRO_Y 0x3C
+#define JY901S_GYRO_Z 0x3E
+#define JY901S_ANGLE_X 0x40
+#define JY901S_ANGLE_Y 0x42
+#define JY901S_ANGLE_Z 0x44
+#define JY901S_MAG_X 0x46
+#define JY901S_MAG_Y 0x48
+#define JY901S_MAG_Z 0x4A
+#define JY901S_TEMP 0x52
+#define JY901S_VERSION 0x5C
 
 
 
@@ -56,19 +61,19 @@
 
 
 typedef struct {
-  float acc_x;       
-  float acc_y;       
-  float acc_z;       
-  float gyro_x;      
-  float gyro_y;      
-  float gyro_z;      
-  float roll;        
-  float pitch;       
-  float yaw;         
-  float mag_x;       
-  float mag_y;       
-  float mag_z;       
-  float temperature; 
+  float acc_x;
+  float acc_y;
+  float acc_z;
+  float gyro_x;
+  float gyro_y;
+  float gyro_z;
+  float roll;
+  float pitch;
+  float yaw;
+  float mag_x;
+  float mag_y;
+  float mag_z;
+  float temperature;
 } JY901S_Data_t;
 
 
@@ -96,13 +101,13 @@ public:
   bool checkConnection(void);
   bool isInitialized(void) { return _initialized; }
 
-  
+
   JY901S_Raw_t readRaw(void);
 
-  
+
   JY901S_Data_t readData(void);
 
-  
+
   void readAccel(float *x, float *y, float *z);
   void readGyro(float *x, float *y, float *z);
   void readAngle(float *roll, float *pitch, float *yaw);
@@ -110,13 +115,13 @@ public:
   float readTemp(void);
   uint8_t readVersion(void);
 
-  
+
   int16_t readReg16(uint8_t reg);
   void readRegs(uint8_t reg, uint8_t *buffer, uint8_t len);
 
 private:
   I2C_HandleTypeDef *_hi2c;
-  uint16_t _addr; 
+  uint16_t _addr;
   bool _initialized;
 
   bool readReg(uint8_t reg, uint8_t *value);
@@ -125,4 +130,4 @@ private:
 
 extern JY901S boardJY901S;
 
-#endif // __JY901S_HPP
+#endif // JY901S_HPP

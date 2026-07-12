@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Tcs3472 interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __TCS3472_HPP
-#define __TCS3472_HPP
+#ifndef TCS3472_HPP
+#define TCS3472_HPP
 
 #include "main.h"
 #include <stdint.h>
@@ -60,14 +65,14 @@ extern "C" {
 
 
 
-#define TCS3472_ENABLE_AIEN 0x10 
-#define TCS3472_ENABLE_WEN 0x08  
-#define TCS3472_ENABLE_AEN 0x02  
-#define TCS3472_ENABLE_PON 0x01  
+#define TCS3472_ENABLE_AIEN 0x10
+#define TCS3472_ENABLE_WEN 0x08
+#define TCS3472_ENABLE_AEN 0x02
+#define TCS3472_ENABLE_PON 0x01
 
 
-#define TCS3472_STATUS_AINT 0x10   
-#define TCS3472_STATUS_AVALID 0x01 
+#define TCS3472_STATUS_AINT 0x10
+#define TCS3472_STATUS_AVALID 0x01
 
 
 #define TCS3472_CONTROL_AGAIN_1X 0x00
@@ -77,19 +82,19 @@ extern "C" {
 
 
 typedef struct {
-  uint16_t clear; 
-  uint16_t red;   
-  uint16_t green; 
-  uint16_t blue;  
-  uint16_t ir;    
+  uint16_t clear;
+  uint16_t red;
+  uint16_t green;
+  uint16_t blue;
+  uint16_t ir;
 } TCS3472_RawData_t;
 
 typedef struct {
-  float red;        
-  float green;      
-  float blue;       
-  float color_temp; 
-  float lux;        
+  float red;
+  float green;
+  float blue;
+  float color_temp;
+  float lux;
 } TCS3472_ColorData_t;
 
 
@@ -97,39 +102,39 @@ class TCS3472 {
 public:
   TCS3472();
 
-  
+
   void init(void);
   bool isInitialized(void) { return _initialized; }
 
-  
+
   void setGain(uint8_t gain);
 
-  
+
   void setIntegrationTime(uint8_t atime);
 
-  
+
   void enable(void);
   void disable(void);
 
-  
+
   TCS3472_RawData_t readRaw(void);
 
-  
+
   TCS3472_ColorData_t readColor(void);
   float getLux(void);  // quick ambient light reading
 
-  
+
   void ledOn(void);
   void ledOff(void);
   void ledSet(bool on);
 
-  
+
   uint8_t readID(void);
 
-  
+
   void softReset(void);
 
-  
+
   bool waitForData(uint32_t timeout_ms);
 
 private:
@@ -140,13 +145,13 @@ private:
   uint8_t _gain;
   uint8_t _atime;
 
-  
+
   uint8_t readReg(uint8_t reg);
   void writeReg(uint8_t reg, uint8_t value);
   uint16_t readReg16(uint8_t reg);
   bool readBytes(uint8_t reg, uint8_t *data, uint16_t length);
 
-  
+
   float calculateColorTemperature(uint16_t r, uint16_t g, uint16_t b);
   float calculateLux(uint16_t c, uint16_t r, uint16_t g, uint16_t b);
 };
@@ -158,4 +163,4 @@ extern TCS3472 boardTCS3472;
 }
 #endif
 
-#endif /* __TCS3472_HPP */
+#endif /* TCS3472_HPP */

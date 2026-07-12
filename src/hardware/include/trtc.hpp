@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Trtc interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __RTC_HPP
-#define __RTC_HPP
+#ifndef TRTC_HPP
+#define TRTC_HPP
 
 #include "main.h"
 #include "rtc.h"
@@ -34,15 +39,15 @@ typedef struct {
 
 
 typedef struct {
-  uint8_t year;    
+  uint8_t year;
   uint8_t month;   // 1-12
   uint8_t date;    // 1-31
-  uint8_t weekday; 
+  uint8_t weekday;
 } Date_t;
 
-class TRTC { 
+class TRTC {
 public:
-  TRTC(); 
+  TRTC();
   void init();
   void setTime(uint8_t hours, uint8_t minutes, uint8_t seconds);
   void setDate(uint8_t year, uint8_t month, uint8_t date, uint8_t weekday);
@@ -63,6 +68,6 @@ private:
   void syncFromHAL(void);
 };
 
-extern TRTC boardTRTC; 
+extern TRTC boardTRTC;
 
-#endif
+#endif /* TRTC_HPP */

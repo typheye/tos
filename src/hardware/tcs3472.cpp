@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Tcs3472 implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/tcs3472.hpp"
@@ -101,7 +106,7 @@ void TCS3472::init(void) {
 
   JPDelay(100);
 
-  
+
   uint8_t id = readID();
   if (id == 0x44 || id == 0x4D) { // TCS34725: 0x44, TCS34721: 0x4D
     _initialized = true;
@@ -112,16 +117,16 @@ void TCS3472::init(void) {
     return;
   }
 
-  
+
   setIntegrationTime(_atime);
   setGain(_gain);
 
-  
+
   writeReg(TCS3472_ENABLE, TCS3472_ENABLE_PON);
   JPDelay(3);
   writeReg(TCS3472_ENABLE, TCS3472_ENABLE_PON | TCS3472_ENABLE_AEN);
 
-  
+
   ledOff();
 
   uint32_t integration_tenths_ms = (uint32_t)(256U - _atime) * 24U;
@@ -157,12 +162,12 @@ TCS3472_RawData_t TCS3472::readRaw(void) {
   if (!_initialized)
     return data;
 
-  
+
   if (!waitForData(70)) {
     return data;
   }
 
-  
+
   uint8_t buffer[8];
   if (!readBytes(TCS3472_CDATAL, buffer, sizeof(buffer))) {
     return data;
@@ -179,15 +184,15 @@ TCS3472_RawData_t TCS3472::readRaw(void) {
 
 
 float TCS3472::calculateColorTemperature(uint16_t r, uint16_t g, uint16_t b) {
-  
+
   if (r == 0 || g == 0 || b == 0)
     return 0;
 
-  
+
   float r_norm = (float)r / g;
   float b_norm = (float)b / g;
 
-  
+
   // CT = 3810 * (R/G) + 1392 * (B/G) + 1084
   float color_temp = 3810.0f * r_norm + 1392.0f * b_norm + 1084.0f;
 
@@ -240,15 +245,15 @@ TCS3472_ColorData_t TCS3472::readColor(void) {
   if (!_last_read_ok || raw.clear == 0)
     return result;
 
-  
+
   result.red = (float)raw.red / raw.clear;
   result.green = (float)raw.green / raw.clear;
   result.blue = (float)raw.blue / raw.clear;
 
-  
+
   result.color_temp = calculateColorTemperature(raw.red, raw.green, raw.blue);
 
-  
+
   result.lux = calculateLux(raw.clear, raw.red, raw.green, raw.blue);
 
   return result;

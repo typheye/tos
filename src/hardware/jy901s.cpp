@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Jy901S implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/jy901s.hpp"
@@ -28,7 +33,7 @@ JY901S boardJY901S;
 
 JY901S::JY901S() {
   _hi2c = &hi2c1;
-  _addr = JY901S_ADDR; 
+  _addr = JY901S_ADDR;
   _initialized = false;
 }
 
@@ -47,7 +52,7 @@ void JY901S::init(void) {
 
 bool JY901S::checkConnection(void) {
   uint8_t test = 0;
-  
+
   if (HAL_I2C_Mem_Read(_hi2c, _addr, JY901S_VERSION, I2C_MEMADD_SIZE_8BIT,
                        &test, 1, 100) == HAL_OK) {
     return true;
@@ -116,7 +121,7 @@ JY901S_Data_t JY901S::readData(void) {
   JY901S_Raw_t raw = readRaw();
   JY901S_Data_t data;
 
-  
+
   data.acc_x = raw.acc_x / 100.0f;
   data.acc_y = raw.acc_y / 100.0f;
   data.acc_z = raw.acc_z / 100.0f;
@@ -133,7 +138,7 @@ JY901S_Data_t JY901S::readData(void) {
   data.mag_y = raw.mag_y;
   data.mag_z = raw.mag_z;
 
-  
+
   data.temperature = raw.temperature / 100.0f;
 
   return data;

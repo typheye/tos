@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Settings Manager implementation (SD card storage).
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/settings_manager.h"
@@ -109,9 +114,9 @@ static void defaults(void) {
   copy_str(g_settings.hs_ssid, "TOS-Hotspot", sizeof(g_settings.hs_ssid));
   copy_str(g_settings.hs_pwd, "12345678", sizeof(g_settings.hs_pwd));
   g_settings.wlan_on        = false;
-  g_settings.wlan_auto_conn = false;
+  g_settings.wlan_auto_conn = true;
   g_settings.debug_dashboard = false;
-  g_settings.debug_log_com   = true;
+  g_settings.debug_log_com   = false;
   g_settings.saved_count    = 0;
   g_settings.time_auto_sync     = true;
   g_settings.time_style_24h     = true;
@@ -208,7 +213,7 @@ void SM_Mount(void) {
   if (!g_sd_available) { LOG_W("SMGR", "SD not available"); return; }
 
   if (!load()) {
-    LOG_W("SMGR", "Load failed 鈥?using defaults");
+    LOG_W("SMGR", "Load failed, using defaults");
     SM_Save();
   } else if (g_settings_needs_migration) {
     g_settings_needs_migration = false;

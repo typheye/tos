@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   SBL fastboot UI and recovery exception implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 #include "ui.h"
 
@@ -41,10 +46,10 @@ extern uint32_t HAL_GetTick(void);
 
 typedef struct {
   uint8_t unlocked;
-} SBL_PageParams;
+} SBL_PageParams_t;
 
-static SBL_PageParams sbl_page_storage;
-static SBL_PageParams *sbl_page_params = &sbl_page_storage;
+static SBL_PageParams_t sbl_page_storage;
+static SBL_PageParams_t *sbl_page_params = &sbl_page_storage;
 static uint8_t sbl_fastboot_visible;
 
 static const char sbl_txt_title[] SBL_CONST = "FASTBOOT MENU";

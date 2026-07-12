@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Jyro Activity implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/jyro_activity.hpp"
@@ -168,8 +173,8 @@ static void jyro_cube_subpage(void) {
   char display_str[32];
 
   while (1) {
-    keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+    keyManager._btnEnter.tick();
+    if (keyManager._btnEnter.getState() == KEY_PRESSED)
       break;
 
     uint32_t now = HAL_GetTick();
@@ -258,20 +263,20 @@ static void jyro_text_subpage(void) {
   char values[TEXT_N][32];
 
   while (1) {
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % TEXT_N;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + TEXT_N) % TEXT_N;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (sel == 0)
         return;
@@ -379,23 +384,23 @@ static void jyro_chart_subpage(void) {
   uint32_t last_time = 0;
 
   while (1) {
-    keyManager.btn_enter.tick();
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
+    keyManager._btnEnter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
 
-    if (keyManager.btn_enter.getState() == KEY_PRESSED) {
+    if (keyManager._btnEnter.getState() == KEY_PRESSED) {
       chart_free();
       return;
     }
 
-    uint8_t ca8 = (keyManager.collision_A8.getState() == KEY_PRESSED);
+    uint8_t ca8 = (keyManager._collisionA8.getState() == KEY_PRESSED);
     if (ca8 && !le_a8) {
       chart_param_group = (chart_param_group + 1) % 3;
       reset_chart();
     }
     le_a8 = ca8;
 
-    uint8_t cd0 = (keyManager.collision_D0.getState() == KEY_PRESSED);
+    uint8_t cd0 = (keyManager._collisionD0.getState() == KEY_PRESSED);
     if (cd0 && !le_d0) {
       chart_param_group = (chart_param_group - 1 + 3) % 3;
       reset_chart();
@@ -504,20 +509,20 @@ void jyro_activity(void) {
   uint32_t lu = 0;
 
   while (1) {
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       sel = (sel + 1) % JYRO_N;
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       sel = (sel - 1 + JYRO_N) % JYRO_N;
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       switch (sel) {
       case 0:

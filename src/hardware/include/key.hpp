@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Key interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __KEY_HPP
-#define __KEY_HPP
+#ifndef KEY_HPP
+#define KEY_HPP
 
 #include "main.h"
 #include "stm32f4xx_hal.h"
@@ -35,8 +40,8 @@ class Switch {
 public:
   Switch(GPIO_TypeDef *port, uint16_t pin, bool inverted = false);
   void init(void);
-  bool isOn(void);  
-  bool isOff(void); 
+  bool isOn(void);
+  bool isOff(void);
 private:
   GPIO_TypeDef *_port;
   uint16_t _pin;
@@ -56,7 +61,7 @@ public:
   bool isPressed(void);
   bool isReleased(void);
   KeyState_t getState(void);
-  void tick(void); 
+  void tick(void);
   void setLongPressTime(uint32_t ms);
 
 private:
@@ -65,13 +70,13 @@ private:
 
   GPIO_TypeDef *_port;
   uint16_t _pin;
-  bool _inverted; 
-  bool _last_state;
-  bool _long_press_triggered;
-  uint32_t _press_start_time;
-  uint32_t _long_press_time;
-  uint32_t _last_sample_time;
-  uint8_t _debounce;     
+  bool _inverted;
+  bool _lastState;
+  bool _longPressTriggered;
+  uint32_t _pressStartTime;
+  uint32_t _longPressTime;
+  uint32_t _lastSampleTime;
+  uint8_t _debounce;
   KeyState_t _event;
   bool _initialized;
 };
@@ -82,37 +87,37 @@ public:
   void init(void);
   void tick(void);
 
-  
-  Switch sw1_E0{GPIOE, GPIO_PIN_0, false};
-  Switch sw2_G13{GPIOG, GPIO_PIN_13, false};
-  Switch sw3_E2{GPIOE, GPIO_PIN_2, false};
-  Switch sw4_E4{GPIOE, GPIO_PIN_4, false};
 
-  
-  Switch sw5_D6{GPIOD, GPIO_PIN_6, true};
-  Switch sw6_G9{GPIOG, GPIO_PIN_9, true};
-  Switch sw7_G11{GPIOG, GPIO_PIN_11, true};
-  Switch sw8_G10{GPIOG, GPIO_PIN_10, true};
-  Switch sw9_G15{GPIOG, GPIO_PIN_15, true};
+  Switch _sw1E0{GPIOE, GPIO_PIN_0, false};
+  Switch _sw2G13{GPIOG, GPIO_PIN_13, false};
+  Switch _sw3E2{GPIOE, GPIO_PIN_2, false};
+  Switch _sw4E4{GPIOE, GPIO_PIN_4, false};
 
-  
-  Switch sw10_G3{GPIOG, GPIO_PIN_3, false};
-  Switch sw11_D15{GPIOD, GPIO_PIN_15, false};
-  Switch sw12_B12{GPIOB, GPIO_PIN_12, false};
-  Switch sw13_B14{GPIOB, GPIO_PIN_14, false};
 
-  
-  Switch sw_sd_detect{GPIOG, GPIO_PIN_6, true};   // G6  = SD card detect
-  Switch sw_mute{GPIOG, GPIO_PIN_8, true};        // G8  = mute switch
+  Switch _sw5D6{GPIOD, GPIO_PIN_6, true};
+  Switch _sw6G9{GPIOG, GPIO_PIN_9, true};
+  Switch _sw7G11{GPIOG, GPIO_PIN_11, true};
+  Switch _sw8G10{GPIOG, GPIO_PIN_10, true};
+  Switch _sw9G15{GPIOG, GPIO_PIN_15, true};
 
-  
-  Key collision_A8{GPIOA, GPIO_PIN_8, true};
-  Key collision_D0{GPIOD, GPIO_PIN_0, true};
 
-  
-  Key btn_enter{GPIOD, GPIO_PIN_10, false};
+  Switch _sw10G3{GPIOG, GPIO_PIN_3, false};
+  Switch _sw11D15{GPIOD, GPIO_PIN_15, false};
+  Switch _sw12B12{GPIOB, GPIO_PIN_12, false};
+  Switch _sw13B14{GPIOB, GPIO_PIN_14, false};
 
-  
+
+  Switch _swSdDetect{GPIOG, GPIO_PIN_6, true};   // G6  = SD card detect
+  Switch _swMute{GPIOG, GPIO_PIN_8, true};        // G8  = mute switch
+
+
+  Key _collisionA8{GPIOA, GPIO_PIN_8, true};
+  Key _collisionD0{GPIOD, GPIO_PIN_0, true};
+
+
+  Key _btnEnter{GPIOD, GPIO_PIN_10, false};
+
+
   uint8_t getGroup1Config(void);
   uint8_t getGroup2Config(void);
   uint8_t getGroup3Config(void);
@@ -123,4 +128,4 @@ public:
 
 extern KeyManager keyManager;
 
-#endif
+#endif /* KEY_HPP */

@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Syslog implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/syslog.h"
@@ -61,7 +66,7 @@ static int u32dec(uint32_t v, char *b) {
  * The bracket field keeps 8 numeric digits; the dot moves right when uptime
  * needs more integer digits.
  */
-const char *syslog_ts(void) {
+const char *SysLog_Ts(void) {
   static char buf[16];
   uint32_t t = SysLog_GetTick();
   uint32_t sec = t / 1000u;
@@ -119,10 +124,10 @@ static void syslog_handle_file_result(FRESULT res) {
   if (g_syslog_file_failures >= 3U) {
     g_syslog_file_disabled = 1U;
     printf("%s [WARN ] [SYS  ] SD log write failed: %d; disabled after %u consecutive errors\r\n",
-           syslog_ts(), (int)res, (unsigned)g_syslog_file_failures);
+           SysLog_Ts(), (int)res, (unsigned)g_syslog_file_failures);
   } else {
     printf("%s [WARN ] [SYS  ] SD log write failed: %d; retrying (%u/3)\r\n",
-           syslog_ts(), (int)res, (unsigned)g_syslog_file_failures);
+           SysLog_Ts(), (int)res, (unsigned)g_syslog_file_failures);
   }
 }
 
@@ -144,7 +149,7 @@ static void syslog_emit_v(SysLog_Level_t level, const char *mod,
   }
 
   n = snprintf(line, sizeof(line) - 2U, "%s [%s] [%-5s] %s",
-               syslog_ts(), syslog_level_name(level), mod, msg);
+               SysLog_Ts(), syslog_level_name(level), mod, msg);
   if (n < 0) return;
   line[sizeof(line) - 3U] = '\0';
   len = strlen(line);

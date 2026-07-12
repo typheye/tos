@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   REC mode dispatch and recovery task implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 #include "rec.h"
 
@@ -35,7 +40,7 @@ typedef struct {
   uint32_t command;
   uint32_t arg;
   uint32_t crc;
-} REC_Command;
+} REC_Command_t;
 
 static const char rec_title[] REC_CONST = "Recovery Mode";
 static const char rec_tdb_ready[] REC_CONST = "TDB was ready";
@@ -90,12 +95,12 @@ static REC_CODE void rec_draw_full(const char *status, uint16_t color) {
   SBL_LcdDisplayOn();
 }
 
-static REC_CODE uint32_t rec_crc(const REC_Command *cmd) {
+static REC_CODE uint32_t rec_crc(const REC_Command_t *cmd) {
   return cmd->magic ^ cmd->command ^ cmd->arg ^ 0xA55A5AA5UL;
 }
 
-static REC_CODE uint8_t rec_read_command(REC_Command *out) {
-  const REC_Command *cmd = (const REC_Command *)REC_CMD_ADDR;
+static REC_CODE uint8_t rec_read_command(REC_Command_t *out) {
+  const REC_Command_t *cmd = (const REC_Command_t *)REC_CMD_ADDR;
   if (!out || cmd->magic != REC_CMD_MAGIC || cmd->crc != rec_crc(cmd)) {
     return 0U;
   }
@@ -111,7 +116,7 @@ static REC_CODE void rec_erase_command(void) {
 }
 
 static REC_CODE uint8_t rec_resolve_mode(uint8_t mode) {
-  REC_Command cmd;
+  REC_Command_t cmd;
   uint32_t target = SBL_StateConsumeBootTarget();
 
   if (target == SBL_BOOT_TARGET_RECOVERY_FORMAT)

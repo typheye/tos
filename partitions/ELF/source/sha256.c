@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   ELF SHA-256 hash implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "sha256.h"
@@ -52,7 +57,7 @@ static void store_be32(uint8_t *p, uint32_t x) {
   p[3] = (uint8_t)x;
 }
 
-static void transform(TosSha256Context *ctx, const uint8_t block[64]) {
+static void transform(TosSha256Context_t *ctx, const uint8_t block[64]) {
   uint32_t w[64];
   uint32_t a, b, c, d, e, f, g, h;
   for (uint32_t i = 0U; i < 16U; ++i) w[i] = load_be32(block + i * 4U);
@@ -80,7 +85,7 @@ static void transform(TosSha256Context *ctx, const uint8_t block[64]) {
   ctx->state[6] += g; ctx->state[7] += h;
 }
 
-void TosSha256Init(TosSha256Context *ctx) {
+void TosSha256Init(TosSha256Context_t *ctx) {
   static const uint32_t initial[8] = {
       0x6A09E667U, 0xBB67AE85U, 0x3C6EF372U, 0xA54FF53AU,
       0x510E527FU, 0x9B05688CU, 0x1F83D9ABU, 0x5BE0CD19U,
@@ -90,7 +95,7 @@ void TosSha256Init(TosSha256Context *ctx) {
   ctx->block_size = 0U;
 }
 
-void TosSha256Update(TosSha256Context *ctx, const void *data, uint32_t size) {
+void TosSha256Update(TosSha256Context_t *ctx, const void *data, uint32_t size) {
   const uint8_t *p = (const uint8_t *)data;
   ctx->total_size += size;
   while (size != 0U) {
@@ -108,7 +113,7 @@ void TosSha256Update(TosSha256Context *ctx, const void *data, uint32_t size) {
   }
 }
 
-void TosSha256Final(TosSha256Context *ctx, uint8_t digest[32]) {
+void TosSha256Final(TosSha256Context_t *ctx, uint8_t digest[32]) {
   uint64_t bits = ctx->total_size * 8U;
   uint8_t pad[72] = {0x80U};
   uint32_t pad_size = ctx->block_size < 56U ? 56U - ctx->block_size

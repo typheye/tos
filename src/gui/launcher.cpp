@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Launcher pet UI implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/launcher.hpp"
@@ -27,8 +32,8 @@ extern KeyManager keyManager;
 extern LCD boardLCD;
 
 static void pet_launcher_drain_nav_keys(void) {
-  (void)keyManager.collision_A8.getState();
-  (void)keyManager.collision_D0.getState();
+  (void)keyManager._collisionA8.getState();
+  (void)keyManager._collisionD0.getState();
 }
 
 // ============ Animation state (CCMRAM to save main RAM) ============
@@ -889,7 +894,7 @@ static void update_animation(void) {
 
 // ============ Main loop ============
 
-void pet_launcher_run(void) {
+void petLauncherRun(void) {
   EMO_Init();
   EHW_Init();
 
@@ -949,7 +954,7 @@ void pet_launcher_run(void) {
     // Use edge detection. The old logic counted a long hold as multiple presses.
     keyManager.tick();
     pet_launcher_drain_nav_keys();
-    uint8_t enter_pressed = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t enter_pressed = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (enter_pressed && !last_enter_pressed) {
       mark_activity(now, "enter", true);
       enter_tm[enter_idx % 3] = now;

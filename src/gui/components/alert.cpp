@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Alert implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/alert.hpp"
@@ -28,8 +33,8 @@ void alert_show(const char *title, const char *msg) {
   while (1) {
     SysWatchdog_Tick();
     TosApi_Tick();
-    keyManager.btn_enter.tick();
-    if (keyManager.btn_enter.getState() == KEY_PRESSED)
+    keyManager._btnEnter.tick();
+    if (keyManager._btnEnter.getState() == KEY_PRESSED)
       return;
 
     if (HAL_GetTick() - lu > 16) {
@@ -41,7 +46,7 @@ void alert_show(const char *title, const char *msg) {
         Date_t today;
         boardTRTC.getDateTime(&now, &today);
         char ts[8];
-        time_fmt(ts, sizeof(ts), now.hours, now.minutes);
+        SysTime_Fmt(ts, sizeof(ts), now.hours, now.minutes);
         PD_SetHeaderTime(ts);
 
         PD_Init();

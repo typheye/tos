@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Dual-region dynamic RAM allocator interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef SYSDRAM_H
-#define SYSDRAM_H
+#ifndef DRAM_H
+#define DRAM_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -28,7 +33,7 @@ extern "C" {
 typedef enum {
   SYSDRAM_REGION_RAM = 0,
   SYSDRAM_REGION_CCM = 1,
-} SysDram_Region_t;
+} SysDramRegion_t;
 
 typedef struct {
   uint32_t total;
@@ -37,7 +42,7 @@ typedef struct {
   uint32_t largest_free;
   uint32_t alloc_count;
   uint32_t peak_used;
-} SysDram_Stats_t;
+} SysDramStats_t;
 
 void SysDram_Init(void);
 void *SysDram_Alloc(size_t size);
@@ -47,7 +52,7 @@ void *SysDram_Calloc(size_t count, size_t size);
 void *SysDram_Realloc(void *ptr, size_t size);
 void SysDram_Free(void *ptr);
 
-int SysDram_GetStats(SysDram_Region_t region, SysDram_Stats_t *out);
+int SysDram_GetStats(SysDramRegion_t region, SysDramStats_t *out);
 void SysDram_LogStats(void);
 int SysDram_IsCcmPtr(const void *ptr);
 int SysDram_IsRamPtr(const void *ptr);
@@ -56,4 +61,4 @@ int SysDram_IsRamPtr(const void *ptr);
 }
 #endif
 
-#endif
+#endif /* DRAM_H */

@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Lcd implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/lcd.hpp"
@@ -59,7 +64,7 @@ extern "C" void SysUI_DebugOverlayDraw(void);
 
 __attribute__((weak)) void lcd_dma_yield(void) {}
 
-#define hspi hspi1
+#define LCD_HSPI hspi1
 
 #ifdef __cplusplus
 extern "C" {
@@ -100,7 +105,7 @@ void LCD_FlushTiledBlocking(void (*render_cb)(void)) {
 void LCD_FlushFull(const uint16_t *data) { boardLCD.flushFull(data); }
 
 void LCD_ClearFrameBuffer(uint32_t color) {
-  uint16_t color_565 = boardLCD.rgb888_to_rgb565(color);
+  uint16_t color_565 = boardLCD.rgb888ToRgb565(color);
   uint16_t *fb = boardLCD.getFrameBuffer();
   if (fb) {
     for (uint32_t i = 0; i < LCD_WIDTH * TILE_HEIGHT; i++) {
@@ -110,7 +115,7 @@ void LCD_ClearFrameBuffer(uint32_t color) {
 }
 
 uint16_t LCD_RGB888ToRGB565(uint32_t rgb888) {
-  return boardLCD.rgb888_to_rgb565(rgb888);
+  return boardLCD.rgb888ToRgb565(rgb888);
 }
 
 uint16_t LCD_GetWidth(void) { return LCD_WIDTH; }
@@ -124,28 +129,28 @@ uint16_t LCD_GetTileH(void) { return boardLCD.getTileH(); }
 #endif
 
 LCD::LCD() {
-  initialized = false;
-  current_color_565 = 0xFFFF;
+  _initialized = false;
+  _currentColor565 = 0xFFFF;
   _rotation = 0;
-  _brightness_pwm = 1000;
+  _brightnessPwm = 1000;
   _auto_brightness = false;
-  _auto_brightness_logged = false;
-  _auto_brightness_force = false;
-  _auto_brightness_lux_valid = false;
-  _auto_brightness_last = 0;
-  _auto_brightness_lux = 0.0f;
-  _tile_y = 0;
-  _tile_h = TILE_HEIGHT;
+  _autoBrightnessLogged = false;
+  _autoBrightnessForce = false;
+  _autoBrightnessLuxValid = false;
+  _autoBrightnessLast = 0;
+  _autoBrightnessLux = 0.0f;
+  _tileY = 0;
+  _tileH = TILE_HEIGHT;
 }
 
-uint16_t LCD::rgb888_to_rgb565(uint32_t rgb888) {
+uint16_t LCD::rgb888ToRgb565(uint32_t rgb888) {
   uint8_t r = (rgb888 >> 16) & 0xFF;
   uint8_t g = (rgb888 >> 8) & 0xFF;
   uint8_t b = rgb888 & 0xFF;
   return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
 
-void LCD::hardware_reset(void) {
+void LCD::hardwareReset(void) {
 #ifdef LCD_RST_PIN
   LCD_RST_H;
   JPDelay(10);
@@ -156,58 +161,58 @@ void LCD::hardware_reset(void) {
 #endif
 }
 
-void LCD::write_cmd(uint8_t cmd) {
+void LCD::writeCmd(uint8_t cmd) {
   LCD_DC_CMD;
   LCD_CS_L;
-  HAL_SPI_Transmit(&hspi, &cmd, 1, HAL_MAX_DELAY);
+  HAL_SPI_Transmit(&LCD_HSPI, &cmd, 1, HAL_MAX_DELAY);
   LCD_CS_H;
 }
 
-void LCD::write_data(uint8_t data) {
+void LCD::writeData(uint8_t data) {
   LCD_DC_DATA;
   LCD_CS_L;
-  HAL_SPI_Transmit(&hspi, &data, 1, HAL_MAX_DELAY);
+  HAL_SPI_Transmit(&LCD_HSPI, &data, 1, HAL_MAX_DELAY);
   LCD_CS_H;
 }
 
-void LCD::write_data_16(uint16_t data) {
+void LCD::writeData16(uint16_t data) {
   uint8_t buf[2];
   buf[0] = data >> 8;
   buf[1] = data & 0xFF;
 
   LCD_DC_DATA;
   LCD_CS_L;
-  HAL_SPI_Transmit(&hspi, buf, 2, HAL_MAX_DELAY);
+  HAL_SPI_Transmit(&LCD_HSPI, buf, 2, HAL_MAX_DELAY);
   LCD_CS_H;
 }
 
-void LCD::set_address(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
-  write_cmd(0x2A);
-  write_data_16(x1);
-  write_data_16(x2);
+void LCD::setAddress(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
+  writeCmd(0x2A);
+  writeData16(x1);
+  writeData16(x2);
 
-  write_cmd(0x2B);
-  write_data_16(y1);
-  write_data_16(y2);
+  writeCmd(0x2B);
+  writeData16(y1);
+  writeData16(y2);
 
-  write_cmd(0x2C);
+  writeCmd(0x2C);
 }
 
 void LCD::setColor(uint32_t color) {
-  current_color_565 = rgb888_to_rgb565(color);
+  _currentColor565 = rgb888ToRgb565(color);
 }
 
 void LCD::drawPixel(uint16_t x, uint16_t y, uint32_t color) {
-  if (!initialized || x >= LCD_WIDTH || y >= LCD_HEIGHT)
+  if (!_initialized || x >= LCD_WIDTH || y >= LCD_HEIGHT)
     return;
 
-  set_address(x, y, x, y);
-  write_data_16(rgb888_to_rgb565(color));
+  setAddress(x, y, x, y);
+  writeData16(rgb888ToRgb565(color));
 }
 
 void LCD::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                    uint32_t color) {
-  if (!initialized || x >= LCD_WIDTH || y >= LCD_HEIGHT || w == 0 || h == 0)
+  if (!_initialized || x >= LCD_WIDTH || y >= LCD_HEIGHT || w == 0 || h == 0)
     return;
 
   if (x + w > LCD_WIDTH)
@@ -217,8 +222,8 @@ void LCD::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
   if (w == 0 || h == 0)
     return;
 
-  uint16_t c565 = rgb888_to_rgb565(color);
-  set_address(x, y, x + w - 1, y + h - 1);
+  uint16_t c565 = rgb888ToRgb565(color);
+  setAddress(x, y, x + w - 1, y + h - 1);
 
   const uint32_t pixels = (uint32_t)w * h;
   uint8_t buf[128];
@@ -236,7 +241,7 @@ void LCD::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
   uint32_t remaining = pixels;
   while (remaining > 0) {
     uint32_t batch = remaining < chunk_pixels ? remaining : chunk_pixels;
-    HAL_SPI_Transmit(&hspi, buf, (uint16_t)(batch * 2), HAL_MAX_DELAY);
+    HAL_SPI_Transmit(&LCD_HSPI, buf, (uint16_t)(batch * 2), HAL_MAX_DELAY);
     remaining -= batch;
   }
   LCD_CS_H;
@@ -247,7 +252,7 @@ void LCD::init() {
     lcd_tile_buffer = (uint16_t *)SysDram_AllocDma(sizeof(uint16_t) *
                                                    LCD_WIDTH * TILE_HEIGHT);
     if (!lcd_tile_buffer) {
-      initialized = false;
+      _initialized = false;
       return;
     }
   }
@@ -256,94 +261,94 @@ void LCD::init() {
   lcd_preserve_sah_splash = 0U;
 
   if (!preserve_sah_splash) {
-    hardware_reset();
+    hardwareReset();
 
-    write_cmd(0x01);
+    writeCmd(0x01);
     JPDelay(150);
 
-    write_cmd(0x11);
+    writeCmd(0x11);
     JPDelay(120);
   }
 
-  write_cmd(0x3A);
-  write_data(0x55);
+  writeCmd(0x3A);
+  writeData(0x55);
 
-  write_cmd(0x36);
-  write_data(0x10);
+  writeCmd(0x36);
+  writeData(0x10);
 
-  write_cmd(0xB2);
-  write_data(0x0C);
-  write_data(0x0C);
-  write_data(0x00);
-  write_data(0x33);
-  write_data(0x33);
+  writeCmd(0xB2);
+  writeData(0x0C);
+  writeData(0x0C);
+  writeData(0x00);
+  writeData(0x33);
+  writeData(0x33);
 
-  write_cmd(0xB7);
-  write_data(0x35);
+  writeCmd(0xB7);
+  writeData(0x35);
 
-  write_cmd(0xBB);
-  write_data(0x19);
+  writeCmd(0xBB);
+  writeData(0x19);
 
-  write_cmd(0xC0);
-  write_data(0x2C);
+  writeCmd(0xC0);
+  writeData(0x2C);
 
-  write_cmd(0xC2);
-  write_data(0x01);
+  writeCmd(0xC2);
+  writeData(0x01);
 
-  write_cmd(0xC3);
-  write_data(0x12);
+  writeCmd(0xC3);
+  writeData(0x12);
 
-  write_cmd(0xC4);
-  write_data(0x20);
+  writeCmd(0xC4);
+  writeData(0x20);
 
-  write_cmd(0xC6);
-  write_data(0x0F);
+  writeCmd(0xC6);
+  writeData(0x0F);
 
-  write_cmd(0xD0);
-  write_data(0xA4);
-  write_data(0xA1);
+  writeCmd(0xD0);
+  writeData(0xA4);
+  writeData(0xA1);
 
-  write_cmd(0xE0);
-  write_data(0xD0);
-  write_data(0x04);
-  write_data(0x0D);
-  write_data(0x11);
-  write_data(0x13);
-  write_data(0x2B);
-  write_data(0x3F);
-  write_data(0x54);
-  write_data(0x4C);
-  write_data(0x18);
-  write_data(0x0D);
-  write_data(0x0B);
-  write_data(0x1F);
-  write_data(0x23);
+  writeCmd(0xE0);
+  writeData(0xD0);
+  writeData(0x04);
+  writeData(0x0D);
+  writeData(0x11);
+  writeData(0x13);
+  writeData(0x2B);
+  writeData(0x3F);
+  writeData(0x54);
+  writeData(0x4C);
+  writeData(0x18);
+  writeData(0x0D);
+  writeData(0x0B);
+  writeData(0x1F);
+  writeData(0x23);
 
-  write_cmd(0xE1);
-  write_data(0xD0);
-  write_data(0x04);
-  write_data(0x0C);
-  write_data(0x11);
-  write_data(0x13);
-  write_data(0x2C);
-  write_data(0x3F);
-  write_data(0x44);
-  write_data(0x51);
-  write_data(0x2F);
-  write_data(0x1F);
-  write_data(0x1F);
-  write_data(0x20);
-  write_data(0x23);
+  writeCmd(0xE1);
+  writeData(0xD0);
+  writeData(0x04);
+  writeData(0x0C);
+  writeData(0x11);
+  writeData(0x13);
+  writeData(0x2C);
+  writeData(0x3F);
+  writeData(0x44);
+  writeData(0x51);
+  writeData(0x2F);
+  writeData(0x1F);
+  writeData(0x1F);
+  writeData(0x20);
+  writeData(0x23);
 
-  write_cmd(0x21);
-  write_cmd(0x29);
+  writeCmd(0x21);
+  writeCmd(0x29);
   JPDelay(100);
 
   if (!preserve_sah_splash) {
     LCD_BL_OFF;
 
-    uint16_t black = rgb888_to_rgb565(LCD_COLOR_BLACK);
-    set_address(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
+    uint16_t black = rgb888ToRgb565(LCD_COLOR_BLACK);
+    setAddress(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
 
     LCD_DC_DATA;
     LCD_CS_L;
@@ -352,7 +357,7 @@ void LCD::init() {
       uint8_t buf[2];
       buf[0] = black >> 8;
       buf[1] = black & 0xFF;
-      HAL_SPI_Transmit(&hspi, buf, 2, HAL_MAX_DELAY);
+      HAL_SPI_Transmit(&LCD_HSPI, buf, 2, HAL_MAX_DELAY);
     }
 
     LCD_CS_H;
@@ -363,21 +368,21 @@ void LCD::init() {
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   setBrightness(1000); // default full brightness (SM overrides after boot)
 
-  initialized = true;
+  _initialized = true;
 }
 
 void LCD::fillScreen(uint32_t color) {
-  if (!initialized)
+  if (!_initialized)
     return;
   fillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, color);
 }
 
 void LCD::drawPixels(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                      const uint16_t *colors) {
-  if (!initialized)
+  if (!_initialized)
     return;
 
-  set_address(x, y, x + w - 1, y + h - 1);
+  setAddress(x, y, x + w - 1, y + h - 1);
 
   LCD_DC_DATA;
   LCD_CS_L;
@@ -386,7 +391,7 @@ void LCD::drawPixels(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
     uint8_t buf[2];
     buf[0] = colors[i] >> 8;
     buf[1] = colors[i] & 0xFF;
-    HAL_SPI_Transmit(&hspi, buf, 2, HAL_MAX_DELAY);
+    HAL_SPI_Transmit(&LCD_HSPI, buf, 2, HAL_MAX_DELAY);
   }
 
   LCD_CS_H;
@@ -405,40 +410,40 @@ void LCD::scrollArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h, int16_t dx,
 void LCD::setRotation(uint8_t rotation) {
   _rotation = rotation % 4;
 
-  write_cmd(0x36);
+  writeCmd(0x36);
 
   switch (_rotation) {
   case 0:
-    write_data(0x10);
+    writeData(0x10);
     break;
   case 1:
-    write_data(0x60);
+    writeData(0x60);
     break;
   case 2:
-    write_data(0xC0);
+    writeData(0xC0);
     break;
   case 3:
-    write_data(0xA0);
+    writeData(0xA0);
     break;
   }
 }
 
 void LCD::sleep(void) {
-  write_cmd(0x10);
+  writeCmd(0x10);
   JPDelay(120);
   LCD_BL_OFF;
 }
 
 void LCD::wakeup(void) {
   LCD_BL_ON;
-  write_cmd(0x11);
+  writeCmd(0x11);
   JPDelay(120);
 }
 
 void LCD::setBrightness(uint16_t val) {
   if (val > 1000)
     val = 1000;
-  _brightness_pwm = val;
+  _brightnessPwm = val;
   lcd_backlight_pwm_ensure();
 
   /* Keep the public scale independent of the timer period. */
@@ -451,16 +456,16 @@ void LCD::setBrightness(uint16_t val) {
 void LCD::setAutoBrightness(bool on) {
   bool enabled = on ? true : false;
   if (_auto_brightness != enabled) {
-    _auto_brightness_force = enabled;
-    _auto_brightness_last = 0;
-    _auto_brightness_lux_valid = false;
+    _autoBrightnessForce = enabled;
+    _autoBrightnessLast = 0;
+    _autoBrightnessLuxValid = false;
   } else if (enabled) {
-    _auto_brightness_force = true;
+    _autoBrightnessForce = true;
   }
   _auto_brightness = enabled;
   if (!enabled) {
-    _auto_brightness_logged = false;
-    _auto_brightness_lux_valid = false;
+    _autoBrightnessLogged = false;
+    _autoBrightnessLuxValid = false;
   }
 }
 
@@ -488,20 +493,20 @@ void LCD::updateAutoBrightness(void) {
   uint32_t now = HAL_GetTick();
 
   if (!_auto_brightness) {
-    _auto_brightness_logged = false;
-    _auto_brightness_last = 0;
-    _auto_brightness_lux_valid = false;
+    _autoBrightnessLogged = false;
+    _autoBrightnessLast = 0;
+    _autoBrightnessLuxValid = false;
     return;
   }
-  if (!_auto_brightness_logged) {
+  if (!_autoBrightnessLogged) {
     LOG_I("LCD", "Auto-brightness active");
-    _auto_brightness_logged = true;
+    _autoBrightnessLogged = true;
   }
 
-  const uint32_t interval = _auto_brightness_force ? 0U : 300U;
-  if ((uint32_t)(now - _auto_brightness_last) < interval)
+  const uint32_t interval = _autoBrightnessForce ? 0U : 300U;
+  if ((uint32_t)(now - _autoBrightnessLast) < interval)
     return;
-  _auto_brightness_last = now;
+  _autoBrightnessLast = now;
 
   extern TCS3472 boardTCS3472;
   if (!boardTCS3472.isInitialized())
@@ -512,41 +517,41 @@ void LCD::updateAutoBrightness(void) {
     return;
   }
 
-  if (!_auto_brightness_lux_valid) {
-    _auto_brightness_lux = lux;
-    _auto_brightness_lux_valid = true;
+  if (!_autoBrightnessLuxValid) {
+    _autoBrightnessLux = lux;
+    _autoBrightnessLuxValid = true;
   } else {
-    float alpha = lux > _auto_brightness_lux ? 0.55f : 0.35f;
-    if (lux < _auto_brightness_lux && lux < 30.0f)
+    float alpha = lux > _autoBrightnessLux ? 0.55f : 0.35f;
+    if (lux < _autoBrightnessLux && lux < 30.0f)
       alpha = 0.25f;
-    _auto_brightness_lux += (lux - _auto_brightness_lux) * alpha;
+    _autoBrightnessLux += (lux - _autoBrightnessLux) * alpha;
   }
 
-  uint16_t target = lcd_auto_brightness_target(_auto_brightness_lux);
+  uint16_t target = lcd_auto_brightness_target(_autoBrightnessLux);
 
-  uint16_t cur = _brightness_pwm;
+  uint16_t cur = _brightnessPwm;
   uint16_t distance = target > cur ? (uint16_t)(target - cur)
                                    : (uint16_t)(cur - target);
 
   if (distance < 25U) {
-    _auto_brightness_force = false;
+    _autoBrightnessForce = false;
     return;
   }
 
   uint16_t pwm = cur;
   if (target > cur) {
     uint16_t d = (uint16_t)(target - cur);
-    uint16_t max_step = _auto_brightness_force ? 1000U : 160U;
+    uint16_t max_step = _autoBrightnessForce ? 1000U : 160U;
     pwm = (uint16_t)(cur + (d > max_step ? max_step : d));
   } else {
     uint16_t d = (uint16_t)(cur - target);
-    uint16_t max_step = _auto_brightness_lux < 30.0f ? 70U : 120U;
+    uint16_t max_step = _autoBrightnessLux < 30.0f ? 70U : 120U;
     pwm = (uint16_t)(cur - (d > max_step ? max_step : d));
   }
 
-  _auto_brightness_force = false;
+  _autoBrightnessForce = false;
 
-  if (pwm != _brightness_pwm)
+  if (pwm != _brightnessPwm)
     setBrightness(pwm);
 }
 
@@ -565,54 +570,54 @@ void LCD::beginTileRender(uint16_t y, uint16_t h) {
     h = 1;
   if (y + h > LCD_HEIGHT)
     h = LCD_HEIGHT - y;
-  _tile_y = y;
-  _tile_h = h;
+  _tileY = y;
+  _tileH = h;
   PD_SetTileWindow(y, h);
   EMO_SetTileWindow(y, h);
 
-  uint16_t bg = rgb888_to_rgb565(LCD_COLOR_BLACK);
+  uint16_t bg = rgb888ToRgb565(LCD_COLOR_BLACK);
   for (uint32_t i = 0; i < LCD_WIDTH * h; i++) {
     lcd_tile_buffer[i] = bg;
   }
 }
 
 void LCD::endTileRender(void) {
-  if (!initialized || !lcd_tile_buffer)
+  if (!_initialized || !lcd_tile_buffer)
     return;
 
-  const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
+  const uint8_t last_tile = ((_tileY + _tileH) >= LCD_HEIGHT) ? 1U : 0U;
   if (!lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayDraw();
   }
-  set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
+  setAddress(0, _tileY, LCD_WIDTH - 1, _tileY + _tileH - 1);
 
   LCD_DC_DATA;
   LCD_CS_L;
 
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
-  hspi.Init.DataSize = SPI_DATASIZE_16BIT;
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_DFF);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_16BIT;
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
 
   MODIFY_REG(hdma_spi1_tx.Instance->CR, DMA_SxCR_MSIZE | DMA_SxCR_PSIZE,
              DMA_SxCR_MSIZE_0 | DMA_SxCR_PSIZE_0);
   hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
   hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
 
-  uint16_t pixel_count = LCD_WIDTH * _tile_h;
-  HAL_SPI_Transmit_DMA(&hspi, (uint8_t *)lcd_tile_buffer, pixel_count);
+  uint16_t pixel_count = LCD_WIDTH * _tileH;
+  HAL_SPI_Transmit_DMA(&LCD_HSPI, (uint8_t *)lcd_tile_buffer, pixel_count);
 
   uint32_t timeout = HAL_GetTick() + 100;
-  while (HAL_SPI_GetState(&hspi) != HAL_SPI_STATE_READY) {
+  while (HAL_SPI_GetState(&LCD_HSPI) != HAL_SPI_STATE_READY) {
     if (HAL_GetTick() > timeout)
       break;
     lcd_dma_yield();
   }
 
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
-  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_DFF);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_8BIT;
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
 
   CLEAR_BIT(hdma_spi1_tx.Instance->CR, DMA_SxCR_MSIZE | DMA_SxCR_PSIZE);
   hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
@@ -628,60 +633,60 @@ void LCD::emergencyPrepare(void) {
   /* Fatal errors may be raised while SPI/DMA is still busy.  Do not run the
    * full LCD::init() here: it clears the panel pixel-by-pixel and can take long
    * enough for a short IWDG configuration to reset before anything is visible.
-   * Instead, resync the SPI/DMA state, wake the already-initialized panel, and
+   * Instead, resync the SPI/DMA state, wake the already-_initialized panel, and
    * force full backlight. */
-  HAL_SPI_Abort(&hspi);
+  HAL_SPI_Abort(&LCD_HSPI);
   HAL_DMA_Abort(&hdma_spi1_tx);
   LCD_CS_H;
   LCD_DC_DATA;
 
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
-  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_DFF);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_8BIT;
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
 
   LCD_BL_ON;
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   setBrightness(1000);
 
-  if (initialized) {
-    write_cmd(0x11); /* sleep out */
+  if (_initialized) {
+    writeCmd(0x11); /* sleep out */
     JPDelay(20);
-    write_cmd(0x3A); /* RGB565 */
-    write_data(0x55);
-    write_cmd(0x36); /* same default orientation as LCD::init() */
-    write_data(0x10);
-    write_cmd(0x21); /* display inversion on: matches normal TOS init */
-    write_cmd(0x29); /* display on */
+    writeCmd(0x3A); /* RGB565 */
+    writeData(0x55);
+    writeCmd(0x36); /* same default orientation as LCD::init() */
+    writeData(0x10);
+    writeCmd(0x21); /* display inversion on: matches normal TOS init */
+    writeCmd(0x29); /* display on */
     JPDelay(20);
   }
 }
 
 void LCD::endTileRenderBlocking(void) {
-  if (!initialized || !lcd_tile_buffer)
+  if (!_initialized || !lcd_tile_buffer)
     return;
 
-  const uint8_t last_tile = ((_tile_y + _tile_h) >= LCD_HEIGHT) ? 1U : 0U;
+  const uint8_t last_tile = ((_tileY + _tileH) >= LCD_HEIGHT) ? 1U : 0U;
   if (!lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayDraw();
   }
-  set_address(0, _tile_y, LCD_WIDTH - 1, _tile_y + _tile_h - 1);
+  setAddress(0, _tileY, LCD_WIDTH - 1, _tileY + _tileH - 1);
   LCD_DC_DATA;
   LCD_CS_L;
 
-  HAL_SPI_Abort(&hspi);
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
-  hspi.Init.DataSize = SPI_DATASIZE_16BIT;
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  HAL_SPI_Abort(&LCD_HSPI);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_DFF);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_16BIT;
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
 
-  uint16_t pixel_count = LCD_WIDTH * _tile_h;
-  (void)HAL_SPI_Transmit(&hspi, (uint8_t *)lcd_tile_buffer, pixel_count, 500);
+  uint16_t pixel_count = LCD_WIDTH * _tileH;
+  (void)HAL_SPI_Transmit(&LCD_HSPI, (uint8_t *)lcd_tile_buffer, pixel_count, 500);
 
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
-  CLEAR_BIT(hspi.Instance->CR1, SPI_CR1_DFF);
-  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
-  SET_BIT(hspi.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
+  CLEAR_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_DFF);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_8BIT;
+  SET_BIT(LCD_HSPI.Instance->CR1, SPI_CR1_SPE);
   LCD_CS_H;
   if (last_tile && !lcd_debug_overlay_suppressed) {
     SysUI_DebugOverlayEndFrame();
@@ -689,7 +694,7 @@ void LCD::endTileRenderBlocking(void) {
 }
 
 void LCD::flushTiledBlocking(void (*render_cb)(void)) {
-  if (!initialized || !render_cb)
+  if (!_initialized || !render_cb)
     return;
 
   for (uint16_t y = 0; y < LCD_HEIGHT; y += TILE_HEIGHT) {
@@ -701,7 +706,7 @@ void LCD::flushTiledBlocking(void (*render_cb)(void)) {
 }
 
 void LCD::flushTiled(void (*render_cb)(void)) {
-  if (!initialized || !render_cb)
+  if (!_initialized || !render_cb)
     return;
 
   for (uint16_t y = 0; y < LCD_HEIGHT; y += TILE_HEIGHT) {
@@ -713,22 +718,22 @@ void LCD::flushTiled(void (*render_cb)(void)) {
 }
 
 void LCD::flushFull(const uint16_t *data) {
-  if (!initialized || !data)
+  if (!_initialized || !data)
     return;
 
-  set_address(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
+  setAddress(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
 
   LCD_DC_DATA;
   LCD_CS_L;
 
-  hspi.Init.DataSize = SPI_DATASIZE_16BIT;
-  HAL_SPI_Init(&hspi);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_16BIT;
+  HAL_SPI_Init(&LCD_HSPI);
 
-  HAL_SPI_Transmit(&hspi, (uint8_t *)data, LCD_WIDTH * LCD_HEIGHT,
+  HAL_SPI_Transmit(&LCD_HSPI, (uint8_t *)data, LCD_WIDTH * LCD_HEIGHT,
                    HAL_MAX_DELAY);
 
-  hspi.Init.DataSize = SPI_DATASIZE_8BIT;
-  HAL_SPI_Init(&hspi);
+  LCD_HSPI.Init.DataSize = SPI_DATASIZE_8BIT;
+  HAL_SPI_Init(&LCD_HSPI);
 
   LCD_CS_H;
 }
@@ -743,20 +748,20 @@ void LCD::drawDMA(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
 }
 
 void LCD::setColumn(uint16_t start, uint16_t end) {
-  write_cmd(0x2A);
-  write_data_16(start);
-  write_data_16(end);
+  writeCmd(0x2A);
+  writeData16(start);
+  writeData16(end);
 }
 
 void LCD::setRow(uint16_t start, uint16_t end) {
-  write_cmd(0x2B);
-  write_data_16(start);
-  write_data_16(end);
+  writeCmd(0x2B);
+  writeData16(start);
+  writeData16(end);
 }
 
 void LCD::writeData(const uint8_t *data, uint32_t len) {
   LCD_DC_DATA;
   LCD_CS_L;
-  HAL_SPI_Transmit(&hspi, (uint8_t *)data, len, HAL_MAX_DELAY);
+  HAL_SPI_Transmit(&LCD_HSPI, (uint8_t *)data, len, HAL_MAX_DELAY);
   LCD_CS_H;
 }

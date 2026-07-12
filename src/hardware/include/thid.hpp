@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Thid interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef __THID_HPP
-#define __THID_HPP
+#ifndef THID_HPP
+#define THID_HPP
 
 #include "main.h"
 #include <cstddef>
@@ -154,4 +159,4 @@ extern THID boardHID;
 #define HID_KEY_DOT     0x37U
 #define HID_KEY_SLASH   0x38U
 
-#endif /* __THID_HPP */
+#endif /* THID_HPP */

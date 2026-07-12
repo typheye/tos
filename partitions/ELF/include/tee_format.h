@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   TEE state record format and validation interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #ifndef TEE_FORMAT_H
@@ -52,7 +57,7 @@ typedef struct __attribute__((packed, aligned(4))) {
   uint8_t  image_digest[32];
   uint8_t  signature[64];
   uint32_t header_crc32;
-} TosImageHeader;
+} TosImageHeader_t;
 
 typedef struct __attribute__((packed, aligned(4))) {
   uint32_t magic;
@@ -62,7 +67,7 @@ typedef struct __attribute__((packed, aligned(4))) {
   struct { char name[12]; uint32_t offset; uint32_t size; uint32_t attr; uint32_t crc; } partitions[8];
   uint8_t  public_key_hash[32];
   uint32_t reserved[16];
-} TosTeeManifest;
+} TosTeeManifest_t;
 
 typedef struct __attribute__((packed, aligned(4))) {
   uint32_t magic;
@@ -81,9 +86,9 @@ typedef struct __attribute__((packed, aligned(4))) {
   uint32_t reserved1;
   uint32_t reserved2;
   uint32_t record_crc;
-} TosTeeStateRecord;
+} TosTeeStateRecord_t;
 
-static inline uint32_t TosTeeStateRecordCrc(const TosTeeStateRecord *r) {
+static inline uint32_t TosTeeStateRecordCrc(const TosTeeStateRecord_t *r) {
   return r->magic ^ r->version ^ r->sequence ^ r->unlocked ^
          r->boot_target ^ r->update_kind ^ r->txn_state ^
          r->source_address ^ r->target_address ^ r->image_size ^
@@ -91,7 +96,7 @@ static inline uint32_t TosTeeStateRecordCrc(const TosTeeStateRecord *r) {
          r->reserved1 ^ r->reserved2 ^ 0xA5C35A3CUL;
 }
 
-static inline uint8_t TosTeeStateRecordValid(const TosTeeStateRecord *r) {
+static inline uint8_t TosTeeStateRecordValid(const TosTeeStateRecord_t *r) {
   if (!r || r->magic != TOS_TEE_STATE_MAGIC ||
       r->version != TOS_TEE_STATE_VERSION) return 0U;
   if (r->txn_state != 0xFFFFFFFFUL &&

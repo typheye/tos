@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Lib3Dox implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 
@@ -417,14 +422,14 @@ static void init_scene(void) {
     return;
   const float *p = raw_triangles;
   for (int i = 0; i < 32; i++) {
-    
+
     vec3_t bbmin_t, bbmax_t, v0, v1, v2, normal;
     V3_ASSIGN_S3(bbmin_t, p[0], p[1], p[2]);
     V3_ASSIGN_S3(bbmax_t, p[3], p[4], p[5]);
     V3_ASSIGN_S3(v0, p[6], p[7], p[8]);
     V3_ASSIGN_S3(v1, p[9], p[10], p[11]);
     V3_ASSIGN_S3(v2, p[12], p[13], p[14]);
-    V3_ASSIGN_S3(normal, p[21], p[22], p[23]); 
+    V3_ASSIGN_S3(normal, p[21], p[22], p[23]);
 
     V3_ASSIGN(triangles[i].bbmin, bbmin_t);
     V3_ASSIGN(triangles[i].bbmax, bbmax_t);
@@ -539,11 +544,11 @@ static void intersect(void) {
 
 static void Reflectance(int8_t i) {
   if (i == 8 || i == 9)
-    V3_ASSIGN_S3(reflectance, 0.05f, 0.65f, 0.05f); 
+    V3_ASSIGN_S3(reflectance, 0.05f, 0.65f, 0.05f);
   else if (i == 10 || i == 11)
-    V3_ASSIGN_S3(reflectance, 0.65f, 0.05f, 0.05f); 
+    V3_ASSIGN_S3(reflectance, 0.65f, 0.05f, 0.05f);
   else
-    V3_ASSIGN_S(reflectance, 0.65f); 
+    V3_ASSIGN_S(reflectance, 0.65f);
 }
 
 static uint8_t sampleBSDF(void) {

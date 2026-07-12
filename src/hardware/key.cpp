@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Key implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/key.hpp"
@@ -34,9 +39,9 @@ bool Switch::isOn(void) {
     return false;
   GPIO_PinState state = HAL_GPIO_ReadPin(_port, _pin);
   if (_inverted) {
-    return state == GPIO_PIN_RESET; 
+    return state == GPIO_PIN_RESET;
   } else {
-    return state == GPIO_PIN_SET; 
+    return state == GPIO_PIN_SET;
   }
 }
 
@@ -45,29 +50,29 @@ bool Switch::isOff(void) { return !isOn(); }
 
 
 Key::Key(GPIO_TypeDef *port, uint16_t pin, bool inverted)
-    : _port(port), _pin(pin), _inverted(inverted), _last_state(false),
-      _long_press_triggered(false), _press_start_time(0), _long_press_time(500),
-      _last_sample_time(0), _debounce(0), _event(KEY_IDLE), _initialized(false) {}
+    : _port(port), _pin(pin), _inverted(inverted), _lastState(false),
+      _longPressTriggered(false), _pressStartTime(0), _longPressTime(500),
+      _lastSampleTime(0), _debounce(0), _event(KEY_IDLE), _initialized(false) {}
 
 void Key::init(void) {
   if (_initialized)
     return;
   _initialized = true;
   bool raw = rawPressed();
-  _last_state = raw;
+  _lastState = raw;
   _debounce = raw ? KEY_DEBOUNCE_CNT : 0;
-  _press_start_time = HAL_GetTick();
-  _last_sample_time = _press_start_time;
-  _long_press_triggered = false;
+  _pressStartTime = HAL_GetTick();
+  _lastSampleTime = _pressStartTime;
+  _longPressTriggered = false;
   _event = KEY_IDLE;
 }
 
 bool Key::rawPressed(void) const {
   GPIO_PinState state = HAL_GPIO_ReadPin(_port, _pin);
   if (_inverted) {
-    return state == GPIO_PIN_SET; 
+    return state == GPIO_PIN_SET;
   } else {
-    return state == GPIO_PIN_RESET; 
+    return state == GPIO_PIN_RESET;
   }
 }
 
@@ -109,14 +114,14 @@ void Key::tick(void) {
     return;
 
   uint32_t now = HAL_GetTick();
-  if (now - _last_sample_time < KEY_SCAN_INTERVAL_MS) {
-    if (_last_state && !_long_press_triggered &&
-        now - _press_start_time >= _long_press_time) {
-      _long_press_triggered = true;
+  if (now - _lastSampleTime < KEY_SCAN_INTERVAL_MS) {
+    if (_lastState && !_longPressTriggered &&
+        now - _pressStartTime >= _longPressTime) {
+      _longPressTriggered = true;
     }
     return;
   }
-  _last_sample_time = now;
+  _lastSampleTime = now;
 
   bool raw = rawPressed();
   if (raw) {
@@ -128,27 +133,27 @@ void Key::tick(void) {
   }
 
   bool stable = (_debounce >= KEY_DEBOUNCE_CNT);
-  if (stable && !_last_state) {
-    _press_start_time = now;
-    _long_press_triggered = false;
+  if (stable && !_lastState) {
+    _pressStartTime = now;
+    _longPressTriggered = false;
     latchEvent(KEY_PRESSED);
-  } else if (!stable && _last_state) {
-    if (_long_press_triggered) {
+  } else if (!stable && _lastState) {
+    if (_longPressTriggered) {
       latchEvent(KEY_LONG_PRESS);
-      _long_press_triggered = false;
+      _longPressTriggered = false;
     } else {
       latchEvent(KEY_RELEASED);
     }
   }
-  _last_state = stable;
+  _lastState = stable;
 
-  if (_last_state && !_long_press_triggered &&
-      now - _press_start_time >= _long_press_time) {
-    _long_press_triggered = true;
+  if (_lastState && !_longPressTriggered &&
+      now - _pressStartTime >= _longPressTime) {
+    _longPressTriggered = true;
   }
 }
 
-void Key::setLongPressTime(uint32_t ms) { _long_press_time = ms; }
+void Key::setLongPressTime(uint32_t ms) { _longPressTime = ms; }
 
 
 
@@ -157,84 +162,84 @@ KeyManager keyManager;
 
 void lcd_dma_yield(void) {
   TosApi_Tick();
-  keyManager.collision_A8.tick();
-  keyManager.collision_D0.tick();
-  keyManager.btn_enter.tick();
+  keyManager._collisionA8.tick();
+  keyManager._collisionD0.tick();
+  keyManager._btnEnter.tick();
 }
 
 void KeyManager::init(void) {
-  
-  sw1_E0.init();
-  sw2_G13.init();
-  sw3_E2.init();
-  sw4_E4.init();
-  sw5_D6.init();
-  sw6_G9.init();
-  sw7_G11.init();
-  sw8_G10.init();
-  sw9_G15.init();
-  sw10_G3.init();
-  sw11_D15.init();
-  sw12_B12.init();
-  sw13_B14.init();
-  sw_sd_detect.init();
-  sw_mute.init();
 
-  
-  collision_A8.init();
-  collision_D0.init();
-  btn_enter.init();
+  _sw1E0.init();
+  _sw2G13.init();
+  _sw3E2.init();
+  _sw4E4.init();
+  _sw5D6.init();
+  _sw6G9.init();
+  _sw7G11.init();
+  _sw8G10.init();
+  _sw9G15.init();
+  _sw10G3.init();
+  _sw11D15.init();
+  _sw12B12.init();
+  _sw13B14.init();
+  _swSdDetect.init();
+  _swMute.init();
+
+
+  _collisionA8.init();
+  _collisionD0.init();
+  _btnEnter.init();
 }
 
 void KeyManager::tick(void) {
-  collision_A8.tick();
-  collision_D0.tick();
-  btn_enter.tick();
+  _collisionA8.tick();
+  _collisionD0.tick();
+  _btnEnter.tick();
 }
 
 uint8_t KeyManager::getGroup1Config(void) {
   uint8_t val = 0;
-  if (sw1_E0.isOn())
+  if (_sw1E0.isOn())
     val |= 0x01;
-  if (sw2_G13.isOn())
+  if (_sw2G13.isOn())
     val |= 0x02;
-  if (sw3_E2.isOn())
+  if (_sw3E2.isOn())
     val |= 0x04;
-  if (sw4_E4.isOn())
+  if (_sw4E4.isOn())
     val |= 0x08;
   return val;
 }
 
 uint8_t KeyManager::getGroup2Config(void) {
   uint8_t val = 0;
-  if (sw5_D6.isOn())
+  if (_sw5D6.isOn())
     val |= 0x01;
-  if (sw6_G9.isOn())
+  if (_sw6G9.isOn())
     val |= 0x02;
-  if (sw7_G11.isOn())
+  if (_sw7G11.isOn())
     val |= 0x04;
-  if (sw8_G10.isOn())
+  if (_sw8G10.isOn())
     val |= 0x08;
-  if (sw9_G15.isOn())
+  if (_sw9G15.isOn())
     val |= 0x10;
   return val;
 }
 
 uint8_t KeyManager::getGroup3Config(void) {
   uint8_t val = 0;
-  if (sw10_G3.isOn())
+  if (_sw10G3.isOn())
     val |= 0x01;
-  if (sw11_D15.isOn())
+  if (_sw11D15.isOn())
     val |= 0x02;
-  if (sw12_B12.isOn())
+  if (_sw12B12.isOn())
     val |= 0x04;
-  if (sw13_B14.isOn())
+  if (_sw13B14.isOn())
     val |= 0x08;
   return val;
 }
 
-bool KeyManager::isSdCardInserted(void) { return sw_sd_detect.isOn(); }
-bool KeyManager::isMuted(void) { return sw_mute.isOn(); }
+bool KeyManager::isSdCardInserted(void) { return _swSdDetect.isOn(); }
+bool KeyManager::isMuted(void) { return _swMute.isOn(); }
 bool KeyManager::isAnyCollision(void) {
-  return collision_A8.isPressed() || collision_D0.isPressed();
+  return _collisionA8.isPressed() || _collisionD0.isPressed();
 }

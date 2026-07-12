@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   ESP8266 AT driver implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/esp8266.hpp"
@@ -48,14 +53,14 @@ CCMRAM ESP8266 esp8266(&huart2);
 ESP8266::ESP8266(UART_HandleTypeDef *huart) {
   _huart = huart;
   _state = 0;
-  _hard_disabled = false;
-  _last_recover_ms = 0;
-  _recover_attempts = 0;
-  _recover_failures = 0;
-  _uart_rearms = 0;
-  _rx_index = 0;
-  _rx_overflow = false;
-  memset(_rx_buffer, 0, sizeof(_rx_buffer));
+  _hardDisabled = false;
+  _lastRecoverMs = 0;
+  _recoverAttempts = 0;
+  _recoverFailures = 0;
+  _uartRearms = 0;
+  _rxIndex = 0;
+  _rxOverflow = false;
+  memset(_rxBuffer, 0, sizeof(_rxBuffer));
 }
 
 void ESP8266::serviceUartRx(void) {
@@ -90,19 +95,19 @@ void ESP8266::serviceUartRx(void) {
   if (primask == 0U)
     __enable_irq();
 
-  if (_uart_rearms < 0xFFFFU)
-    _uart_rearms++;
+  if (_uartRearms < 0xFFFFU)
+    _uartRearms++;
   LOG_W("ESP", "UART2 RX rearmed #%u sr=0x%08lX cr1=0x%08lX cr3=0x%08lX",
-        (unsigned)_uart_rearms, (unsigned long)sr, (unsigned long)uart->CR1,
+        (unsigned)_uartRearms, (unsigned long)sr, (unsigned long)uart->CR1,
         (unsigned long)uart->CR3);
 }
 
 void ESP8266::clearRxBuffer(void) {
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
-  _rx_index = 0;
-  _rx_overflow = false;
-  memset(_rx_buffer, 0, sizeof(_rx_buffer));
+  _rxIndex = 0;
+  _rxOverflow = false;
+  memset(_rxBuffer, 0, sizeof(_rxBuffer));
   esp8266_global_index = 0;
   esp8266_data_ready = 0;
   memset(esp8266_global_buffer, 0, 2048);
@@ -178,7 +183,7 @@ void ESP8266::hardwareReset(bool cycle_en, uint32_t boot_wait_ms) {
 }
 
 bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
-  if (_hard_disabled)
+  if (_hardDisabled)
     return false;
 
   uint32_t start = HAL_GetTick();
@@ -186,8 +191,8 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
   while (HAL_GetTick() - start < timeout_ms) {
     processPendingData();
 
-    if (_rx_index > 0) {
-      if (_rx_overflow) {
+    if (_rxIndex > 0) {
+      if (_rxOverflow) {
         LOG_E("ESP", "RX overflow while waiting for %s",
               expected ? expected : "(any)");
         clearRxBuffer();
@@ -195,14 +200,14 @@ bool ESP8266::waitForResponse(const char *expected, uint32_t timeout_ms) {
         return false;
       }
 
-      if (expected && strstr((char *)_rx_buffer, expected) != NULL) {
+      if (expected && strstr((char *)_rxBuffer, expected) != NULL) {
         /* Communication success: brief blink to acknowledge */
         esp_led_success();
         return true;
       }
 
-      if (strstr((char *)_rx_buffer, "ERROR") != NULL ||
-          strstr((char *)_rx_buffer, "FAIL") != NULL) {
+      if (strstr((char *)_rxBuffer, "ERROR") != NULL ||
+          strstr((char *)_rxBuffer, "FAIL") != NULL) {
         /* Communication failure: blink warn LED without blocking */
         clearRxBuffer();
         esp_led_failure();
@@ -234,36 +239,36 @@ void ESP8266::parseResponse(const char *response) {
 
 void ESP8266::processRxData(uint8_t *data, uint16_t len) {
   for (uint16_t i = 0; i < len; i++) {
-    if (_rx_index >= sizeof(_rx_buffer) - 1) {
-      _rx_overflow = true;
+    if (_rxIndex >= sizeof(_rxBuffer) - 1) {
+      _rxOverflow = true;
       break;
     }
-    _rx_buffer[_rx_index++] = data[i];
+    _rxBuffer[_rxIndex++] = data[i];
   }
-  _rx_buffer[_rx_index] = '\0';
+  _rxBuffer[_rxIndex] = '\0';
 }
 
 bool ESP8266::tryRecover(bool force) {
   uint32_t now = HAL_GetTick();
-  if (!force && _last_recover_ms != 0U &&
-      (uint32_t)(now - _last_recover_ms) < 60000U) {
+  if (!force && _lastRecoverMs != 0U &&
+      (uint32_t)(now - _lastRecoverMs) < 60000U) {
     return false;
   }
 
-  _last_recover_ms = now;
-  if (_recover_attempts < 0xFFU)
-    _recover_attempts++;
+  _lastRecoverMs = now;
+  if (_recoverAttempts < 0xFFU)
+    _recoverAttempts++;
   LOG_W("ESP", "Bounded recovery attempt #%u, uart_rx=%lu",
-        (unsigned)_recover_attempts, (unsigned long)uart2_rx_count);
+        (unsigned)_recoverAttempts, (unsigned long)uart2_rx_count);
 
-  _hard_disabled = false;
+  _hardDisabled = false;
   serviceUartRx();
   clearRxBuffer();
 
   /* First distinguish a dead TCP/WLAN state from a dead AT/UART path. */
   if (sendCommand("AT", "OK", 1200U)) {
     LOG_I("ESP", "AT interface alive after UART rearm");
-    _recover_failures = 0;
+    _recoverFailures = 0;
     return true;
   }
 
@@ -272,16 +277,16 @@ bool ESP8266::tryRecover(bool force) {
     (void)sendCommand("ATE0", "OK", 1000U);
     (void)sendCommand("AT+CIPMODE=0", "OK", 1000U);
     (void)sendCommand("AT+CIPMUX=0", "OK", 1000U);
-    _hard_disabled = false;
+    _hardDisabled = false;
     _state = 0;
-    _recover_failures = 0;
+    _recoverFailures = 0;
     LOG_I("ESP", "ESP8266 recovered after EN/RST reset");
     return true;
   }
 
-  if (_recover_failures < 0xFFFFU)
-    _recover_failures++;
-  _hard_disabled = true;
+  if (_recoverFailures < 0xFFFFU)
+    _recoverFailures++;
+  _hardDisabled = true;
   _state = 4;
   LOG_E("ESP", "ESP8266 recovery failed, uart_rx=%lu",
         (unsigned long)uart2_rx_count);
@@ -292,7 +297,7 @@ void ESP8266::init(void) {
   LOG_I("ESP", "Initializing...");
   LOG_D("ESP", "UART2 RX count before: %lu", (unsigned long)uart2_rx_count);
 
-  _hard_disabled = false;
+  _hardDisabled = false;
   _state = 0;
 
   hardwareReset(true, 2800U);
@@ -307,7 +312,7 @@ void ESP8266::init(void) {
     LOG_D("ESP", "UART2 RX count: %lu", (unsigned long)uart2_rx_count);
     LOG_W("ESP", "Initial AT failed; trying one module-local reset");
     if (!tryRecover(true)) {
-      _hard_disabled = false;
+      _hardDisabled = false;
       bool late_ok = false;
       for (uint8_t i = 0; i < 2U && !late_ok; ++i) {
         LOG_W("ESP", "Late boot AT probe %u/2", (unsigned)(i + 1U));
@@ -327,10 +332,10 @@ void ESP8266::init(void) {
         (void)sendCommand("ATE0", "OK", 1000U);
         (void)sendCommand("AT+CIPMODE=0", "OK", 1000U);
         (void)sendCommand("AT+CIPMUX=0", "OK", 1000U);
-        _hard_disabled = false;
+        _hardDisabled = false;
         _state = 0;
       } else {
-        _hard_disabled = true;
+        _hardDisabled = true;
         _state = 4;
         LOG_E("ESP", "ESP8266 unavailable for this boot");
       }
@@ -340,7 +345,7 @@ void ESP8266::init(void) {
 
 bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
                           uint32_t timeout_ms) {
-  if (_hard_disabled) {
+  if (_hardDisabled) {
     LOG_W("ESP", "sendCommand blocked: hard-disabled");
     return false;
   }
@@ -363,11 +368,11 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
   while (HAL_GetTick() - start < timeout_ms) {
     processPendingData();
 
-    if (_rx_index > 0) {
-      if (_rx_overflow) {
+    if (_rxIndex > 0) {
+      if (_rxOverflow) {
         LOG_E("ESP", "RX overflow after %lums, rx=%u/%u while waiting for '%s'",
-              (unsigned long)(HAL_GetTick() - start), _rx_index,
-              (unsigned)sizeof(_rx_buffer),
+              (unsigned long)(HAL_GetTick() - start), _rxIndex,
+              (unsigned)sizeof(_rxBuffer),
               expected_response ? expected_response : "(any)");
         clearRxBuffer();
         esp_led_failure();
@@ -375,18 +380,18 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
       }
 
       if (expected_response) {
-        if (strstr((char *)_rx_buffer, expected_response) != NULL) {
+        if (strstr((char *)_rxBuffer, expected_response) != NULL) {
           LOG_D("ESP", "OK after %lums, rx=%u bytes",
-                (unsigned long)(HAL_GetTick() - start), _rx_index);
+                (unsigned long)(HAL_GetTick() - start), _rxIndex);
           /* Communication success: brief blink to acknowledge */
           esp_led_success();
           return true;
         }
         /* Buffer nearly full search for partial match */
-        if (!near_full_logged && _rx_index >= sizeof(_rx_buffer) - 64) {
+        if (!near_full_logged && _rxIndex >= sizeof(_rxBuffer) - 64) {
           near_full_logged = true;
           LOG_W("ESP", "Rx buffer nearly full (%u/%u), searching for '%s'",
-                _rx_index, (unsigned)sizeof(_rx_buffer), expected_response);
+                _rxIndex, (unsigned)sizeof(_rxBuffer), expected_response);
         }
       } else {
         /* No expected response specified any data counts as success */
@@ -394,10 +399,10 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
         return true;
       }
 
-      if (strstr((char *)_rx_buffer, "ERROR") != NULL ||
-          strstr((char *)_rx_buffer, "FAIL") != NULL) {
+      if (strstr((char *)_rxBuffer, "ERROR") != NULL ||
+          strstr((char *)_rxBuffer, "FAIL") != NULL) {
         LOG_E("ESP", "Got ERROR/FAIL after %lums, rx=%u bytes",
-              (unsigned long)(HAL_GetTick() - start), _rx_index);
+              (unsigned long)(HAL_GetTick() - start), _rxIndex);
         /* Communication failure: blink warn LED without blocking */
         clearRxBuffer();
         esp_led_failure();
@@ -408,8 +413,8 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
       if (timeout_ms > 3000 && HAL_GetTick() - last_dbg > 2000) {
         last_dbg = HAL_GetTick();
         LOG_D("ESP", "Waiting... %lums, rx=%u/%u bytes",
-              (unsigned long)(HAL_GetTick() - start), _rx_index,
-              (unsigned)sizeof(_rx_buffer));
+              (unsigned long)(HAL_GetTick() - start), _rxIndex,
+              (unsigned)sizeof(_rxBuffer));
       }
     }
     JPDelay(10);
@@ -417,7 +422,7 @@ bool ESP8266::sendCommand(const char *cmd, const char *expected_response,
   }
 
   LOG_E("ESP", "TIMEOUT after %lums, rx=%u bytes", (unsigned long)timeout_ms,
-        _rx_index);
+        _rxIndex);
   /* Communication failure: blink warn LED without blocking */
   clearRxBuffer();
   esp_led_failure();
@@ -473,7 +478,7 @@ void ESP8266::disconnect(void) {
 }
 
 bool ESP8266::scanNetworks(void) {
-  if (_hard_disabled) {
+  if (_hardDisabled) {
     LOG_W("ESP", "scanNetworks blocked: hard-disabled");
     return false;
   }
@@ -489,42 +494,42 @@ bool ESP8266::scanNetworks(void) {
   while (HAL_GetTick() - start < 15000U) {
     processPendingData();
 
-    if (_rx_index > 0) {
-      const char *rx = (const char *)_rx_buffer;
+    if (_rxIndex > 0) {
+      const char *rx = (const char *)_rxBuffer;
 
-      if (_rx_overflow) {
+      if (_rxOverflow) {
         LOG_E("ESP", "CWLAP RX overflow after %lums, rx=%u/%u",
-              (unsigned long)(HAL_GetTick() - start), _rx_index,
-              (unsigned)sizeof(_rx_buffer));
+              (unsigned long)(HAL_GetTick() - start), _rxIndex,
+              (unsigned)sizeof(_rxBuffer));
         break;
       }
 
       if (strstr(rx, "\r\nOK") || strstr(rx, "OK\r\n")) {
         LOG_D("ESP", "CWLAP OK after %lums, rx=%u bytes",
-              (unsigned long)(HAL_GetTick() - start), _rx_index);
+              (unsigned long)(HAL_GetTick() - start), _rxIndex);
         esp_led_success();
         return true;
       }
 
       if (strstr(rx, "ERROR") || strstr(rx, "FAIL")) {
         LOG_E("ESP", "CWLAP ERROR after %lums, rx=%u bytes",
-              (unsigned long)(HAL_GetTick() - start), _rx_index);
+              (unsigned long)(HAL_GetTick() - start), _rxIndex);
         clearRxBuffer();
         esp_led_failure();
         return false;
       }
 
-      if (!near_full_logged && _rx_index >= sizeof(_rx_buffer) - 64) {
+      if (!near_full_logged && _rxIndex >= sizeof(_rxBuffer) - 64) {
         near_full_logged = true;
         LOG_W("ESP", "CWLAP RX nearly full (%u/%u), will stop on overflow",
-              _rx_index, (unsigned)sizeof(_rx_buffer));
+              _rxIndex, (unsigned)sizeof(_rxBuffer));
       }
 
       if (HAL_GetTick() - last_dbg > 3000U) {
         last_dbg = HAL_GetTick();
         LOG_D("ESP", "CWLAP waiting... %lums, rx=%u/%u bytes",
-              (unsigned long)(HAL_GetTick() - start), _rx_index,
-              (unsigned)sizeof(_rx_buffer));
+              (unsigned long)(HAL_GetTick() - start), _rxIndex,
+              (unsigned)sizeof(_rxBuffer));
       }
     }
 
@@ -533,8 +538,8 @@ bool ESP8266::scanNetworks(void) {
   }
 
   LOG_E("ESP", "CWLAP failed after %lums, rx=%u/%u",
-        (unsigned long)(HAL_GetTick() - start), _rx_index,
-        (unsigned)sizeof(_rx_buffer));
+        (unsigned long)(HAL_GetTick() - start), _rxIndex,
+        (unsigned)sizeof(_rxBuffer));
 
   /* Let late scan output drain briefly, then verify the module still answers.
    * The WLAN page will decide whether to retry; keep this function from
@@ -563,7 +568,7 @@ bool ESP8266::getIP(char *ip_buffer, uint16_t buffer_size) {
     return false;
   }
 
-  const char *ip_start = strstr((char *)_rx_buffer, "STAIP");
+  const char *ip_start = strstr((char *)_rxBuffer, "STAIP");
   if (ip_start) {
     ip_start = strchr(ip_start, '"');
     if (ip_start) {
@@ -631,7 +636,7 @@ static bool esp_parse_rssi_from_cwjap(const char *rx, int *rssi) {
 bool ESP8266::getRSSI(int *rssi) {
   if (!rssi)
     return false;
-  if (_hard_disabled)
+  if (_hardDisabled)
     return false;
 
   const char *cmds[] = {"AT+CWJAP?", "AT+CWJAP_CUR?"};
@@ -647,8 +652,8 @@ bool ESP8266::getRSSI(int *rssi) {
     uint32_t start = HAL_GetTick();
     while (HAL_GetTick() - start < 900U) {
       processPendingData();
-      const char *rx = (const char *)_rx_buffer;
-      if (_rx_overflow)
+      const char *rx = (const char *)_rxBuffer;
+      if (_rxOverflow)
         break;
       if (strstr(rx, "OK")) {
         int v = 0;

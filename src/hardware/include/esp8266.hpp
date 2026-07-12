@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   ESP8266 AT driver interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #ifndef ESP8266_HPP
@@ -138,11 +143,11 @@ public:
   bool closeConnection(void);
   bool isConnected(void);
   int getState(void) { return _state; }
-  bool isHardDisabled(void) { return _hard_disabled; }
+  bool isHardDisabled(void) { return _hardDisabled; }
   bool tryRecover(bool force = false);
   void serviceUartRx(void);
-  uint16_t recoveryFailureCount(void) const { return _recover_failures; }
-  void clearRecoveryFailureCount(void) { _recover_failures = 0; }
+  uint16_t recoveryFailureCount(void) const { return _recoverFailures; }
+  void clearRecoveryFailureCount(void) { _recoverFailures = 0; }
 
   // Data processing, called from the interrupt path
   void processRxData(uint8_t *data, uint16_t len);
@@ -153,10 +158,10 @@ public:
   bool getIP(char *ip_buffer, uint16_t buffer_size);
   bool getRSSI(int *rssi);
   bool sendString(const char *str);
-  const char *getRxBuffer(void) const { return (const char *)_rx_buffer; }
-  uint16_t getRxLength(void) const { return _rx_index; }
+  const char *getRxBuffer(void) const { return (const char *)_rxBuffer; }
+  uint16_t getRxLength(void) const { return _rxIndex; }
   uint16_t getRxCapacity(void) const { return RX_BUFFER_SIZE; }
-  bool hasRxOverflow(void) const { return _rx_overflow; }
+  bool hasRxOverflow(void) const { return _rxOverflow; }
 
   void processPendingData(void);
   void resetRxBuffer(void);
@@ -164,14 +169,14 @@ public:
 private:
   UART_HandleTypeDef *_huart;
   int _state; // 0=disconnected, 1=joining, 2=TCP connected, 3=got IP
-  bool _hard_disabled; // true = unavailable for this boot
-  uint32_t _last_recover_ms;
-  uint8_t _recover_attempts;
-  uint16_t _recover_failures;
-  uint16_t _uart_rearms;
-  uint8_t _rx_buffer[RX_BUFFER_SIZE];
-  uint16_t _rx_index;
-  bool _rx_overflow;
+  bool _hardDisabled; // true = unavailable for this boot
+  uint32_t _lastRecoverMs;
+  uint8_t _recoverAttempts;
+  uint16_t _recoverFailures;
+  uint16_t _uartRearms;
+  uint8_t _rxBuffer[RX_BUFFER_SIZE];
+  uint16_t _rxIndex;
+  bool _rxOverflow;
 
   void clearRxBuffer(void);
   void waitWithService(uint32_t delay_ms);

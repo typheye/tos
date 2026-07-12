@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   ELF root-of-trust boot and state management implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 #include "init.h"
 
@@ -108,7 +113,7 @@ static uint32_t ELF_Crc32(const void *data, uint32_t size) {
   return ~crc;
 }
 
-static uint8_t ELF_RecordErased(const TosTeeStateRecord *r) {
+static uint8_t ELF_RecordErased(const TosTeeStateRecord_t *r) {
   const uint32_t *w = (const uint32_t *)r;
   for (uint32_t i = 0U; i < sizeof(*r) / sizeof(uint32_t); ++i) {
     if (w[i] != 0xFFFFFFFFUL) return 0U;
@@ -116,12 +121,12 @@ static uint8_t ELF_RecordErased(const TosTeeStateRecord *r) {
   return 1U;
 }
 
-static const TosTeeStateRecord *ELF_LatestState(void) {
-  const TosTeeStateRecord *latest = NULL;
-  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord) <= TOS_TEE_STATE_SIZE;
-       off += sizeof(TosTeeStateRecord)) {
-    const TosTeeStateRecord *r =
-        (const TosTeeStateRecord *)(TOS_TEE_STATE_ADDRESS + off);
+static const TosTeeStateRecord_t *ELF_LatestState(void) {
+  const TosTeeStateRecord_t *latest = NULL;
+  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord_t) <= TOS_TEE_STATE_SIZE;
+       off += sizeof(TosTeeStateRecord_t)) {
+    const TosTeeStateRecord_t *r =
+        (const TosTeeStateRecord_t *)(TOS_TEE_STATE_ADDRESS + off);
     if (ELF_RecordErased(r)) break;
     if (!TosTeeStateRecordValid(r)) continue;
     /* PENDING update always takes priority —
@@ -158,7 +163,7 @@ static uint8_t ELF_VectorValid(uint32_t address, uint32_t size) {
   return pc >= address && pc < address + size ? 1U : 0U;
 }
 
-static uint8_t ELF_TransactionBounds(const TosTeeStateRecord *r) {
+static uint8_t ELF_TransactionBounds(const TosTeeStateRecord_t *r) {
   if (r->source_address != TOS_TMP_STAGE_ADDRESS || r->image_size == 0U ||
       r->image_size > TOS_TMP_STAGE_SIZE) return 0U;
   if (r->update_kind == TOS_UPDATE_SBL) {
@@ -169,8 +174,8 @@ static uint8_t ELF_TransactionBounds(const TosTeeStateRecord *r) {
 }
 
 static uint8_t ELF_SetRestart(void) {
-  const TosTeeStateRecord *latest = ELF_LatestState();
-  TosTeeStateRecord r;
+  const TosTeeStateRecord_t *latest = ELF_LatestState();
+  TosTeeStateRecord_t r;
   const uint32_t *w;
   uint32_t address = 0U;
   uint32_t off;
@@ -212,7 +217,7 @@ static uint8_t ELF_SetRestart(void) {
   return 1U;
 }
 
-static uint8_t ELF_MarkState(const TosTeeStateRecord *r, uint32_t state) {
+static uint8_t ELF_MarkState(const TosTeeStateRecord_t *r, uint32_t state) {
   uint32_t address = (uint32_t)(uintptr_t)&r->txn_state;
   uint8_t ok = 0U;
   if (!ELF_FlashUnlock()) return 0U;
@@ -222,7 +227,7 @@ static uint8_t ELF_MarkState(const TosTeeStateRecord *r, uint32_t state) {
   return ok;
 }
 
-static uint8_t ELF_ApplyUpdate(const TosTeeStateRecord *r) {
+static uint8_t ELF_ApplyUpdate(const TosTeeStateRecord_t *r) {
   const uint32_t *src = (const uint32_t *)r->source_address;
   uint32_t words = r->image_size / 4U;
 
@@ -292,7 +297,7 @@ static void ELF_Jump(uint32_t address) {
 }
 
 void ELF_Main(void) {
-  const TosTeeStateRecord *state;
+  const TosTeeStateRecord_t *state;
   SCB->VTOR = TOS_PART_ELF_ADDRESS;
   Cust_Setup();
   state = ELF_LatestState();

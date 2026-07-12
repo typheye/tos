@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Trtc implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/trtc.hpp"
@@ -47,11 +52,11 @@ void TRTC::init() {
 
   LOG_I("RTC", "Initializing...");
 
-  
+
   __HAL_RCC_PWR_CLK_ENABLE();
   HAL_PWR_EnableBkUpAccess();
 
-  
+
   uint32_t start = HAL_GetTick();
   uint8_t lse_ready = 0;
 
@@ -69,12 +74,12 @@ void TRTC::init() {
     LOG_W("RTC", "LSE not ready! RTC may not work correctly");
   }
 
-  
+
   HAL_StatusTypeDef ret;
   int retry = 5;
 
   do {
-    
+
     hrtc.Instance = RTC;
     hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
     hrtc.Init.AsynchPrediv = 127;
@@ -94,27 +99,27 @@ void TRTC::init() {
 
   if (ret != HAL_OK) {
     LOG_F("RTC", "Cannot initialize RTC!");
-    initialized = true; 
+    initialized = true;
     return;
   }
 
-  
+
   syncFromHAL();
 
-  
+
   if (sTime.Hours > 23 || sTime.Minutes > 59 || sTime.Seconds > 59 ||
       sDate.Year > 99 || sDate.Month > 12 || sDate.Date > 31) {
     LOG_W("RTC", "Invalid time detected, setting default...");
 
-    
+
     sTime.Hours = 0;
     sTime.Minutes = 0;
     sTime.Seconds = 0;
     sTime.TimeFormat = RTC_HOURFORMAT_24;
-    sDate.Year = 25; 
+    sDate.Year = 25;
     sDate.Month = 1;
     sDate.Date = 1;
-    sDate.WeekDay = 4; 
+    sDate.WeekDay = 4;
 
     syncToHAL();
     syncFromHAL();

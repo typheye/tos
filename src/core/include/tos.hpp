@@ -4,19 +4,24 @@
  * @author  Typheye
  * @brief   Tos interface.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef CORE_TOS_HPP
-#define CORE_TOS_HPP
+#ifndef TOS_HPP
+#define TOS_HPP
 
 // ── Hardware headers ──────────────────────────────────────────
 #include "include/bmp180.hpp"
@@ -45,12 +50,11 @@ extern "C" {
 #include "main.h"
 #include "stm32f4xx_hal.h"
 
+#include <cmath>
 #include <cstdint>
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include "core/sdk/include/tos_api.h"
-#include "stm32f4xx_hal.h"
 #include "core/sys/include/syswatchdog.h"
 
 // ── Demo type ─────────────────────────────────────────────────
@@ -71,20 +75,20 @@ public:
   TOS();
   ~TOS();
 
-  void init();  
-  void start(); 
+  void init();
+  void start();
 
 private:
-  bool initialized_;
-  uint32_t tick_count_;
+  bool _initialized;
+  uint32_t _tickCount;
 };
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-void start_tos(void);
+void Tos_Start(void);
 #ifdef __cplusplus
 }
 #endif
 
-#endif // CORE_TOS_HPP
+#endif // TOS_HPP

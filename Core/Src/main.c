@@ -25,7 +25,6 @@
 #include "iwdg.h"
 #include "rtc.h"
 #include "sdio.h"
-#include "settings_manager.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -36,12 +35,14 @@
 /* USER CODE BEGIN Includes */
 
 #ifdef __cplusplus
-#include "hardware/include/esp8266.hpp" // 确保 ESP8266 函数可用
+#include "hardware/include/esp8266.hpp"
 #endif
-#include <stdio.h>                      // 添加这个头文件 for printf
-#include "core/sys/include/syswatchdog.h"
+#include "syswatchdog.h"
 #include "init.h"
 #include "manifest.h"
+#include "settings_manager.h"
+#include <stdio.h>
+
 
 /* USER CODE END Includes */
 
@@ -63,11 +64,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
-/* ESP8266 单字节接收缓冲区（必须！） */
 uint8_t esp8266_rx_byte = 0;
-
-/* 声明外部调试变量 */
 extern volatile uint32_t uart2_rx_count;
 /* USER CODE END PV */
 
@@ -155,7 +152,7 @@ int main(void)
   SysWatchdog_FeedNow();
   HAL_UART_Receive_IT(&huart2, &esp8266_rx_byte, 1);
 
-  start_tos();
+  Tos_Start();
   /* USER CODE END 2 */
 
   /* Infinite loop */

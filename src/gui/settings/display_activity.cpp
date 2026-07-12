@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Display Activity implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/display_activity.hpp"
@@ -118,11 +123,11 @@ void display_activity_run(void) {
   uint32_t lu = 0;
 
   while (1) {
-    keyManager.collision_A8.tick();
-    keyManager.collision_D0.tick();
-    keyManager.btn_enter.tick();
+    keyManager._collisionA8.tick();
+    keyManager._collisionD0.tick();
+    keyManager._btnEnter.tick();
 
-    if (keyManager.collision_A8.getState() == KEY_PRESSED) {
+    if (keyManager._collisionA8.getState() == KEY_PRESSED) {
       if (disp_edit) {
         if (edit_field == 1)
           disp_auto = !disp_auto;
@@ -140,7 +145,7 @@ void display_activity_run(void) {
       }
       JPDelay(45);
     }
-    if (keyManager.collision_D0.getState() == KEY_PRESSED) {
+    if (keyManager._collisionD0.getState() == KEY_PRESSED) {
       if (disp_edit) {
         if (edit_field == 1)
           disp_auto = !disp_auto;
@@ -159,7 +164,7 @@ void display_activity_run(void) {
       JPDelay(45);
     }
 
-    uint8_t ce = (keyManager.btn_enter.getState() == KEY_PRESSED);
+    uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       if (disp_edit) {
         disp_edit = false;

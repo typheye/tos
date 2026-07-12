@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Sfhd implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/sfhd.h"
@@ -20,7 +25,7 @@
 
 
 
-#define FLASH_TIMEOUT    500u   
+#define FLASH_TIMEOUT    500u
 #define ALIGN4(x)        (((uint32_t)(x) + 3u) & ~3u)
 #define FLASH_BL_REC_ADDR TOS_PART_REC_ADDRESS
 
@@ -76,7 +81,7 @@ static Flash_Status_t program_words(uint32_t addr, const uint32_t *data, uint32_
   return FLASH_OK;
 }
 
-static bool flash_bl_state_erased(const TosTeeStateRecord *r) {
+static bool flash_bl_state_erased(const TosTeeStateRecord_t *r) {
   const uint32_t *w = (const uint32_t *)r;
   for (uint32_t i = 0; i < sizeof(*r) / sizeof(uint32_t); ++i) {
     if (w[i] != 0xFFFFFFFFu) {
@@ -86,12 +91,12 @@ static bool flash_bl_state_erased(const TosTeeStateRecord *r) {
   return true;
 }
 
-static const TosTeeStateRecord *flash_bl_state_latest(void) {
-  const TosTeeStateRecord *latest = NULL;
-  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord) <= FLASH_BL_STATE_SIZE;
-       off += sizeof(TosTeeStateRecord)) {
-    const TosTeeStateRecord *r =
-        (const TosTeeStateRecord *)(FLASH_BL_STATE_ADDR + off);
+static const TosTeeStateRecord_t *flash_bl_state_latest(void) {
+  const TosTeeStateRecord_t *latest = NULL;
+  for (uint32_t off = 0U; off + sizeof(TosTeeStateRecord_t) <= FLASH_BL_STATE_SIZE;
+       off += sizeof(TosTeeStateRecord_t)) {
+    const TosTeeStateRecord_t *r =
+        (const TosTeeStateRecord_t *)(FLASH_BL_STATE_ADDR + off);
     if (flash_bl_state_erased(r)) break;
     if (TosTeeStateRecordValid(r) &&
         (!latest || r->sequence >= latest->sequence)) latest = r;
@@ -100,13 +105,13 @@ static const TosTeeStateRecord *flash_bl_state_latest(void) {
 }
 
 static Flash_Status_t flash_bl_state_append(uint32_t boot_target) {
-  TosTeeStateRecord r;
-  const TosTeeStateRecord *latest = flash_bl_state_latest();
+  TosTeeStateRecord_t r;
+  const TosTeeStateRecord_t *latest = flash_bl_state_latest();
   uint32_t addr = 0U;
   for (uint32_t off = 0U; off + sizeof(r) <= FLASH_BL_STATE_SIZE;
        off += sizeof(r)) {
-    const TosTeeStateRecord *slot =
-        (const TosTeeStateRecord *)(FLASH_BL_STATE_ADDR + off);
+    const TosTeeStateRecord_t *slot =
+        (const TosTeeStateRecord_t *)(FLASH_BL_STATE_ADDR + off);
     if (flash_bl_state_erased(slot)) {
       addr = FLASH_BL_STATE_ADDR + off;
       break;
@@ -197,7 +202,7 @@ Flash_Status_t Flash_Write(const uint32_t *pData, uint32_t dataSize) {
   hdr.datasize = dataSize;
   hdr.crc      = Flash_CRC32(pData, dataSize);
 
-  
+
   memcpy(&record[0], &hdr, sizeof(hdr));
   memcpy((uint8_t *)&record[0] + sizeof(hdr), pData, dataSize);
   uint32_t total = sizeof(hdr) + dataSize;
@@ -330,7 +335,7 @@ Flash_Status_t Flash_Rolling_Write(const uint32_t *pData, uint32_t dataSize) {
     next = last + last_slot;
   }
 
-  
+
   if (next + slot_size > FLASH_DATA_ADDR + FLASH_DATA_SIZE) {
     LOG_W("FLASH", "Rolling sector full, erasing...");
     st = erase_data_sector_preserve_bl();
@@ -366,7 +371,7 @@ Flash_Status_t Flash_Rolling_Read(uint32_t *pData, uint32_t maxSize, uint32_t *o
     return FLASH_ERR_CRC;
   }
 
-  
+
   Flash_Record_Header_t *valid_hdr = NULL;
   if (!rolling_record_valid(last, &valid_hdr)) {
     LOG_D("FLASH", "No valid rolling data found");

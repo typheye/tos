@@ -4,15 +4,20 @@
  * @author  Typheye
  * @brief   Libpd implementation.
  ******************************************************************************
- * @attention
  *
- * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- ******************************************************************************
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "include/libpd.h"
@@ -72,7 +77,7 @@ static uint16_t color_to_565(uint32_t color) {
 void PD_Init(void) {
   current_ascii_font = &ASCII_Font16;
 
-  
+
   g_fb = LCD_GetFrameBuffer();
   g_fb_width = LCD_GetWidth();
   g_fb_height = TILE_HEIGHT;
@@ -214,7 +219,7 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
   uint8_t height = (*current_ascii_font)->Height;
   const uint8_t *font_data = (*current_ascii_font)->pTable;
 
-  
+
   uint16_t *buffer = pd_char_buffer;
   uint16_t i = 0;
   uint8_t w = 0;
@@ -226,7 +231,7 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
       if (disChar & 0x01) {
         buffer[i] = color_to_565(pd_color);
       } else {
-        
+
         uint8_t col = i % width;
         uint8_t row = i / width;
         int16_t px = x + col;
@@ -248,7 +253,7 @@ void PD_DrawChar(int16_t x, int16_t y, char ch) {
     }
   }
 
-  
+
   for (uint16_t idx = 0; idx < width * height; idx++) {
     uint8_t col = idx % width;
     uint8_t row = idx / width;
@@ -347,37 +352,37 @@ void PD_DrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r) {
   bool fill = pd_fill;
 
   if (fill) {
-    
+
     PD_SetFill(true);
     PD_SetColor(color);
-    PD_DrawRect(x + r, y, w - 2 * r, h);         
-    PD_DrawRect(x, y + r, w, h - 2 * r);         
+    PD_DrawRect(x + r, y, w - 2 * r, h);
+    PD_DrawRect(x, y + r, w, h - 2 * r);
 
-    
+
     for (int16_t dy = -r; dy <= r; dy++) {
       for (int16_t dx = -r; dx <= r; dx++) {
         if (dx * dx + dy * dy <= r * r) {
-          PD_DrawPixel(x + r + dx, y + r + dy);           
-          PD_DrawPixel(x + w - r + dx, y + r + dy);       
-          PD_DrawPixel(x + r + dx, y + h - r + dy);       
-          PD_DrawPixel(x + w - r + dx, y + h - r + dy);   
+          PD_DrawPixel(x + r + dx, y + r + dy);
+          PD_DrawPixel(x + w - r + dx, y + r + dy);
+          PD_DrawPixel(x + r + dx, y + h - r + dy);
+          PD_DrawPixel(x + w - r + dx, y + h - r + dy);
         }
       }
     }
   } else {
-    
-    PD_SetFill(false);
-    
-    PD_DrawLine(x + r, y, x + w - r, y);             
-    PD_DrawLine(x + r, y + h, x + w - r, y + h);     
-    PD_DrawLine(x, y + r, x, y + h - r);             
-    PD_DrawLine(x + w, y + r, x + w, y + h - r);     
 
-    
+    PD_SetFill(false);
+
+    PD_DrawLine(x + r, y, x + w - r, y);
+    PD_DrawLine(x + r, y + h, x + w - r, y + h);
+    PD_DrawLine(x, y + r, x, y + h - r);
+    PD_DrawLine(x + w, y + r, x + w, y + h - r);
+
+
     int16_t px = r, py = 0;
     int16_t err = 0;
     while (px >= py) {
-      
+
       PD_DrawPixel(x + r + px, y + r + py);
       PD_DrawPixel(x + r + py, y + r + px);
       PD_DrawPixel(x + r - px, y + r + py);
@@ -387,7 +392,7 @@ void PD_DrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r) {
       PD_DrawPixel(x + r + px, y + r - py);
       PD_DrawPixel(x + r + py, y + r - px);
 
-      
+
       PD_DrawPixel(x + w - r + px, y + r + py);
       PD_DrawPixel(x + w - r + py, y + r + px);
       PD_DrawPixel(x + w - r - px, y + r + py);
@@ -397,7 +402,7 @@ void PD_DrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r) {
       PD_DrawPixel(x + w - r + px, y + r - py);
       PD_DrawPixel(x + w - r + py, y + r - px);
 
-      
+
       PD_DrawPixel(x + r + px, y + h - r + py);
       PD_DrawPixel(x + r + py, y + h - r + px);
       PD_DrawPixel(x + r - px, y + h - r + py);
@@ -407,7 +412,7 @@ void PD_DrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r) {
       PD_DrawPixel(x + r + px, y + h - r - py);
       PD_DrawPixel(x + r + py, y + h - r - px);
 
-      
+
       PD_DrawPixel(x + w - r + px, y + h - r + py);
       PD_DrawPixel(x + w - r + py, y + h - r + px);
       PD_DrawPixel(x + w - r - px, y + h - r + py);
@@ -479,8 +484,8 @@ void PD_DrawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h,
 typedef struct {
   int16_t y_min;
   int16_t y_max;
-  float x;     
-  float dx;    
+  float x;
+  float dx;
 } PolyEdge;
 
 #define MAX_POLY_EDGES 16
@@ -492,7 +497,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
 
   uint16_t color_565 = color_to_565(color);
 
-  
+
   int16_t min_y = points[1], max_y = points[1];
   for (uint16_t i = 1; i < num_points; i++) {
     if (points[i * 2 + 1] < min_y)
@@ -503,7 +508,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
   if (min_y > max_y)
     return;
 
-  
+
   PolyEdge edges[MAX_POLY_EDGES];
   uint16_t edge_count = 0;
 
@@ -513,7 +518,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
     int16_t y1 = points[j * 2 + 1];
 
     if (y0 == y1)
-      continue; 
+      continue;
 
     int16_t x0 = points[i * 2];
     int16_t x1 = points[j * 2];
@@ -539,9 +544,9 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
     edge_count++;
   }
 
-  
+
   for (int16_t y = min_y; y <= max_y; y++) {
-    
+
     int16_t intersections[MAX_POLY_EDGES];
     uint16_t int_count = 0;
 
@@ -551,7 +556,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
       }
     }
 
-    
+
     for (uint16_t a = 0; a < int_count; a++) {
       for (uint16_t b = a + 1; b < int_count; b++) {
         if (intersections[a] > intersections[b]) {
@@ -562,7 +567,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
       }
     }
 
-    
+
     if (y >= (int)g_tile_y && y < (int)(g_tile_y + g_tile_h)) {
       uint16_t *row_start = &g_fb[(y - g_tile_y) * g_fb_width];
       for (uint16_t k = 0; k + 1 < int_count; k += 2) {
@@ -580,7 +585,7 @@ void PD_DrawPolygon(const int16_t *points, uint16_t num_points,
       }
     }
 
-    
+
     for (uint16_t e = 0; e < edge_count; e++) {
       if (y >= edges[e].y_min && y < edges[e].y_max) {
         edges[e].x += edges[e].dx;
@@ -610,14 +615,14 @@ void PD_DrawAngledCard(int16_t x, int16_t y, int16_t w, int16_t h,
   if (radius < 0)
     radius = 0;
 
-  
+
   int16_t pts[12] = {
-      x,                y,                  
-      x + w - radius,   y,                  
-      x + w,            y + radius,         
-      x + w,            y + h,              
-      x + radius,       y + h,              
-      x,                y + h - radius,     
+      x,                y,
+      x + w - radius,   y,
+      x + w,            y + radius,
+      x + w,            y + h,
+      x + radius,       y + h,
+      x,                y + h - radius,
   };
   PD_DrawPolygon(pts, 6, color);
 }
@@ -630,7 +635,7 @@ void PD_DrawWifiIcon(int16_t x, int16_t y, bool connected) {
   uint32_t on = connected ? TOS_ACCENT : TOS_GREY;
   #define WIFI_ARC_STEPS 16
 
-  
+
   struct { int16_t ro; int16_t ri; } bars[3] = {
     {8, 5}, {4, 2}, {1, 0}
   };
@@ -657,15 +662,15 @@ void PD_DrawEthIcon(int16_t x, int16_t y, bool connected) {
   uint32_t color = connected ? TOS_ACCENT : TOS_GREY;
   int16_t bw = 5, bh = 4;
 
-  
+
   PD_SetColor(color);
   PD_SetFill(true);
-  PD_DrawRect(x + 7,  y + 1,  bw, bh);  
-  PD_DrawRect(x + 1,  y + 11, bw, bh);  
-  PD_DrawRect(x + 13, y + 11, bw, bh);  
+  PD_DrawRect(x + 7,  y + 1,  bw, bh);
+  PD_DrawRect(x + 1,  y + 11, bw, bh);
+  PD_DrawRect(x + 13, y + 11, bw, bh);
   PD_SetFill(false);
 
-  
+
   PD_DrawLine(x + 9,  y + 5,  x + 3,  y + 11);
   PD_DrawLine(x + 11, y + 5,  x + 16, y + 11);
 }
@@ -708,14 +713,14 @@ void PD_DrawFrame(void) {
   LCD_UpdateAutoBrightness(); // global auto-brightness hook
   const int16_t line_w = 2;
 
-  
+
   const int16_t outer[16] = {
       0,   0,   90,  0,   110, 20,  218, 20,
       238, 40,  238, 215, 20,  215, 0,   195,
   };
   PD_DrawPolygon(outer, 8, TOS_ACCENT);
 
-  
+
   const int16_t inner[16] = {
       line_w,       line_w,       90 - line_w,  line_w,
       110 - line_w, 20 + line_w,  218 - line_w, 20 + line_w,
@@ -724,17 +729,17 @@ void PD_DrawFrame(void) {
   };
   PD_DrawPolygon(inner, 8, TOS_BG);
 
-  
+
   {
     const int16_t d1[8] = {83, 8, 88, 8, 98, 18, 93, 18};
     PD_DrawPolygon(d1, 4, TOS_ACCENT);
   }
-  
+
   {
     const int16_t d2[8] = {73, 8, 78, 8, 88, 18, 83, 18};
     PD_DrawPolygon(d2, 4, TOS_ACCENT);
   }
-  
+
   {
     const int16_t d3[6] = {223, 20, 238, 20, 238, 35};
     PD_DrawPolygon(d3, 3, TOS_ACCENT);
@@ -763,7 +768,7 @@ void PD_SetHeaderTime(const char *time_str) {
 void PD_DrawHeader(const char *title) {
   PD_DrawFrame();
 
-  
+
   if (title) {
     PD_SetFont(FONT_ASCII_16);
     PD_SetColor(TOS_ACCENT);
@@ -866,7 +871,7 @@ static void splash_draw_progress(uint8_t level, uint8_t alpha) {
 
 void PD_ShowSplashFadeStart(uint32_t fade_in_ms) {
   PD_Init();
-  
+
   LCD_BeginTileRender(0U, 48U);
   g_fb = LCD_GetFrameBuffer();
   g_tile_y = 0U;
