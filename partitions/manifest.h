@@ -47,7 +47,9 @@
  * Code ~30 KB + logo ~18 KB.  Read-only at runtime.
  * Upgrade is staged via TMP → ELF copies.
  * LCD splash logo: disable LCD_ENABLED for headless boards.            */
+#ifndef LCD_ENABLED
 #define LCD_ENABLED                1
+#endif
 #define BTN_PORT                   GPIOA
 #define BTN_PIN                    15U
 

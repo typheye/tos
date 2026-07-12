@@ -13,8 +13,10 @@ function Format-CBytes {
 
 $keyDirectory = Split-Path -Parent $KeyPath
 $headerDirectory = Split-Path -Parent $OutputHeader
+$keyPathFileDirectory = Split-Path -Parent $KeyPathFile
 New-Item -ItemType Directory -Force -Path $keyDirectory | Out-Null
 New-Item -ItemType Directory -Force -Path $headerDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $keyPathFileDirectory | Out-Null
 
 if (Test-Path -LiteralPath $KeyPath) {
   $keyBytes = [IO.File]::ReadAllBytes($KeyPath)

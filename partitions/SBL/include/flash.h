@@ -30,6 +30,8 @@ typedef struct {
 } SBL_FlashSession;
 
 SBL_CODE const SBL_FlashPartition *SBL_FlashFindPartition(const char *name);
+SBL_CODE uint32_t SBL_FlashPartitionCount(void);
+SBL_CODE const SBL_FlashPartition *SBL_FlashPartitionAt(uint32_t index);
 SBL_CODE uint32_t SBL_FlashChunkSize(void);
 SBL_CODE uint32_t SBL_FlashCrc32Seed(void);
 SBL_CODE uint32_t SBL_FlashCrc32Update(uint32_t crc, const uint8_t *data, uint32_t len);

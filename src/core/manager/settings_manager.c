@@ -17,14 +17,31 @@
 
 #include "include/settings_manager.h"
 #include "ff.h"
+#include "library/include/libdly.h"
 #include <stddef.h>
 
 #define CCMRAM __attribute__((section(".ccmram")))
 
 static CCMRAM Settings_t g_settings;
 static bool g_sd_available = false;
+static bool g_settings_needs_migration = false;
+
+static uint32_t settings_crc(const Settings_t *settings) {
+  const uint8_t *bytes = (const uint8_t *)settings;
+  uint32_t crc = 0xFFFFFFFFU;
+  for (size_t i = 0U; i < sizeof(*settings); ++i) {
+    uint8_t value = (i >= offsetof(Settings_t, crc) &&
+                     i < offsetof(Settings_t, crc) + sizeof(settings->crc))
+                        ? 0U : bytes[i];
+    crc ^= value;
+    for (uint32_t bit = 0U; bit < 8U; ++bit)
+      crc = (crc >> 1) ^ (0xEDB88320U & (0U - (crc & 1U)));
+  }
+  return ~crc;
+}
 
 static void copy_str(char *dst, const char *src, size_t cap) {
+
   if (!dst || cap == 0) return;
   if (!src) src = "";
   strncpy(dst, src, cap - 1);
@@ -110,7 +127,7 @@ static bool load(void) {
   UINT br;
   Settings_t tmp;
 
-  if (f_open(&file, "0:/settings.bin", FA_READ) != FR_OK) {
+  if (f_open(&file, "0:/data/settings.bin", FA_READ) != FR_OK) {
     return false;
   }
   memset(&tmp, 0, sizeof(tmp));
@@ -122,6 +139,18 @@ static bool load(void) {
 
   if (!sm_magic_compatible(tmp.magic)) {
     LOG_W("SMGR", "Bad magic 0x%08lX", (unsigned long)tmp.magic);
+    return false;
+  }
+  if (br != sizeof(tmp)) {
+    LOG_W("SMGR", "Settings size mismatch: %lu/%lu", (unsigned long)br,
+          (unsigned long)sizeof(tmp));
+    return false;
+  }
+  if (tmp.crc == 0U) {
+    g_settings_needs_migration = true;
+    LOG_I("SMGR", "Migrating legacy settings without CRC");
+  } else if (tmp.crc != settings_crc(&tmp)) {
+    LOG_W("SMGR", "Settings CRC mismatch");
     return false;
   }
 
@@ -157,22 +186,32 @@ void SM_Mount(void) {
   FIL file;
   FRESULT res;
 
+  g_sd_available = false;
+  res = f_mkdir("0:/data");
+  if (res != FR_OK && res != FR_EXIST) {
+    LOG_W("SMGR", "Cannot create data directory (%d)", (int)res);
+    return;
+  }
+
   for (int retry = 0; retry < 3; ++retry) {
-    res = f_open(&file, "0:/settings.bin", FA_OPEN_EXISTING);
+    res = f_open(&file, "0:/data/settings.bin", FA_OPEN_EXISTING);
     if (res == FR_OK) { g_sd_available = true; f_close(&file); break; }
     if (res != FR_NOT_READY) break;
     JPDelay(200);
   }
 
   if (!g_sd_available) {
-    res = f_open(&file, "0:/settings.bin", FA_CREATE_NEW);
+    res = f_open(&file, "0:/data/settings.bin", FA_CREATE_NEW);
     if (res == FR_OK) { g_sd_available = true; f_close(&file); }
   }
 
   if (!g_sd_available) { LOG_W("SMGR", "SD not available"); return; }
 
   if (!load()) {
-    LOG_W("SMGR", "Load failed — using defaults");
+    LOG_W("SMGR", "Load failed 鈥?using defaults");
+    SM_Save();
+  } else if (g_settings_needs_migration) {
+    g_settings_needs_migration = false;
     SM_Save();
   }
 }
@@ -185,18 +224,30 @@ void SM_Save(void) {
   /* Always attempt SD write; set available flag on success so
    * late-init or delayed-mount paths still persist settings.   */
   sanitize();
-  res = f_open(&file, "0:/settings.bin", FA_CREATE_ALWAYS | FA_WRITE);
+  g_settings.magic = SM_MAGIC;
+  g_settings.crc = settings_crc(&g_settings);
+  res = f_open(&file, "0:/data/settings.bin", FA_CREATE_ALWAYS | FA_WRITE);
+  g_sd_available = false;
   if (res == FR_OK) {
-    g_sd_available = true;
     if (f_write(&file, &g_settings, sizeof(g_settings), &bw) == FR_OK &&
         bw == sizeof(g_settings)) {
-      f_sync(&file);
-      LOG_I("SMGR", "Saved to SD OK (%luB)", (unsigned long)sizeof(g_settings));
+      res = f_sync(&file);
+      if (res == FR_OK) {
+        g_sd_available = true;
+        LOG_I("SMGR", "Saved to SD OK (%luB)",
+              (unsigned long)sizeof(g_settings));
+      } else {
+        LOG_E("SMGR", "Save: sync failed (%d)", (int)res);
+      }
     } else {
       LOG_E("SMGR", "Save: write failed (%lu/%lu)",
             (unsigned long)bw, (unsigned long)sizeof(g_settings));
     }
-    f_close(&file);
+    res = f_close(&file);
+    if (res != FR_OK) {
+      g_sd_available = false;
+      LOG_E("SMGR", "Save: close failed (%d)", (int)res);
+    }
   } else {
     LOG_W("SMGR", "Save: open failed (%d)", (int)res);
   }

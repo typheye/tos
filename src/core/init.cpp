@@ -69,7 +69,7 @@ static bool sd_root_entry_allowed(const FMCore_Entry *entry) {
     return entry->is_dir == 0U;
   }
 
-  static const char *kAllowedDirs[] = {"storage"};
+  static const char *kAllowedDirs[] = {"data", "storage"};
   for (unsigned i = 0; i < sizeof(kAllowedDirs) / sizeof(kAllowedDirs[0]); ++i) {
     if (sd_root_name_eq(entry->name, kAllowedDirs[i])) {
       return entry->is_dir != 0U;

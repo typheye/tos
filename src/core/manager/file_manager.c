@@ -43,8 +43,8 @@ static FRESULT translate_path(const char *path, char *out, size_t out_sz,
   if (!path || !out || out_sz == 0U) return FR_INVALID_PARAMETER;
 
   if (strcmp(path, "/") == 0 || path[0] == '\0') {
-    if (kind) *kind = FM_PATH_VIRTUAL_ROOT;
-    out[0] = '\0';
+    if (kind) *kind = FM_PATH_STORAGE;
+    strcpy(out, "0:");
     return FR_OK;
   }
   if (path[0] >= '0' && path[0] <= '9' && path[1] == ':') {
@@ -58,18 +58,19 @@ static FRESULT translate_path(const char *path, char *out, size_t out_sz,
     suffix = path + strlen("/storage");
     if (kind) *kind = FM_PATH_STORAGE;
   } else if (path_prefix(path, "/tmp")) {
-    if (kind) *kind = FM_PATH_TMP;
-    out[0] = '\0';
-    return FR_OK;
+    base = "0:/tmp";
+    suffix = path + strlen("/tmp");
+    if (kind) *kind = FM_PATH_STORAGE;
   } else if (path_prefix(path, "/data")) {
+    base = "0:/data";
+    suffix = path + strlen("/data");
     if (kind) *kind = FM_PATH_DATA;
-    out[0] = '\0';
-    return FR_OK;
   } else if (strcmp(path, "/init") == 0) {
     base = "0:/init";
     if (kind) *kind = FM_PATH_INIT;
   } else {
-    return FR_INVALID_NAME;
+    base = "0:"; suffix = path;
+    if (kind) *kind = FM_PATH_STORAGE;
   }
 
   while (*suffix == '/') suffix++;
@@ -88,8 +89,8 @@ static FRESULT translate_path(const char *path, char *out, size_t out_sz,
 }
 
 static bool virtual_write_protected(FMPathKind kind) {
-  return kind == FM_PATH_TMP || kind == FM_PATH_DATA ||
-         kind == FM_PATH_VIRTUAL_ROOT || kind == FM_PATH_INIT;
+  return kind == FM_PATH_TMP || kind == FM_PATH_VIRTUAL_ROOT ||
+         kind == FM_PATH_INIT;
 }
 
 static void fatal_if_needed(FRESULT res, bool fatal_on_storage_error,
@@ -238,11 +239,12 @@ FRESULT FMCore_ListDir(const char *path, FMCore_Entry *entries, uint16_t max_ent
     if (out_count) *out_count = count;
     return FR_OK;
   }
-  if (kind == FM_PATH_STORAGE && !g_storage_mounted) {
+  if ((kind == FM_PATH_STORAGE || kind == FM_PATH_DATA) &&
+      !g_storage_mounted) {
     if (out_count) *out_count = 0U;
     return FR_OK;
   }
-  if (kind == FM_PATH_TMP || kind == FM_PATH_DATA) {
+  if (kind == FM_PATH_TMP) {
     if (out_count) *out_count = 0U;
     return FR_OK;
   }

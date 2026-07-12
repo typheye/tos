@@ -382,6 +382,30 @@ static char *tdb_append_hex32(char *p, uint32_t value) {
   return p;
 }
 
+static uint8_t tdb_send_status(const char *status, const char *message);
+static char *tdb_append_uid_word(char *p, uint32_t value) {
+  static const char hex[] REC_CONST = "0123456789ABCDEF";
+  for (int8_t shift = 28; shift >= 0; shift -= 4)
+    *p++ = hex[(value >> (uint8_t)shift) & 0xFU];
+  return p;
+}
+
+static void tdb_device_id(char id[25]) {
+  const uint32_t *uid = (const uint32_t *)UID_BASE;
+  char *p = id;
+  p = tdb_append_uid_word(p, uid[0]);
+  p = tdb_append_uid_word(p, uid[1]);
+  p = tdb_append_uid_word(p, uid[2]);
+  *p = '\0';
+}
+
+static void tdb_send_identity(void) {
+  char message[40] = "TDB/1 REC ";
+  tdb_device_id(message + 10);
+  (void)tdb_send_status("OKAY", message);
+}
+
+
 static void tdb_usb_get_string(const char *ascii, uint16_t *length) {
   uint16_t len = tdb_strlen(ascii);
   if (len > 31U) len = 31U;
@@ -882,11 +906,14 @@ static uint8_t tdb_shell_ls(uint8_t argc, char *argv[]) {
   for (;;) {
     fr = f_readdir(&dir, &info);
     if (fr != FR_OK || info.fname[0] == 0) break;
-    tdb_output_text((info.fattrib & AM_DIR) ? "d " : "- ");
-    tdb_output_u32((uint32_t)info.fsize);
-    tdb_output_text(" ");
     tdb_output_text(info.fname);
-    tdb_output_text("\r\n");
+    if (info.fattrib & AM_DIR) {
+      tdb_output_text("/\r\n");
+    } else {
+      tdb_output_text("\t");
+      tdb_output_u32((uint32_t)info.fsize);
+      tdb_output_text(" bytes\r\n");
+    }
     if (tdb_output_truncated) break;
   }
   (void)f_closedir(&dir);
@@ -1573,10 +1600,14 @@ static void tdb_handle_command(uint8_t *line) {
   if (tdb_ascii_equal((char *)line, "__LINE_TOO_LONG__")) {
     (void)tdb_send_status("FAIL", "command line too long");
   } else if (tdb_ascii_equal((char *)line, "HELLO")) {
-    (void)tdb_send_status("OKAY", "TDB/1 REC");
+    tdb_send_identity();
   } else if (tdb_ascii_equal((char *)line, "INFO")) {
     tdb_output_reset();
     tdb_output_text("product=TOS Debug Bridge\r\nprotocol=1\r\nmode=REC\r\ncwd=");
+    {
+      char id[25]; tdb_device_id(id);
+      tdb_output_text("serial="); tdb_output_text(id); tdb_output_text("\r\n");
+    }
     tdb_output_text(tdb_cwd);
     tdb_output_text("\r\nmounted=");
     tdb_output_text(REC_FsIsMounted() ? "true\r\n" : "false\r\n");

@@ -7,6 +7,7 @@
 
 #define ELF_FLASH_ERRORS (FLASH_SR_OPERR | FLASH_SR_WRPERR | FLASH_SR_PGAERR | \
                           FLASH_SR_PGPERR | FLASH_SR_PGSERR)
+#define ELF_TXN_STATE_CONSUMED 0xFFFFFFE0UL
 
 static uint8_t ELF_FlashWait(uint32_t guard) {
   while ((FLASH->SR & FLASH_SR_BSY) != 0U) {
@@ -223,7 +224,9 @@ static uint8_t ELF_ApplyUpdate(const TosTeeStateRecord *r) {
 
   if (!ELF_FlashUnlock()) return 0U;
   if (r->update_kind == TOS_UPDATE_SBL) {
-    if (!ELF_FlashEraseSector(1U) || !ELF_FlashEraseSector(2U)) {
+    /* SBL spans all three 16-KiB sectors at 0x08004000..0x0800FFFF. */
+    if (!ELF_FlashEraseSector(1U) || !ELF_FlashEraseSector(2U) ||
+        !ELF_FlashEraseSector(3U)) {
       ELF_FlashLock();
       return 0U;
     }
@@ -251,7 +254,7 @@ static uint8_t ELF_ApplyUpdate(const TosTeeStateRecord *r) {
 }
 
 static void ELF_Reset(void) {
-  /* Write restart flag so next boot skips ECDSA + button wait. */
+  /* Persist a one-shot restart marker before requesting a system reset. */
   (void)ELF_SetRestart();
   __disable_irq();
   __DSB();
@@ -286,11 +289,16 @@ void ELF_Main(void) {
   SCB->VTOR = TOS_PART_ELF_ADDRESS;
   Cust_Setup();
   state = ELF_LatestState();
-  /* Warm boot (system restart): skip ECDSA verification and button wait,
-   * jump directly to SBL if the image passes vector + digest checks. */
+  /* A restart record is only a one-shot UI hint. It must never weaken the
+   * root-of-trust check: SYSTEM can request a reset and may be compromised.
+   * Consume it with a legal 1->0 flash transition; writing 0xFFFFFFFF cannot
+   * erase a programmed word and used to leave this path active forever. */
   if (state && state->txn_state == TOS_TXN_STATE_RESTART &&
+      ELF_SignedImageValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_ADDRESS,
+                             TOS_UPDATE_SBL) &&
       ELF_VectorValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_SIZE)) {
-    (void)ELF_MarkState(state, 0xFFFFFFFFUL); /* consume flag */
+    if (state->boot_target == TOS_BOOT_TARGET_NONE)
+      (void)ELF_MarkState(state, ELF_TXN_STATE_CONSUMED);
     ELF_Jump(TOS_PART_SBL_ADDRESS);
   }
   if (state && state->txn_state == TOS_TXN_STATE_PENDING &&

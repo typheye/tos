@@ -13,9 +13,7 @@ typedef struct {
 } SBL_SectorInfo;
 
 static const char part_sbl[] SBL_CONST = "sbl";
-static const char part_tee[] SBL_CONST = "tee";
 static const char part_rec[] SBL_CONST = "rec";
-static const char part_sah[] SBL_CONST = "sah";
 static const char part_system[] SBL_CONST = "system";
 static const char part_tmp[] SBL_CONST = "tmp";
 
@@ -100,6 +98,14 @@ SBL_CODE const SBL_FlashPartition *SBL_FlashFindPartition(const char *name) {
   }
   return NULL;
 }
+SBL_CODE uint32_t SBL_FlashPartitionCount(void) {
+  return sizeof(sbl_partitions) / sizeof(sbl_partitions[0]);
+}
+
+SBL_CODE const SBL_FlashPartition *SBL_FlashPartitionAt(uint32_t index) {
+  return index < SBL_FlashPartitionCount() ? &sbl_partitions[index] : NULL;
+}
+
 
 SBL_CODE uint32_t SBL_FlashChunkSize(void) { return SBL_FLASH_CHUNK_SIZE; }
 SBL_CODE uint32_t SBL_FlashCrc32Seed(void) { return 0xFFFFFFFFUL; }

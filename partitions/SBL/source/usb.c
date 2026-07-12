@@ -794,12 +794,78 @@ static SBL_CODE void sbl_send_info(void) {
     sbl_hex32(serial + 16, uid[2]);
     serial[24] = '\0';
     SBL_USB_WriteText("serialno:");
+    while (sbl_cdc.tx_busy) {}
     SBL_USB_WriteText(serial);
+    while (sbl_cdc.tx_busy) {}
     SBL_USB_WriteText("\r\n");
     while (sbl_cdc.tx_busy) {}
   }
   SBL_USB_WriteText(SBL_StateUnlocked() ? "unlocked:yes\r\n" : "unlocked:no\r\n");
+  while (sbl_cdc.tx_busy) {}
 }
+static SBL_CODE void sbl_send_value(const char *value) {
+  SBL_USB_WriteTextWait("OKAY");
+  SBL_USB_WriteTextWait(value ? value : "");
+  SBL_USB_WriteTextWait("\r\n");
+}
+
+static SBL_CODE void sbl_serial(char serial[25]) {
+  const uint32_t *uid = (const uint32_t *)0x1FFF7A10U;
+  sbl_hex32(serial + 0, uid[0]);
+  sbl_hex32(serial + 8, uid[1]);
+  sbl_hex32(serial + 16, uid[2]);
+  serial[24] = '\0';
+}
+
+static SBL_CODE void sbl_send_partition_info(const SBL_FlashPartition *part) {
+  char size[11] = "0x00000000";
+  sbl_hex32(size + 2, part->size);
+  SBL_USB_WriteTextWait("INFOpartition:");
+  SBL_USB_WriteTextWait(part->name);
+  SBL_USB_WriteTextWait(":size:");
+  SBL_USB_WriteTextWait(size);
+  SBL_USB_WriteTextWait(part->allow_flash ? ":flash:yes" : ":flash:no");
+  SBL_USB_WriteTextWait(part->allow_erase ? ":erase:yes" : ":erase:no");
+  SBL_USB_WriteTextWait(part->staged ? ":staged:yes\r\n" : ":staged:no\r\n");
+}
+
+static SBL_CODE void sbl_send_partitions(void) {
+  for (uint32_t i = 0U; i < SBL_FlashPartitionCount(); ++i)
+    sbl_send_partition_info(SBL_FlashPartitionAt(i));
+  SBL_USB_WriteTextWait("OKAY\r\n");
+}
+
+static SBL_CODE void sbl_send_getvar(const char *name) {
+  char serial[25];
+  if (sbl_streq((const uint8_t *)name, "product"))
+    sbl_send_value(SBL_BUILD_PRODUCT_NAME);
+  else if (sbl_streq((const uint8_t *)name, "version"))
+    sbl_send_value(SBL_BUILD_VERSION);
+  else if (sbl_streq((const uint8_t *)name, "version-bootloader"))
+    sbl_send_value(SBL_BUILD_VERSION_BOOTLOADER);
+  else if (sbl_streq((const uint8_t *)name, "version-baseband"))
+    sbl_send_value(SBL_BUILD_VERSION_BASEBAND);
+  else if (sbl_streq((const uint8_t *)name, "serialno")) {
+    sbl_serial(serial); sbl_send_value(serial);
+  } else if (sbl_streq((const uint8_t *)name, "unlocked"))
+    sbl_send_value(SBL_StateUnlocked() ? "yes" : "no");
+  else if (sbl_streq((const uint8_t *)name, "all"))
+    sbl_send_partitions();
+  else {
+    static const char prefix[] = "partition-size:";
+    uint32_t i = 0U;
+    while (prefix[i] && name[i] == prefix[i]) ++i;
+    if (!prefix[i]) {
+      const SBL_FlashPartition *part = SBL_FlashFindPartition(name + i);
+      if (part) {
+        char size[11] = "0x00000000";
+        sbl_hex32(size + 2, part->size); sbl_send_value(size); return;
+      }
+    }
+    SBL_USB_WriteTextWait("FAILunknown variable\r\n");
+  }
+}
+
 
 static SBL_CODE void sbl_handle_command(const uint8_t *line) {
   if ((line[0] == 'F' || line[0] == 'f') &&
@@ -824,6 +890,16 @@ static SBL_CODE void sbl_handle_command(const uint8_t *line) {
     (void)sbl_flash_parse_erase(line);
   } else if (sbl_streq(line, "FLASHEND") || sbl_streq(line, "flashend")) {
     (void)sbl_flash_parse_end();
+  } else if ((line[0] == 'G' || line[0] == 'g') &&
+             (line[1] == 'E' || line[1] == 'e') &&
+             (line[2] == 'T' || line[2] == 't') &&
+             (line[3] == 'V' || line[3] == 'v') &&
+             (line[4] == 'A' || line[4] == 'a') &&
+             (line[5] == 'R' || line[5] == 'r') && line[6] == ' ') {
+    sbl_send_getvar((const char *)(line + 7U));
+  } else if (sbl_streq(line, "OEM PARTITIONS") ||
+             sbl_streq(line, "oem partitions")) {
+    sbl_send_partitions();
   } else if (sbl_streq(line, "INFO") || sbl_streq(line, "info")) {
     sbl_send_info();
   } else if (sbl_streq(line, "REBOOT RECOVERY") ||
