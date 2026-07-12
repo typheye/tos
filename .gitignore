@@ -6,7 +6,3 @@
 *~
 .DS_Store
 Thumbs.db
-
-# Logs (from flash tool)
-tools/flash_download_tool/logs/
-tools/flash_download_tool/dl_temp/
