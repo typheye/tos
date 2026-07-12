@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    fat.c
+ * @author  Typheye
+ * @brief   REC FatFS and SD card implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "rec.h"
 
 #include "diskio.h"
@@ -677,7 +694,7 @@ static REC_CODE uint8_t rec_flash_file(const char *part_name, const char *path,
 
   part = SBL_FlashFindPartition(part_name);
   image_size = (uint32_t)f_size(&file);
-  if (!part || image_size != part->size) {
+  if (!part || image_size == 0U || image_size > part->size) {
     (void)f_close(&file);
     rec_copy_error(rec_err_bad_size);
     rec_log_line("ERROR", "REC  ", rec_err_bad_size);
@@ -825,6 +842,7 @@ REC_CODE uint8_t REC_FatHasUpgradeManifest(void) {
                ok ? rec_log_manifest_found : REC_FatLastError());
   return ok;
 }
+
 
 REC_CODE uint8_t REC_FatFlashUpgrade(void (*status)(const char *, uint16_t)) {
   uint8_t wrote = 0U;

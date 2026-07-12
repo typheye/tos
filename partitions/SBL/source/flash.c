@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    flash.c
+ * @author  Typheye
+ * @brief   SBL flash partition management and flashing implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #include "flash.h"
 
 #include <stddef.h>
@@ -126,7 +143,7 @@ SBL_CODE uint32_t SBL_FlashCrc32Finish(uint32_t crc) { return ~crc; }
 SBL_CODE uint8_t SBL_FlashBegin(SBL_FlashSession *session,
                                 const SBL_FlashPartition *part,
                                 uint32_t size, uint32_t expected_crc) {
-  if (!session || !part || !part->allow_flash || size != part->size ||
+  if (!session || !part || !part->allow_flash || size > part->size ||
       expected_crc == 0xFFFFFFFFUL) return 0U;
   if (part->staged) {
     if (part->size > TOS_TMP_STAGE_SIZE ||

@@ -67,8 +67,8 @@ function Pad-File4 {
   }
 }
 
-$signScript = Join-Path $root "scripts\sign_image.ps1"
-$verifyScript = Join-Path $root "scripts\verify_image.ps1"
+$signScript = Join-Path $root "scripts\sign.ps1"
+$verifyScript = Join-Path $root "scripts\verify.ps1"
 $keyPathFile = Join-Path $buildPath "secure-boot\signing-key.path"
 if (!(Test-Path -LiteralPath $keyPathFile)) {
   throw "Secure boot signing key path not found: $keyPathFile"

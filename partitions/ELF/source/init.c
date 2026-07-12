@@ -1,3 +1,19 @@
+/**
+ ******************************************************************************
+ * @file    init.c
+ * @author  Typheye
+ * @brief   ELF root-of-trust boot and state management implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 #include "init.h"
 
 #include "stm32f407xx.h"
@@ -107,9 +123,12 @@ static const TosTeeStateRecord *ELF_LatestState(void) {
     const TosTeeStateRecord *r =
         (const TosTeeStateRecord *)(TOS_TEE_STATE_ADDRESS + off);
     if (ELF_RecordErased(r)) break;
-    if (TosTeeStateRecordValid(r) && (!latest || r->sequence >= latest->sequence)) {
-      latest = r;
-    }
+    if (!TosTeeStateRecordValid(r)) continue;
+    /* PENDING update always takes priority —
+     * SBL_SystemReboot writes RESTART after PENDING with a higher
+     * sequence, so pure sequence-order would shadow the update. */
+    if (r->txn_state == TOS_TXN_STATE_PENDING) return r;
+    if (!latest || r->sequence >= latest->sequence) latest = r;
   }
   return latest;
 }
@@ -121,11 +140,8 @@ static uint8_t ELF_ManifestPresent(void) {
 
 static uint8_t ELF_SignedImageValid(uint32_t storage_address,
                                       uint32_t load_address,
-                                      uint32_t update_kind) {
-  uint32_t size = update_kind == TOS_UPDATE_SBL ? TOS_PART_SBL_SIZE
-                                                : TOS_PART_REC_SIGNED_SIZE;
-  uint32_t type = update_kind == TOS_UPDATE_SBL ? TOS_IMAGE_TYPE_SBL
-                                                : TOS_IMAGE_TYPE_REC;
+                                      uint32_t size,
+                                      uint32_t type) {
   return SecureBoot_Verify(storage_address, load_address, size, type, 1U) ==
                  SECUREBOOT_VERIFY_OK
              ? 1U
@@ -147,11 +163,7 @@ static uint8_t ELF_TransactionBounds(const TosTeeStateRecord *r) {
       r->image_size > TOS_TMP_STAGE_SIZE) return 0U;
   if (r->update_kind == TOS_UPDATE_SBL) {
     return r->target_address == TOS_PART_SBL_ADDRESS &&
-           r->image_size == TOS_PART_SBL_SIZE ? 1U : 0U;
-  }
-  if (r->update_kind == TOS_UPDATE_REC) {
-    return r->target_address == TOS_PART_REC_ADDRESS &&
-           r->image_size == TOS_PART_REC_SIZE ? 1U : 0U;
+           r->image_size <= TOS_PART_SBL_SIZE ? 1U : 0U;
   }
   return 0U;
 }
@@ -217,20 +229,15 @@ static uint8_t ELF_ApplyUpdate(const TosTeeStateRecord *r) {
   if (!ELF_TransactionBounds(r) || !ELF_ManifestPresent() ||
       ELF_Crc32(src, r->image_size) != r->image_crc32 ||
       !ELF_SignedImageValid(r->source_address, r->target_address,
-                              r->update_kind)) {
+                              TOS_PART_SBL_SIZE, TOS_IMAGE_TYPE_SBL)) {
     (void)ELF_MarkState(r, TOS_TXN_STATE_FAILED);
     return 0U;
   }
 
   if (!ELF_FlashUnlock()) return 0U;
-  if (r->update_kind == TOS_UPDATE_SBL) {
-    /* SBL spans all three 16-KiB sectors at 0x08004000..0x0800FFFF. */
-    if (!ELF_FlashEraseSector(1U) || !ELF_FlashEraseSector(2U) ||
-        !ELF_FlashEraseSector(3U)) {
-      ELF_FlashLock();
-      return 0U;
-    }
-  } else if (!ELF_FlashEraseSector(4U)) {
+  /* SBL spans all three 16-KiB sectors at 0x08004000..0x0800FFFF. */
+  if (!ELF_FlashEraseSector(1U) || !ELF_FlashEraseSector(2U) ||
+      !ELF_FlashEraseSector(3U)) {
     ELF_FlashLock();
     return 0U;
   }
@@ -247,7 +254,7 @@ static uint8_t ELF_ApplyUpdate(const TosTeeStateRecord *r) {
   if (ELF_Crc32((const void *)(uintptr_t)r->target_address, r->image_size) !=
           r->image_crc32 ||
       !ELF_SignedImageValid(r->target_address, r->target_address,
-                              r->update_kind)) {
+                              TOS_PART_SBL_SIZE, TOS_IMAGE_TYPE_SBL)) {
     return 0U;
   }
   return ELF_MarkState(r, TOS_TXN_STATE_DONE);
@@ -295,7 +302,7 @@ void ELF_Main(void) {
    * erase a programmed word and used to leave this path active forever. */
   if (state && state->txn_state == TOS_TXN_STATE_RESTART &&
       ELF_SignedImageValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_ADDRESS,
-                             TOS_UPDATE_SBL) &&
+                             TOS_PART_SBL_SIZE, TOS_IMAGE_TYPE_SBL) &&
       ELF_VectorValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_SIZE)) {
     if (state->boot_target == TOS_BOOT_TARGET_NONE)
       (void)ELF_MarkState(state, ELF_TXN_STATE_CONSUMED);
@@ -306,14 +313,14 @@ void ELF_Main(void) {
     if (ELF_ApplyUpdate(state)) ELF_Reset();
     if (state->txn_state == TOS_TXN_STATE_FAILED &&
         ELF_SignedImageValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_ADDRESS,
-                               TOS_UPDATE_SBL) &&
+                               TOS_PART_SBL_SIZE, TOS_IMAGE_TYPE_SBL) &&
         ELF_VectorValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_SIZE)) {
       ELF_Jump(TOS_PART_SBL_ADDRESS);
     }
     while (1) __NOP();
   }
   if (ELF_SignedImageValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_ADDRESS,
-                             TOS_UPDATE_SBL) &&
+                             TOS_PART_SBL_SIZE, TOS_IMAGE_TYPE_SBL) &&
       ELF_VectorValid(TOS_PART_SBL_ADDRESS, TOS_PART_SBL_SIZE)) {
     Cust_Finally();
     ELF_Jump(TOS_PART_SBL_ADDRESS);

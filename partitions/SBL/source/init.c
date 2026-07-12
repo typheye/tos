@@ -1,3 +1,19 @@
+/**
+ ******************************************************************************
+ * @file    init.c
+ * @author  Typheye
+ * @brief   SBL boot initialization and routing implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 #include "init.h"
 
 #include <stdint.h>
@@ -178,8 +194,10 @@ SBL_CODE void SBL_Run(void) {
 
   SBL_LedsOff();
   if (fastboot_requested) {
+    SBL_StatusLedOn();
     SBL_UiDrawFastboot();
     if (SBL_ClockConfig()) {
+      SBL_UartInit();
       SBL_USB_DisconnectPulse();
       if (SBL_USB_Init()) {
         HAL_NVIC_SetPriority(OTG_FS_IRQn, 6U, 0U);
@@ -191,7 +209,6 @@ SBL_CODE void SBL_Run(void) {
     }
     SBL_UiRunFastboot();
   }
-  SBL_UiRunFastboot();
 }
 
 void SBL_Main(void) {

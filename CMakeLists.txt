@@ -28,7 +28,7 @@ set(TOS_SECURE_BOOT_KEY_HEADER "${TOS_SECURE_BOOT_GENERATED_DIR}/tos_secure_boot
 set(TOS_SECURE_BOOT_KEY_PATH_FILE "${CMAKE_BINARY_DIR}/secure-boot/signing-key.path")
 execute_process(
     COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File
-            ${CMAKE_SOURCE_DIR}/scripts/prepare_secure_boot_key.ps1
+            ${CMAKE_SOURCE_DIR}/scripts/keygen.ps1
             -OutputHeader ${TOS_SECURE_BOOT_KEY_HEADER}
             -KeyPath ${TOS_SIGNING_KEY}
             -KeyPathFile ${TOS_SECURE_BOOT_KEY_PATH_FILE}
@@ -63,7 +63,7 @@ add_subdirectory(cmake/partitions)
 
 add_custom_target(export_partitions
     COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File
-            ${CMAKE_SOURCE_DIR}/scripts/export_partitions.ps1
+            ${CMAKE_SOURCE_DIR}/scripts/export.ps1
             -BuildDir ${CMAKE_BINARY_DIR}
     DEPENDS sbl rec ${CMAKE_PROJECT_NAME}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
@@ -73,13 +73,13 @@ add_custom_target(factory_images
 
 if(CMAKE_HOST_WIN32)
   add_custom_target(flash_system
-      COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/upload.bat system
+      COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/flash.bat system
       DEPENDS factory_images)
   add_custom_target(flash_runtime
-      COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/upload.bat runtime
+      COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/flash.bat runtime
       DEPENDS factory_images)
   add_custom_target(flash_factory
-      COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/upload.bat factory
+      COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/flash.bat factory
       DEPENDS factory_images)
 endif()
 

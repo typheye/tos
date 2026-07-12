@@ -48,7 +48,7 @@ if /I "%MODE%"=="system" goto system
 if /I "%MODE%"=="runtime" goto runtime
 if /I "%MODE%"=="factory" goto factory
 
-echo Usage: upload.bat [system^|runtime^|factory]
+echo Usage: flash.bat [system^|runtime^|factory]
 echo.
 echo   system  - flash SYSTEM only ^(default^)
 echo   runtime - flash REC + SAH + SYSTEM
@@ -96,6 +96,11 @@ goto finish
 
 :factory
 echo [WARNING] Factory mode writes immutable ELF and the complete boot layout.
+if not exist "%BUILD_WIN%\CMakeCache.txt" (
+  echo [INFO] First-time setup: configuring CMake...
+  cmake -B "%BUILD_WIN%" -DCMAKE_BUILD_TYPE=Release
+  if errorlevel 1 ( echo [ERROR] CMake configure failed. & exit /b 4 )
+)
 call :require_file "%FLASH_WIN%\factory.elf"
 if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\sbl.elf"

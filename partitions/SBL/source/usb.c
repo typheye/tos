@@ -1,3 +1,19 @@
+/**
+ ******************************************************************************
+ * @file    usb.c
+ * @author  Typheye
+ * @brief   SBL USB CDC fastboot protocol implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 #include "usb.h"
 
 #include "build.h"
@@ -58,8 +74,14 @@ static SBL_USB_FlashContext sbl_flash_ctx;
 static uint8_t sbl_flash_chunk[SBL_FLASH_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint8_t sbl_usb_started;
 static uint8_t sbl_usb_banner_sent;
-static volatile uint8_t sbl_usb_unlock_pending;
-static volatile uint8_t sbl_usb_reload_pending;
+
+/* ── OEM unlock token (32 bytes) ─────────────────────────────────── */
+static const uint8_t sbl_unlock_token[32] = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
 
 static uint8_t SBL_USBD_CDC_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
 static uint8_t SBL_USBD_CDC_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
@@ -230,6 +252,46 @@ static SBL_CODE uint32_t sbl_parse_hex32(const uint8_t *text, uint32_t *out) {
   }
   *out = value;
   return i;
+}
+
+static SBL_CODE uint8_t sbl_hex_to_bin(const uint8_t *hex, uint8_t *bin,
+                                        uint32_t bin_len) {
+  uint32_t i;
+  if (!hex || !bin || bin_len == 0U) return 0U;
+  for (i = 0U; i < bin_len; ++i) {
+    uint8_t hi = hex[i * 2U];
+    uint8_t lo = hex[i * 2U + 1U];
+    uint8_t nib_hi, nib_lo;
+    if (hi >= '0' && hi <= '9') {
+      nib_hi = (uint8_t)(hi - '0');
+    } else if (hi >= 'a' && hi <= 'f') {
+      nib_hi = (uint8_t)(hi - 'a' + 10U);
+    } else if (hi >= 'A' && hi <= 'F') {
+      nib_hi = (uint8_t)(hi - 'A' + 10U);
+    } else {
+      return 0U;
+    }
+    if (lo >= '0' && lo <= '9') {
+      nib_lo = (uint8_t)(lo - '0');
+    } else if (lo >= 'a' && lo <= 'f') {
+      nib_lo = (uint8_t)(lo - 'a' + 10U);
+    } else if (lo >= 'A' && lo <= 'F') {
+      nib_lo = (uint8_t)(lo - 'A' + 10U);
+    } else {
+      return 0U;
+    }
+    bin[i] = (uint8_t)((nib_hi << 4U) | nib_lo);
+  }
+  return 1U;
+}
+
+static SBL_CODE uint8_t sbl_secure_memcmp(const uint8_t *a, const uint8_t *b,
+                                           uint32_t len) {
+  uint8_t diff = 0U;
+  for (uint32_t i = 0U; i < len; ++i) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff == 0U ? 1U : 0U;
 }
 
 static SBL_CODE const uint8_t *sbl_skip_space(const uint8_t *p) {
@@ -720,37 +782,7 @@ SBL_CODE void SBL_USB_DeInit(void) {
   }
   sbl_usb_started = 0U;
   sbl_usb_banner_sent = 0U;
-  sbl_usb_unlock_pending = 0U;
-  sbl_usb_reload_pending = 0U;
   sbl_flash_reset();
-}
-
-SBL_CODE uint8_t SBL_USB_ConsumeUnlockRequest(void) {
-  if (!sbl_usb_unlock_pending) {
-    return 0U;
-  }
-  sbl_usb_unlock_pending = 0U;
-  return 1U;
-}
-
-SBL_CODE uint8_t SBL_USB_ConsumeBootloaderReloadRequest(void) {
-  if (!sbl_usb_reload_pending) {
-    return 0U;
-  }
-  sbl_usb_reload_pending = 0U;
-  return 1U;
-}
-
-SBL_CODE void SBL_USB_SendUnlockResult(uint8_t accepted, uint8_t flash_ok) {
-  if (accepted) {
-    if (flash_ok) {
-      SBL_USB_WriteTextWait("OKAY bootloader unlocked\r\n");
-    } else {
-      SBL_USB_WriteTextWait("FAIL flash write failed\r\n");
-    }
-  } else {
-    SBL_USB_WriteTextWait("FAIL unlock canceled\r\n");
-  }
 }
 
 SBL_CODE uint8_t SBL_USB_IsBusy(void) {
@@ -919,13 +951,14 @@ static SBL_CODE void sbl_handle_command(const uint8_t *line) {
   } else if (sbl_streq(line, "OEM UNLOCK") ||
              sbl_streq(line, "oem unlock")) {
     if (SBL_StateUnlocked()) {
-      SBL_USB_WriteText("INFO bootloader already unlocked\r\n");
-      while (sbl_cdc.tx_busy) {
-      }
-      SBL_USB_WriteText("OKAY already unlocked\r\n");
+      SBL_USB_WriteTextWait("INFO bootloader already unlocked\r\n");
+      SBL_USB_WriteTextWait("OKAY already unlocked\r\n");
+    } else if (SBL_StateSetUnlocked(1U)) {
+      SBL_USB_WriteTextWait("OKAY bootloader unlocked\r\n");
+      SBL_DelayMs(120U);
+      SBL_SystemReboot();
     } else {
-      sbl_usb_unlock_pending = 1U;
-      SBL_USB_WriteText("INFO unlock confirmation required\r\n");
+      SBL_USB_WriteTextWait("FAIL flash write failed\r\n");
     }
   } else if (sbl_streq(line, "OEM LOCK") ||
              sbl_streq(line, "oem lock")) {

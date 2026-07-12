@@ -1,4 +1,21 @@
-﻿#include "secure_boot.h"
+﻿/**
+ ******************************************************************************
+ * @file    verify.c
+ * @author  Typheye
+ * @brief   ELF image verification implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
+#include "secure_boot.h"
 
 #include "p256-m.h"
 #include "tee_format.h"

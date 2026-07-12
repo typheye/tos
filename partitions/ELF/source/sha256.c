@@ -1,4 +1,21 @@
-﻿#include "sha256.h"
+﻿/**
+ ******************************************************************************
+ * @file    sha256.c
+ * @author  Typheye
+ * @brief   ELF SHA-256 hash implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
+#include "sha256.h"
 
 static const uint32_t k[64] = {
     0x428A2F98U, 0x71374491U, 0xB5C0FBCFU, 0xE9B5DBA5U,

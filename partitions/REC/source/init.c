@@ -1,3 +1,19 @@
+/**
+ ******************************************************************************
+ * @file    init.c
+ * @author  Typheye
+ * @brief   REC mode dispatch and recovery task implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 #include "rec.h"
 
 #include "rec_tdb.h"
@@ -13,8 +29,6 @@
 #define REC_STATUS_Y 112U
 #define REC_DETAIL_Y 136U
 #define REC_LINE_H 16U
-#define REC_REBOOT_DELAY_MS 900U
-#define REC_ERROR_DELAY_MS 1800U
 
 typedef struct {
   uint32_t magic;
@@ -130,15 +144,6 @@ static REC_CODE uint8_t rec_resolve_mode(uint8_t mode) {
   return REC_MODE_WAIT;
 }
 
-static REC_CODE void rec_reboot_after_result(const char *status,
-                                             uint16_t status_color,
-                                             const char *detail) {
-  rec_draw_status(status, status_color);
-  rec_draw_detail(detail, detail ? SBL_RED : SBL_WHITE);
-  SBL_DelayMs(detail ? REC_ERROR_DELAY_MS : REC_REBOOT_DELAY_MS);
-  SBL_SystemReboot();
-}
-
 static REC_CODE uint8_t rec_upgrade_from_sd(void) {
   if (!REC_FatProbeInit()) {
     return 0U;
@@ -158,58 +163,64 @@ REC_CODE void REC_Run(uint8_t mode) {
   SBL_LcdBacklightFull();
   effective_mode = rec_resolve_mode(mode);
 
-  if (effective_mode == REC_MODE_WAIT) {
-    /* CDC enumerates immediately and never waits for SD.  The SD/FatFs path is
-     * opened only when a TDB filesystem command actually needs it, so an
-     * absent or slow card cannot delay the COM device. */
-    rec_draw_full(rec_tdb_ready, SBL_GREEN);
-    rec_draw_detail(rec_tdb_hint, SBL_WHITE);
-    SBL_DelayMs(20U);
-    if (!REC_TDB_Start()) {
-      rec_draw_status(rec_tdb_fail, SBL_RED);
-    }
-    while (1) {
-      if (!REC_TDB_IsStarted()) {
-        SBL_DelayMs(250U);
-        (void)REC_TDB_Start();
-      }
-      REC_TDB_Tick();
-      SBL_DelayMs(1U);
-    }
-  }
-
-  if (effective_mode == REC_MODE_CLOCK_ERROR) {
-    rec_draw_full(rec_clock_fail, SBL_RED);
-    SBL_DelayMs(REC_ERROR_DELAY_MS);
+  switch (effective_mode) {
+  case REC_MODE_FORMAT:
+    rec_draw_full(rec_format, SBL_WHITE);
+    ok = REC_FatInitStorage();
+    error = ok ? 0 : REC_FatLastError();
+    REC_FatRelease();
+    rec_draw_status(ok ? rec_format_done : rec_format_fail,
+                    ok ? SBL_GREEN : SBL_RED);
+    rec_draw_detail(error, error ? SBL_RED : SBL_WHITE);
+    SBL_DelayMs(2000U);
     SBL_SystemReboot();
     return;
-  }
-
-  if (effective_mode == REC_MODE_FORMAT) {
-    rec_draw_full(rec_format, SBL_WHITE);
-    ok = REC_FatFormat();
-    error = ok ? 0 : REC_FatLastError();
-    rec_reboot_after_result(ok ? rec_format_done : rec_format_fail,
-                            ok ? SBL_GREEN : SBL_RED, error);
-    return;
-  }
-
-  if (effective_mode == REC_MODE_INIT) {
+  case REC_MODE_INIT:
     rec_draw_full(rec_init, SBL_WHITE);
     ok = REC_FatInitStorage();
     error = ok ? 0 : REC_FatLastError();
     REC_FatRelease();
-    rec_reboot_after_result(ok ? rec_init_done : rec_init_fail,
-                            ok ? SBL_GREEN : SBL_RED, error);
+    rec_draw_status(ok ? rec_init_done : rec_init_fail,
+                    ok ? SBL_GREEN : SBL_RED);
+    rec_draw_detail(error, error ? SBL_RED : SBL_WHITE);
+    SBL_DelayMs(2000U);
+    SBL_SystemReboot();
     return;
+  case REC_MODE_UPGRADE:
+    rec_draw_full(rec_mounting, SBL_WHITE);
+    ok = rec_upgrade_from_sd();
+    error = ok ? 0 : REC_FatLastError();
+    REC_FatRelease();
+    rec_draw_status(ok ? rec_upgrade_done : rec_upgrade_fail,
+                    ok ? SBL_GREEN : SBL_RED);
+    rec_draw_detail(error, error ? SBL_RED : SBL_WHITE);
+    SBL_DelayMs(2000U);
+    SBL_SystemReboot();
+    return;
+  case REC_MODE_CLOCK_ERROR:
+    rec_draw_full(rec_clock_fail, SBL_RED);
+    SBL_DelayMs(2000U);
+    SBL_SystemReboot();
+    return;
+  default:
+    break;
   }
 
-  rec_draw_full(rec_mounting, SBL_WHITE);
-  ok = rec_upgrade_from_sd();
-  error = ok ? 0 : REC_FatLastError();
-  REC_FatRelease();
-  rec_reboot_after_result(ok ? rec_upgrade_done : rec_upgrade_fail,
-                          ok ? SBL_GREEN : SBL_RED, error);
+  /* REC_MODE_WAIT — stay in TDB shell, no auto-reboot */
+  rec_draw_full(rec_tdb_ready, SBL_GREEN);
+  rec_draw_detail(rec_tdb_hint, SBL_WHITE);
+  SBL_DelayMs(20U);
+  if (!REC_TDB_Start()) {
+    rec_draw_status(rec_tdb_fail, SBL_RED);
+  }
+  while (1) {
+    if (!REC_TDB_IsStarted()) {
+      SBL_DelayMs(250U);
+      (void)REC_TDB_Start();
+    }
+    REC_TDB_Tick();
+    SBL_DelayMs(1U);
+  }
 }
 
 void REC_Main(uint8_t clock_ok) {

@@ -1,3 +1,19 @@
+/**
+ ******************************************************************************
+ * @file    tdb.c
+ * @author  Typheye
+ * @brief   TOS Debug Bridge USB CDC shell and file transfer implementation.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 #include "rec_tdb.h"
 
 #include "ff.h"
@@ -801,7 +817,11 @@ static void tdb_fs_error(const char *what, FRESULT fr) {
 }
 
 static uint8_t tdb_path_pop(char *out, uint32_t *len) {
-  if (*len <= 3U) return 1U;
+  if (*len <= 3U) {
+    out[0] = '0'; out[1] = ':'; out[2] = '/'; out[3] = 0;
+    *len = 3U;
+    return 1U;
+  }
   while (*len > 3U && out[*len - 1U] != '/') (*len)--;
   if (*len > 3U) (*len)--;
   out[*len] = 0;
@@ -1409,10 +1429,21 @@ static uint8_t tdb_shell_exec(char *command) {
   tdb_output_reset();
   if (argc == 0U) return 1U;
   if (tdb_ascii_equal(argv[0], "help")) {
-    tdb_output_text("pwd ls [path] cd <path> stat <path> df\r\n");
-    tdb_output_text("mkdir <path> rm <path> mv <src> <dst> cp <src> <dst>\r\n");
-    tdb_output_text("cat <file> mount umount settings [list|get|set] reboot\r\n");
-    tdb_output_text("Use host commands 'tdb push' and 'tdb pull' for file transfer.\r\n");
+    tdb_output_text("  ls [path]     - list directory\r\n");
+    tdb_output_text("  cd <path>     - change directory\r\n");
+    tdb_output_text("  pwd           - print working directory\r\n");
+    tdb_output_text("  cat <file>    - print file contents\r\n");
+    tdb_output_text("  stat <path>   - show file/dir info\r\n");
+    tdb_output_text("  df            - show free space\r\n");
+    tdb_output_text("  mkdir <path>  - create directory\r\n");
+    tdb_output_text("  rm <path>     - remove file or empty dir\r\n");
+    tdb_output_text("  mv <src> <dst> - move / rename\r\n");
+    tdb_output_text("  cp <src> <dst> - copy file\r\n");
+    tdb_output_text("  mount         - mount SD filesystem\r\n");
+    tdb_output_text("  umount        - unmount SD filesystem\r\n");
+    tdb_output_text("  settings [list|get <k>|set <k> <v>]\r\n");
+    tdb_output_text("  reboot        - reboot device\r\n");
+    tdb_output_text("Host: tdb push <local> [remote] | tdb pull <remote> [local]\r\n");
   } else if (tdb_ascii_equal(argv[0], "pwd")) {
     tdb_output_text(tdb_cwd); tdb_output_text("\r\n");
   } else if (tdb_ascii_equal(argv[0], "ls")) ok = tdb_shell_ls(argc, argv);

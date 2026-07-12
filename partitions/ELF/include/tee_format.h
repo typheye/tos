@@ -1,3 +1,20 @@
+/**
+ ******************************************************************************
+ * @file    tee_format.h
+ * @author  Typheye
+ * @brief   TEE state record format and validation interface.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2021-2026 Typheye. All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+
 #ifndef TEE_FORMAT_H
 #define TEE_FORMAT_H
 
