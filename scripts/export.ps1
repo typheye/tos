@@ -113,8 +113,31 @@ function Export-Partition {
     if ($LASTEXITCODE -ne 0) { throw "Signing failed for $Target" }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verifyScript -ImagePath $path -PublicKeyPath ($signingKeyPath + ".pub") -ExpectedType $ImageType -ExpectedAddress $Address -ExpectedSize $SignedSize -MinimumVersion $imageVersion
     if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $Target" }
-    & $objcopyPath --update-section (".tos_image_header=" + $headerPath) $flashPath
-    if ($LASTEXITCODE -ne 0) { throw "ELF header update failed for $Target" }
+    # Signing also normalizes the unused vector-table tail (0x180..0x1FF) to
+    # erased 0xFF. Patch both loadable sections so sparse ELF flashing is
+    # byte-identical to the verified full-partition BIN.
+    $vectorPath = Join-Path $buildPath ("secure-boot\" + $Target + ".vector.bin")
+    $signedImage = [IO.File]::ReadAllBytes($path)
+    $signedVector = New-Object byte[] 0x200
+    [Array]::Copy($signedImage, 0, $signedVector, 0, $signedVector.Length)
+    [IO.File]::WriteAllBytes($vectorPath, $signedVector)
+    & $objcopyPath `
+        --update-section (".isr_vector=" + $vectorPath) `
+        --update-section (".tos_image_header=" + $headerPath) `
+        $flashPath
+    if ($LASTEXITCODE -ne 0) { throw "ELF signed-section update failed for $Target" }
+
+    $flashVerifyPath = Join-Path $buildPath ("secure-boot\" + $Target + ".flash-verify.bin")
+    & $objcopyPath -O binary --gap-fill 0xFF `
+        --pad-to ("0x{0:X8}" -f $padTo) $flashPath $flashVerifyPath
+    if ($LASTEXITCODE -ne 0) { throw "ELF expansion failed for $Target" }
+    $signedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash
+    $flashHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $flashVerifyPath).Hash
+    $flashLength = (Get-Item -LiteralPath $flashVerifyPath).Length
+    Remove-Item -LiteralPath $flashVerifyPath -Force
+    if ($flashLength -ne $Size -or $flashHash -ne $signedHash) {
+      throw "Host-flash ELF is not byte-identical to signed BIN for $Target"
+    }
   }
 }
 
