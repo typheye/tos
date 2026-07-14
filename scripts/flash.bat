@@ -12,14 +12,12 @@ if not defined MODE set "MODE=system"
 
 set "OPENOCD=C:\ProgramData\chocolatey\lib\openocd\tools\install\bin\openocd.exe"
 set "OPENOCD_SPEED=%OPENOCD_SPEED%"
-if not defined OPENOCD_SPEED set "OPENOCD_SPEED=16000"
+if not defined OPENOCD_SPEED set "OPENOCD_SPEED=50000"
 set "ROOT_WIN=%CD%"
 set "ROOT_OC=%CD:\=/%"
 set "BUILD_WIN=%ROOT_WIN%\build\Release"
-set "FW_WIN=%ROOT_WIN%\dist\firmware"
 set "FLASH_WIN=%ROOT_WIN%\dist\flash"
 set "BUILD_OC=%ROOT_OC%/build/Release"
-set "FW_OC=%ROOT_OC%/dist/firmware"
 set "FLASH_OC=%ROOT_OC%/dist/flash"
 
 if not exist "%BUILD_WIN%\CMakeCache.txt" (
@@ -67,7 +65,8 @@ echo [FLASH] SYSTEM %FLASH_OC%/system.elf
   -c "adapter speed %OPENOCD_SPEED%" ^
   -c "init" ^
   -c "reset halt" ^
-  -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
+  -c "flash erase_address 0x08040000 0x000C0000" ^
+  -c "flash write_image {%FLASH_OC%/system.elf}" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"
@@ -87,8 +86,10 @@ echo [FLASH] SYSTEM %FLASH_OC%/system.elf
   -c "adapter speed %OPENOCD_SPEED%" ^
   -c "init" ^
   -c "reset halt" ^
-  -c "flash write_image erase {%FW_OC%/rec.bin} 0x08010000 bin" ^
-  -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
+  -c "flash erase_address 0x08010000 0x00010000" ^
+  -c "flash write_image {%FLASH_OC%/rec.elf}" ^
+  -c "flash erase_address 0x08040000 0x000C0000" ^
+  -c "flash write_image {%FLASH_OC%/system.elf}" ^
   -c "reset run" ^
   -c "shutdown"
 set "RC=%ERRORLEVEL%"
@@ -104,7 +105,6 @@ if not exist "%BUILD_WIN%\CMakeCache.txt" (
 call :require_file "%FLASH_WIN%\factory.elf"
 if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\sbl.elf"
-if errorlevel 1 exit /b 3
 if errorlevel 1 exit /b 3
 call :require_file "%FLASH_WIN%\rec.elf"
 if errorlevel 1 exit /b 3
@@ -122,9 +122,12 @@ rem Program ELF last so an interrupted migration cannot boot a partial new layou
   -c "adapter speed %OPENOCD_SPEED%" ^
   -c "init" ^
   -c "reset halt" ^
-  -c "flash write_image erase {%FW_OC%/sbl.bin} 0x08004000 bin" ^
-  -c "flash write_image erase {%FW_OC%/rec.bin} 0x08010000 bin" ^
-  -c "flash write_image erase {%FW_OC%/system.bin} 0x08040000 bin" ^
+  -c "flash erase_address 0x08004000 0x0000C000" ^
+  -c "flash write_image {%FLASH_OC%/sbl.elf}" ^
+  -c "flash erase_address 0x08010000 0x00010000" ^
+  -c "flash write_image {%FLASH_OC%/rec.elf}" ^
+  -c "flash erase_address 0x08040000 0x000C0000" ^
+  -c "flash write_image {%FLASH_OC%/system.elf}" ^
   -c "flash write_image erase {%FLASH_OC%/factory.elf}" ^
   -c "reset run" ^
   -c "shutdown"
