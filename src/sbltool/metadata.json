@@ -1,7 +1,7 @@
 {
   "name": "sbltool",
   "display_name": "TOS SBL Boot Tool",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "developer": "Typheye",
   "description": "Host utility for the TOS SBL USB CDC flash protocol",
   "executable": "sbltool.exe"

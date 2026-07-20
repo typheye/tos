@@ -29,7 +29,7 @@ import sys
 import time
 import zlib
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 
 VID = 0x0483
@@ -197,7 +197,7 @@ def do_flash(ser, part_name, image_path):
     begin = f"FLASHBEGIN {part_name} {len(data)} 0x{image_crc:08X}\n"
     ser.write(begin.encode("ascii"))
     ser.flush()
-    begin_rsp = expect_okay_or_fail(ser, timeout=5.0, echo=False)
+    begin_rsp = expect_okay_or_fail(ser, timeout=120.0, echo=False)
     if begin_rsp.startswith("FAIL"):
         print(begin_rsp)
         return 1
@@ -211,7 +211,7 @@ def do_flash(ser, part_name, image_path):
         header = f"FLASHDATA {len(chunk)} {offset} 0x{chunk_crc:08X}\n"
         ser.write(header.encode("ascii"))
         ser.flush()
-        rsp = expect_okay_or_fail(ser, timeout=5.0, echo=False)
+        rsp = expect_okay_or_fail(ser, timeout=10.0, echo=False)
         if rsp.startswith("FAIL"):
             print(rsp)
             return 1

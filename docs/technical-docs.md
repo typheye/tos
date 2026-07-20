@@ -61,6 +61,19 @@
 
 > sbltool 不嵌入分区表。分区信息通过 `GETVAR` 和 `OEM PARTITIONS` 从已连接的 SBL 获取。
 
+**flash 超时说明**：
+
+| 阶段 | 超时 | 说明 |
+|------|------|------|
+| FLASHBEGIN | 120s | 容纳大分区擦除（system 768 KB 约需 12s） |
+| FLASHDATA 握手 | 10s | 设备在擦除完成后响应 `OKAY SEND` |
+| FLASHDATA 数据块 | 20s | 16 KB 写入约 160ms |
+| FLASHEND | 35s | CRC 重读校验 + 安全签名验证 |
+| ERASE (system/tmp) | 90s | 大分区擦除 |
+| ERASE (其他) | 25s | 小分区擦除 |
+
+
+
 ### 2.4 tdb — TOS Debug Bridge 协议
 
 | 属性 | 值 |
