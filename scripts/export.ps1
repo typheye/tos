@@ -14,32 +14,53 @@ $distDir = Join-Path $root "dist"
 $firmwareDir = Join-Path $distDir "firmware"
 $flashDir = Join-Path $distDir "flash"
 
+function Get-Sha256Hex([string]$LiteralPath) {
+  $stream = [IO.File]::OpenRead($LiteralPath)
+  $sha256 = [Security.Cryptography.SHA256]::Create()
+  try {
+    $digest = $sha256.ComputeHash($stream)
+    return ([BitConverter]::ToString($digest)).Replace("-", "")
+  } finally {
+    $sha256.Dispose()
+    $stream.Dispose()
+  }
+}
+
 if (!(Test-Path -LiteralPath $cachePath)) {
   throw "CMake cache not found: $cachePath"
 }
 
+$isWindowsHost = ($env:OS -eq 'Windows_NT')
+$objcopyName = if ($isWindowsHost) { "arm-none-eabi-objcopy.exe" } else { "arm-none-eabi-objcopy" }
+$shellHost = if ($isWindowsHost) { "powershell.exe" } else { "pwsh" }
+
 $cache = Get-Content -LiteralPath $cachePath
 $objcopyPath = $null
 try {
-  $objcopyPath = (Get-Command arm-none-eabi-objcopy.exe -ErrorAction Stop).Source
+  $objcopyPath = (Get-Command $objcopyName -ErrorAction Stop).Source
 } catch {}
 if (-not $objcopyPath) {
-  $line = $cache | Where-Object { $_ -like "CMAKE_OBJCOPY:FILEPATH=*" } | Select-Object -First 1
+  $line = $cache | Where-Object { $_ -like "CMAKE_OBJCOPY:*=" } | Select-Object -First 1
   if ($line) {
     $candidate = $line.Substring($line.IndexOf("=") + 1)
-    if (Test-Path -LiteralPath $candidate) { $objcopyPath = $candidate }
+    if (Test-Path -LiteralPath $candidate) {
+      $objcopyPath = $candidate
+    } elseif ($candidate -notmatch '[\\/]') {
+      # The toolchain file can record a bare tool name; resolve it on PATH.
+      try { $objcopyPath = (Get-Command $candidate -ErrorAction Stop).Source } catch {}
+    }
   }
 }
 if (-not $objcopyPath) {
   $line = $cache | Where-Object { $_ -like "CMAKE_OBJDUMP:FILEPATH=*" } | Select-Object -First 1
   if ($line) {
     $toolDir = Split-Path -Parent $line.Substring($line.IndexOf("=") + 1)
-    $candidate = Join-Path $toolDir "arm-none-eabi-objcopy.exe"
+    $candidate = Join-Path $toolDir $objcopyName
     if (Test-Path -LiteralPath $candidate) { $objcopyPath = $candidate }
   }
 }
 if (-not $objcopyPath) {
-  throw "Cannot find arm-none-eabi-objcopy.exe"
+  throw "Cannot find $objcopyName"
 }
 
 New-Item -ItemType Directory -Force -Path $firmwareDir | Out-Null
@@ -109,9 +130,9 @@ function Export-Partition {
   if ($ImageType -ne 0) {
     if ($SignedSize -eq 0) { $SignedSize = $Size }
     $headerPath = Join-Path $buildPath ("secure-boot\" + $Target + ".header.bin")
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $signScript -ImagePath $path -HeaderPath $headerPath -KeyPath $signingKeyPath -ImageType $ImageType -LoadAddress $Address -SignedSize $SignedSize -ImageVersion $imageVersion
+    & $shellHost -NoProfile -ExecutionPolicy Bypass -File $signScript -ImagePath $path -HeaderPath $headerPath -KeyPath $signingKeyPath -ImageType $ImageType -LoadAddress $Address -SignedSize $SignedSize -ImageVersion $imageVersion
     if ($LASTEXITCODE -ne 0) { throw "Signing failed for $Target" }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verifyScript -ImagePath $path -PublicKeyPath ($signingKeyPath + ".pub") -ExpectedType $ImageType -ExpectedAddress $Address -ExpectedSize $SignedSize -MinimumVersion $imageVersion
+    & $shellHost -NoProfile -ExecutionPolicy Bypass -File $verifyScript -ImagePath $path -PublicKeyPath ($signingKeyPath + ".pub") -ExpectedType $ImageType -ExpectedAddress $Address -ExpectedSize $SignedSize -MinimumVersion $imageVersion
     if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $Target" }
     # Signing also normalizes the unused vector-table tail (0x180..0x1FF) to
     # erased 0xFF. Patch both loadable sections so sparse ELF flashing is
@@ -131,8 +152,8 @@ function Export-Partition {
     & $objcopyPath -O binary --gap-fill 0xFF `
         --pad-to ("0x{0:X8}" -f $padTo) $flashPath $flashVerifyPath
     if ($LASTEXITCODE -ne 0) { throw "ELF expansion failed for $Target" }
-    $signedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash
-    $flashHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $flashVerifyPath).Hash
+    $signedHash = Get-Sha256Hex $path
+    $flashHash = Get-Sha256Hex $flashVerifyPath
     $flashLength = (Get-Item -LiteralPath $flashVerifyPath).Length
     Remove-Item -LiteralPath $flashVerifyPath -Force
     if ($flashLength -ne $Size -or $flashHash -ne $signedHash) {

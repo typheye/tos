@@ -88,10 +88,34 @@ $signatureInput = New-Object byte[] 76
 $signatureDigest = $sha.ComputeHash($signatureInput)
 
 $publicBlob = [IO.File]::ReadAllBytes($PublicKeyPath)
-$cngKey = [Security.Cryptography.CngKey]::Import(
-    $publicBlob, [Security.Cryptography.CngKeyBlobFormat]::EccPublicBlob)
-$ecdsa = New-Object Security.Cryptography.ECDsaCng $cngKey
-$ecdsa.HashAlgorithm = [Security.Cryptography.CngAlgorithm]::Sha256
+if ($env:OS -eq 'Windows_NT') {
+  $cngKey = [Security.Cryptography.CngKey]::Import(
+      $publicBlob, [Security.Cryptography.CngKeyBlobFormat]::EccPublicBlob)
+  $ecdsa = New-Object Security.Cryptography.ECDsaCng $cngKey
+  $ecdsa.HashAlgorithm = [Security.Cryptography.CngAlgorithm]::Sha256
+} else {
+  # Accept either the 72-byte CNG ECC_PUBLIC_BLOB (magic + cbKey + X||Y) or a
+  # raw 64-byte point, then rebuild the fixed 91-byte P-256 SPKI wrapper.
+  $rawKey = $publicBlob
+  if ($publicBlob.Length -eq 72) {
+    $rawKey = New-Object byte[] 64
+    [Array]::Copy($publicBlob, 8, $rawKey, 0, 64)
+  } elseif ($publicBlob.Length -ne 64) {
+    throw "Unexpected public key length: $($publicBlob.Length)"
+  }
+  $spkiPrefix = [byte[]](0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48,
+      0xCE, 0x3D, 0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03,
+      0x01, 0x07, 0x03, 0x42, 0x00, 0x04)
+  $spki = New-Object byte[] ($spkiPrefix.Length + 64)
+  [Array]::Copy($spkiPrefix, 0, $spki, 0, $spkiPrefix.Length)
+  [Array]::Copy($rawKey, 0, $spki, $spkiPrefix.Length, 64)
+  $ecdsa = [Security.Cryptography.ECDsa]::Create()
+  $consumed = 0
+  $ecdsa.ImportSubjectPublicKeyInfo($spki, [ref]$consumed)
+  if ($consumed -ne $spki.Length) {
+    throw "Unexpected SPKI length: imported $consumed of $($spki.Length) bytes"
+  }
+}
 if (-not $ecdsa.VerifyHash($signatureDigest, $signature)) {
   throw "Secure image signature mismatch"
 }

@@ -330,7 +330,6 @@ void TOS::init() {
   warnLed.init();
   errorLed.init();
 
-  buzzer1.init();
   SysWatchdog_Init();
   SysWatchdog_FeedNow();
   boardLCD.init();
@@ -361,6 +360,7 @@ void TOS::init() {
    * written, leaving an abruptly truncated boot log with no reset reason. */
   SysWatchdog_ShowBootReasonIfAny();
 
+  buzzer1.init();
   keyManager.init();
   boardJY901S.init();
   boardBMP180.init();

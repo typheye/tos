@@ -36,14 +36,21 @@ cmake --preset Release
 cmake --build build/Release --target factory_images
 
 # 3. 全量烧录（ELF + SBL + REC + SYSTEM）
-scripts/flash.bat factory
+scripts/flash.bat factory     # Windows
+scripts/flash.sh factory      # Linux / macOS
 
 # 仅烧录 SYSTEM
 scripts/flash.bat system
+scripts/flash.sh system
 
 # 烧录 REC + SYSTEM
 scripts/flash.bat runtime
+scripts/flash.sh runtime
 ```
+
+> `flash.sh` 与 `flash.bat` 的烧录地址/大小/顺序完全一致，两份需保持同步。
+> 签名脚本 (`keygen/sign/verify.ps1`) 在 Windows 上走 CNG，在其它主机走跨平台
+> .NET `ECDsa`，产出的密钥与签名**字节互通**。
 
 > **VSCode**: `Ctrl+Shift+B` → 选择 `factory_images` / `flash_factory` / `flash_system`。
 
@@ -136,7 +143,8 @@ slave-board/
 ├── ld/                   # 链接脚本 (ELF / SBL / REC / SYSTEM)
 ├── cmake/                # CMake 构建配置 + partitions 子项目
 ├── scripts/              # 工具脚本
-│   ├── flash.bat         # OpenOCD 烧录 (factory/system/runtime)
+│   ├── flash.bat         # OpenOCD 烧录 (Windows: factory/system/runtime)
+│   ├── flash.sh          # OpenOCD 烧录 (Linux，地址与 flash.bat 同步)
 │   ├── export.ps1        # 构建后导出 BIN + 签名 + 验证
 │   ├── sign.ps1          # ECDSA P-256 签名
 │   ├── verify.ps1        # 签名验证

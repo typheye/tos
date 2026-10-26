@@ -12,6 +12,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 project(${CMAKE_PROJECT_NAME} LANGUAGES C CXX ASM)
 message("Build type: ${CMAKE_BUILD_TYPE}")
 
+# Secure boot key generation and partition export are PowerShell scripts.
+# Windows ships powershell.exe while other hosts install pwsh; both accept
+# the same arguments, so only the executable differs.
+if(CMAKE_HOST_WIN32)
+  set(TOS_POWERSHELL powershell.exe)
+else()
+  set(TOS_POWERSHELL pwsh)
+endif()
+
 set(TOS_IMAGE_VERSION "1" CACHE STRING "Secure boot image version")
 set(TOS_SIGNING_KEY "$ENV{TOS_SIGNING_KEY}" CACHE FILEPATH
     "PKCS#8 P-256 signing key; project-local development key when empty")
@@ -27,7 +36,7 @@ set(TOS_SECURE_BOOT_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/secure_boot")
 set(TOS_SECURE_BOOT_KEY_HEADER "${TOS_SECURE_BOOT_GENERATED_DIR}/tos_secure_boot_key.h")
 set(TOS_SECURE_BOOT_KEY_PATH_FILE "${CMAKE_BINARY_DIR}/secure-boot/signing-key.path")
 execute_process(
-    COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+    COMMAND ${TOS_POWERSHELL} -NoProfile -ExecutionPolicy Bypass -File
             ${CMAKE_SOURCE_DIR}/scripts/keygen.ps1
             -OutputHeader ${TOS_SECURE_BOOT_KEY_HEADER}
             -KeyPath ${TOS_SIGNING_KEY}
@@ -62,7 +71,7 @@ add_custom_target(system DEPENDS ${CMAKE_PROJECT_NAME})
 add_subdirectory(cmake/partitions)
 
 add_custom_target(export_partitions
-    COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+    COMMAND ${TOS_POWERSHELL} -NoProfile -ExecutionPolicy Bypass -File
             ${CMAKE_SOURCE_DIR}/scripts/export.ps1
             -BuildDir ${CMAKE_BINARY_DIR}
     DEPENDS sbl rec ${CMAKE_PROJECT_NAME}
@@ -80,6 +89,17 @@ if(CMAKE_HOST_WIN32)
       DEPENDS factory_images)
   add_custom_target(flash_factory
       COMMAND cmd /c ${CMAKE_SOURCE_DIR}/scripts/flash.bat factory
+      DEPENDS factory_images)
+else()
+  # bash is explicit so the targets work even without the +x bit (fresh clone).
+  add_custom_target(flash_system
+      COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/flash.sh system
+      DEPENDS factory_images)
+  add_custom_target(flash_runtime
+      COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/flash.sh runtime
+      DEPENDS factory_images)
+  add_custom_target(flash_factory
+      COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/flash.sh factory
       DEPENDS factory_images)
 endif()
 

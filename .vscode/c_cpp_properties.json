@@ -3,7 +3,7 @@
         {
             "name": "STM32",
             "compileCommands": "${workspaceFolder}/build/Release/compile_commands.json",
-            "intelliSenseMode": "windows-msvc-x64"
+            "intelliSenseMode": "linux-gcc-x64"
         }
     ],
     "version": 4

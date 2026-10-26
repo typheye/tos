@@ -77,10 +77,19 @@ $signatureInput = New-Object byte[] 76
 $signatureDigest = $sha.ComputeHash($signatureInput)
 
 $keyBytes = [IO.File]::ReadAllBytes($KeyPath)
-$cngKey = [Security.Cryptography.CngKey]::Import(
-    $keyBytes, [Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
-$ecdsa = New-Object Security.Cryptography.ECDsaCng $cngKey
-$ecdsa.HashAlgorithm = [Security.Cryptography.CngAlgorithm]::Sha256
+if ($env:OS -eq 'Windows_NT') {
+  $cngKey = [Security.Cryptography.CngKey]::Import(
+      $keyBytes, [Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
+  $ecdsa = New-Object Security.Cryptography.ECDsaCng $cngKey
+  $ecdsa.HashAlgorithm = [Security.Cryptography.CngAlgorithm]::Sha256
+} else {
+  $ecdsa = [Security.Cryptography.ECDsa]::Create()
+  $consumed = 0
+  $ecdsa.ImportPkcs8PrivateKey($keyBytes, [ref]$consumed)
+  if ($consumed -ne $keyBytes.Length) {
+    throw "Unexpected PKCS#8 key: imported $consumed of $($keyBytes.Length) bytes"
+  }
+}
 $signature = $ecdsa.SignHash($signatureDigest)
 if ($signature.Length -ne 64 -or
     -not $ecdsa.VerifyHash($signatureDigest, $signature)) {
