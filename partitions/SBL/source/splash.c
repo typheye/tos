@@ -26,6 +26,7 @@
 
 #include "hw.h"
 #include "logo_data.h"
+#include "state.h"
 
 #define SPLASH_LCD_CS_PIN   11U
 #define SPLASH_LCD_DC_PIN   12U
@@ -199,6 +200,9 @@ SBL_CODE void SBL_SplashRun(void) {
   splash_lcd_init();
   splash_lcd_fill(SBL_BLACK);
   splash_draw_logo();
+  if (SBL_StateUnlocked()) {
+    splash_draw_unlock_icon();
+  }
   splash_backlight_full();
   SBL_DelayMs(1600U);
 }

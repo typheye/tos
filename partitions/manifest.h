@@ -35,7 +35,7 @@
 /* ── Bootloader versions (reported by fastboot getvar) ────────────── */
 #define TOS_PRODUCT_NAME "CNAEK7"
 #define TOS_VERSION ""
-#define TOS_BL_VERSION "TOSV3.2"
+#define TOS_BL_VERSION "TOSV3.4"
 #define TOS_BB_VERSION "N/A" /* baseband */
 
 /* ── ELF  partition ───────────────────────────────────────────────── */
