@@ -302,8 +302,9 @@ extern "C" LibVideoResult LibVideo_Play(const char *path, LibVideoPumpFn pump,
       return LIBVIDEO_IO_ERROR;
     }
     const uint32_t loop_start = HAL_GetTick();
-    uint32_t fps_sample_start = loop_start;
-    uint32_t fps_frames = 0U;
+    uint32_t fps_window_start = 0U;
+    uint32_t fps_completed = 0U;
+    bool fps_window_started = false;
     for (uint32_t index = 0U; index < header.frame_count; ++index) {
       FrameHeader frame{};
       if (!read_exact(&file, &frame, sizeof(frame))) {
@@ -341,23 +342,31 @@ extern "C" LibVideoResult LibVideo_Play(const char *path, LibVideoPumpFn pump,
         f_close(&file);
         return LIBVIDEO_ABORTED;
       }
-      ++fps_frames;
-      const uint32_t fps_now = HAL_GetTick();
-      const uint32_t fps_elapsed = fps_now - fps_sample_start;
-      if (fps_elapsed >= 500U) {
-        measuredFps = static_cast<uint16_t>(
-            (fps_frames * 1000U + fps_elapsed / 2U) / fps_elapsed);
-        sample_dashboard();
-        fps_frames = 0U;
-        fps_sample_start = fps_now;
-      }
-
       result = frame.codec == kCodecRaw
                                   ? render_raw(&file, frame, pump, user)
                                   : render_rle(&file, frame, pump, user);
       if (result != LIBVIDEO_OK) {
         f_close(&file);
         return result;
+      }
+
+      /* Count only completed frame presentations. Measuring before render
+       * reports a frame that may still take tens of milliseconds to transfer
+       * and makes a struggling decoder look faster than the panel. */
+      const uint32_t presented_at = HAL_GetTick();
+      if (!fps_window_started) {
+        fps_window_start = presented_at;
+        fps_window_started = true;
+      } else {
+        ++fps_completed;
+        const uint32_t elapsed = presented_at - fps_window_start;
+        if (elapsed >= 1000U) {
+          measuredFps = static_cast<uint16_t>(
+              (fps_completed * 1000U + elapsed / 2U) / elapsed);
+          sample_dashboard();
+          fps_completed = 0U;
+          fps_window_start = presented_at;
+        }
       }
     }
   } while ((header.flags & kFlagLoop) != 0U);
