@@ -100,7 +100,7 @@ static void draw_wrapped_message(int16_t x, int16_t y, int16_t max_w,
 }
 
 bool confirm_show(const char *title, const char *msg) {
-  int sel = 0; /* 0=Yes, 1=No */
+  int sel = 0; /* 0=No, 1=Yes */
   uint8_t le = 0;
   uint32_t lu = 0;
 
@@ -123,7 +123,7 @@ bool confirm_show(const char *title, const char *msg) {
     uint8_t ce = (keyManager._btnEnter.getState() == KEY_PRESSED);
     if (ce && !le) {
       le = ce;
-      return (sel == 0);
+      return (sel == 1);
     }
     le = ce;
 
@@ -151,19 +151,19 @@ bool confirm_show(const char *title, const char *msg) {
         PD_SetColor(TOS_TEXT);
         draw_wrapped_message(16, 33, 208, 145, msg);
 
-        /* Yes / No at positions 6 and 7 (closer to bottom) */
+        /* No / Yes at positions 6 and 7 (closer to bottom) */
         int y0 = 33 + 5 * 25; /* position 5: y=158 */
         int y1 = 33 + 6 * 25; /* position 6: y=183 */
 
         PD_DrawAngledCard(14, y0, 212, 20, 5,
                           sel == 0 ? TOS_ACCENT : TOS_CARD_BG);
         PD_SetColor(sel == 0 ? TOS_TEXT : TOS_TEXT_SEC);
-        PD_DrawString(26, y0 + 2, "01 Yes, Confirm");
+        PD_DrawString(26, y0 + 2, "01 No, Cancel");
 
         PD_DrawAngledCard(14, y1, 212, 20, 5,
                           sel == 1 ? TOS_ACCENT : TOS_CARD_BG);
         PD_SetColor(sel == 1 ? TOS_TEXT : TOS_TEXT_SEC);
-        PD_DrawString(26, y1 + 2, "02 No, Cancel");
+        PD_DrawString(26, y1 + 2, "02 Yes, Confirm");
 
         PD_DrawFooterCenter("ENTER", NULL, "UP/DOWN");
       });

@@ -67,6 +67,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libehw.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libjson.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/library/libvideo.cpp
 
     # Demo 活动文件
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/jyro_activity.cpp
@@ -76,6 +77,7 @@ set(USER_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/3dox_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/tcs3472_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/sn74hc00n_activity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/tvid_activity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/demo/demo_activity.cpp
 
     # GUI文件

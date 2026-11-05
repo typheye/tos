@@ -28,11 +28,11 @@
 extern KeyManager keyManager;
 extern LCD boardLCD;
 
-#define DEMO_ITEMS 8
+#define DEMO_ITEMS 9
 static const char *demo_m[DEMO_ITEMS] = {
     "00 Return",        "01 Key Test",       "03 I2C Scan",
     "04 JY901S Sensor", "05 BMP180 Sensor",  "07 3D Path Tracer",
-    "09 TCS3472 Test",  "10 SN74HC00N Test",
+    "09 TCS3472 Test",  "10 SN74HC00N Test", "11 TVID Test",
 };
 static void (*demo_f[DEMO_ITEMS])(void) = {
     NULL,
@@ -43,6 +43,7 @@ static void (*demo_f[DEMO_ITEMS])(void) = {
     render_3dox_activity_with_exit,
     tcs3472_activity,
     hc00n_activity,
+    tvid_test_activity,
 };
 
 // ============ Original TOS-style menu ============
