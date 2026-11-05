@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+
+    /* ============================ Build ============================ */
+
+    {
+      "label": "Build",
+      "group": { "kind": "build", "isDefault": true },
+      "detail": "Build TOS Helper, tvidtool, sbltool and tdb in the tos Conda environment.",
+      "type": "shell",
+      "icon": { "id": "build", "tooltip": "Build all" },
+      "command": "${workspaceFolder}/scripts/build.sh",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    /* ============================ Clean ============================ */
+
+    {
+      "label": "Clean",
+      "detail": "Remove build/, dist/ and Python cache files.",
+      "type": "shell",
+      "icon": { "id": "trash", "tooltip": "Clean all" },
+      "command": "${workspaceFolder}/scripts/clean.sh",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    }
+  ]
+}

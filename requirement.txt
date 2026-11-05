@@ -1,0 +1,4 @@
+pyinstaller
+opencv-python
+pyserial
+hidapi>=0.14.0,<0.15

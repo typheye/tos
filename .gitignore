@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+
+# Conda / virtual environments
+.conda/
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+
+# OS
+.DS_Store

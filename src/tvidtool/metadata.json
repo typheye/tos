@@ -1,0 +1,8 @@
+{
+  "name": "tvidtool",
+  "display_name": "TVID Tool",
+  "version": "0.1.0",
+  "developer": "Typheye",
+  "description": "Convert desktop video into TOS TVID streams",
+  "executable": "tvidtool"
+}
