@@ -2,7 +2,7 @@
 
 # TOS Windows Tools
 
-**PC 端工具集 — HID 诊断 + SBL FASTBOOT 烧录 + TOS Debug Bridge**
+**PC 端工具集 — TVID 转换 + HID 诊断 + SBL FASTBOOT 烧录 + TOS Debug Bridge**
 
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)]()
 [![Language](https://img.shields.io/badge/Language-Python_3.11-yellow.svg)]()
@@ -14,13 +14,14 @@
 
 ## 概述
 
-TOS Windows Tools 提供三个独立工具，用于与 TOS 嵌入式设备通信：
+TOS Windows Tools 提供四个独立工具，用于 TOS 设备诊断、烧录和媒体准备：
 
 | 工具 | 用途 | 协议 |
 |------|------|------|
+| **tvidtool** | 将普通视频转换为板端可播放的 `.tvid` | RGB565 TVID 文件 |
 | **TOS Helper** | HID 自定义报告收发诊断 (GUI + CLI) | HID Vendor (PID 0x5750) |
 | **sbltool** | SBL FASTBOOT 固件烧录、分区管理、OEM 解锁 | CDC (PID 0x5751) |
-| **tdb** | TOS Debug Bridge：设备 Shell、文件推送/拉取 | CDC (PID 0x5753) |
+| **tdb** | TOS Debug Bridge：设备 Shell、文件推送/拉取 | CDC (PID 0x5756) |
 
 详细技术说明见 [docs/technical-docs.md](docs/technical-docs.md)。
 
@@ -40,7 +41,8 @@ cd /d C:\Code\tos\win-pc
 scripts\setup-conda.bat
 ```
 
-自动完成：创建 `tos` Conda 环境 → 安装依赖 → 构建 `TOS Helper.exe` / `sbltool.exe` / `tdb.exe`。
+自动完成：创建 `tos` Conda 环境 → 安装依赖 → 构建
+`TOS Helper.exe` / `tvidtool.exe` / `sbltool.exe` / `tdb.exe`。
 
 ### 分步构建
 
@@ -50,7 +52,7 @@ python -m pip install -r requirement.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
 ```
 
-默认三合一构建：TOS Helper + sbltool + tdb 一次完成。
+默认四合一构建：TOS Helper + tvidtool + sbltool + tdb 一次完成。
 
 ### 安装 CLI 到 PATH
 
@@ -59,7 +61,25 @@ conda activate tos
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1 -Install
 ```
 
-安装后，在 `tos` 环境下可直接使用 `sbltool` 和 `tdb`。
+安装后，在 `tos` 环境下可直接使用 `tvidtool`、`sbltool` 和 `tdb`。
+
+---
+
+## TVID 视频转换
+
+将普通视频转换为 `240×240` 的 TVID 流：
+
+```bat
+python src\tvidtool\app.py input.mp4 -o test.tvid --fps 30 --size 240x240
+```
+
+把输出文件复制到 SD 卡：
+
+```text
+0:/storage/test.tvid
+```
+
+进入板端 `Demo → TVID Test` 即可播放，按 ENTER 退出。
 
 ---
 
@@ -101,6 +121,10 @@ win-pc/
 │   │   ├── app.py           # 主逻辑（~557 行）+ 入口
 │   │   ├── tos_helper.spec  # PyInstaller 配置
 │   │   └── assets/          # 图标
+│   ├── tvidtool/            # 视频 → .tvid 转换
+│   │   ├── app.py
+│   │   ├── tvidtool.spec
+│   │   └── version_info.txt
 │   ├── sbltool/             # SBL 烧录 CLI
 │   │   ├── app.py           # ~458 行 + 入口
 │   │   └── sbltool.spec
@@ -108,7 +132,7 @@ win-pc/
 │       ├── app.py           # ~600 行 + 入口
 │       └── tdb.spec
 ├── scripts/                 # 构建/安装脚本
-│   ├── build.ps1            # 三合一构建引擎（支持 -Install）
+│   ├── build.ps1            # 四合一构建引擎（支持 -Install）
 │   ├── clean.bat            # 清理 build/ + dist/ + Python 缓存
 │   └── setup-conda.bat      # 一键环境配置 + 构建
 ├── docs/                    # 文档
@@ -136,6 +160,7 @@ win-pc/
 dist/
 ├── TOS Helper.exe           # 独立 GUI 工具
 └── platform-tools/
+    ├── tvidtool.exe         # 视频转换工具
     ├── sbltool.exe          # 烧录 CLI
     └── tdb.exe              # 调试桥 CLI
 ```

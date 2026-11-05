@@ -21,5 +21,6 @@ if errorlevel 1 exit /b %ERRORLEVEL%
 
 echo.
 echo Ready. Run: conda activate tos
-echo Then use: sbltool devices
+echo Then use: tvidtool --help
+echo           sbltool devices
 echo           tdb --version

@@ -50,7 +50,7 @@ function Invoke-PyInstallerSpec {
 }
 
 try {
-    & python -c "import PyInstaller, serial, hid, tkinter"
+    & python -c "import PyInstaller, cv2, numpy, serial, hid, tkinter"
     if ($LASTEXITCODE -ne 0) {
         throw "Missing build dependency. Run scripts\setup-conda.bat first."
     }
@@ -63,9 +63,10 @@ try {
     }
     New-Item -ItemType Directory -Path $PlatformTools -Force | Out-Null
 
-    # Build all three tools
+    # Build all four tools
     $Jobs = @(
         @{ Spec = "tos_helper\tos_helper.spec"; Dist = $DistRoot; Name = "tos_helper" },
+        @{ Spec = "tvidtool\tvidtool.spec";     Dist = $PlatformTools; Name = "tvidtool" },
         @{ Spec = "sbltool\sbltool.spec";      Dist = $PlatformTools; Name = "sbltool" },
         @{ Spec = "tdb\tdb.spec";              Dist = $PlatformTools; Name = "tdb" }
     )
@@ -80,6 +81,7 @@ try {
     # Smoke test
     $Expected = @(
         (Join-Path $DistRoot "TOS Helper.exe"),
+        (Join-Path $PlatformTools "tvidtool.exe"),
         (Join-Path $PlatformTools "sbltool.exe"),
         (Join-Path $PlatformTools "tdb.exe")
     )
@@ -101,14 +103,16 @@ try {
         }
         $ScriptsDir = Join-Path $env:CONDA_PREFIX "Scripts"
         New-Item -ItemType Directory -Path $ScriptsDir -Force | Out-Null
+        Copy-Item (Join-Path $PlatformTools "tvidtool.exe") $ScriptsDir -Force
         Copy-Item (Join-Path $PlatformTools "sbltool.exe") $ScriptsDir -Force
         Copy-Item (Join-Path $PlatformTools "tdb.exe") $ScriptsDir -Force
-        Write-Host "Installed sbltool.exe and tdb.exe to $ScriptsDir" -ForegroundColor Green
+        Write-Host "Installed tvidtool.exe, sbltool.exe and tdb.exe to $ScriptsDir" -ForegroundColor Green
     }
 
     Write-Host ""
     Write-Host "Build complete:" -ForegroundColor Green
     Write-Host "  dist\TOS Helper.exe"
+    Write-Host "  dist\platform-tools\tvidtool.exe"
     Write-Host "  dist\platform-tools\sbltool.exe"
     Write-Host "  dist\platform-tools\tdb.exe"
 }

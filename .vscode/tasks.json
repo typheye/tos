@@ -7,7 +7,7 @@
     {
       "label": "Build",
       "group": { "kind": "build", "isDefault": true },
-      "detail": "Build TOS Helper + sbltool + tdb in one go.",
+      "detail": "Build TOS Helper + tvidtool + sbltool + tdb in one go.",
       "type": "shell",
       "icon": { "id": "build", "tooltip": "Build all" },
       "command": "powershell",
