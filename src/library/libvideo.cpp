@@ -1,9 +1,13 @@
 #include "include/libvideo.h"
 
+#include "core/manager/include/settings_manager.h"
+#include "core/sys/include/sysfonts.h"
 #include "core/sys/include/syswatchdog.h"
+#include "dram.h"
 #include "ff.h"
 #include "hardware/include/lcd.h"
 #include "stm32f4xx_hal.h"
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 
@@ -19,6 +23,99 @@ constexpr uint32_t kRawPayloadSize = kFramePixels * 2U;
 constexpr uint32_t kMaxRlePayloadSize = kFramePixels * 4U;
 
 uint8_t rleReadBuffer[kRleReadBufferSize] __attribute__((aligned(4)));
+uint16_t measuredFps = 0U;
+char dashboardPerf[28] = "FPS:   0F | CPU: 100%";
+char dashboardMemory[28] = "RAM:   0% | CRM:   0%";
+
+void video_put_pixel(uint16_t *pixels, uint16_t tile_y, uint16_t tile_h,
+                     uint16_t x, uint16_t y, uint16_t color) {
+  if (x >= LCD_WIDTH || y < tile_y || y >= tile_y + tile_h)
+    return;
+  pixels[static_cast<uint32_t>(y - tile_y) * LCD_WIDTH + x] = color;
+}
+
+uint16_t ascii12_string_width(const char *text) {
+  const size_t length = strlen(text);
+  return length == 0U ? 0U : static_cast<uint16_t>(length * 7U - 1U);
+}
+
+void sample_dashboard(void) {
+  SysDramStats_t ram{};
+  SysDramStats_t ccm{};
+  (void)SysDram_GetStats(SYSDRAM_REGION_RAM, &ram);
+  (void)SysDram_GetStats(SYSDRAM_REGION_CCM, &ccm);
+  constexpr uint32_t ram_total = 128U * 1024U;
+  constexpr uint32_t ccm_total = 64U * 1024U;
+  uint32_t ram_used = (ram_total > ram.total ? ram_total - ram.total : 0U) +
+                      ram.used;
+  uint32_t ccm_used = (ccm_total > ccm.total ? ccm_total - ccm.total : 0U) +
+                      ccm.used;
+  if (ram_used > ram_total)
+    ram_used = ram_total;
+  if (ccm_used > ccm_total)
+    ccm_used = ccm_total;
+  const unsigned ram_pct = (ram_used * 100U + ram_total / 2U) / ram_total;
+  const unsigned ccm_pct = (ccm_used * 100U + ccm_total / 2U) / ccm_total;
+  snprintf(dashboardPerf, sizeof(dashboardPerf), "FPS: %3uF | CPU: %3u%%",
+           static_cast<unsigned>(measuredFps > 999U ? 999U : measuredFps),
+           100U);
+  snprintf(dashboardMemory, sizeof(dashboardMemory),
+           "RAM: %3u%% | CRM: %3u%%", ram_pct, ccm_pct);
+}
+
+void draw_ascii12(uint16_t *pixels, uint16_t tile_y, uint16_t tile_h,
+                  uint16_t x, uint16_t y, const char *text,
+                  uint16_t color) {
+  const pFONT font = ASCII_Font12;
+  for (; *text != '\0'; ++text, x += font->Width + 1U) {
+    const char ch = (*text >= 32 && *text <= 126) ? *text : '?';
+    const uint8_t *glyph =
+        font->pTable + static_cast<uint16_t>(ch - 32) * font->Bytes;
+    uint16_t pixel = 0U;
+    uint8_t column = 0U;
+    for (uint16_t index = 0U; index < font->Bytes; ++index) {
+      uint8_t bits = glyph[index];
+      for (uint8_t bit = 0U; bit < 8U; ++bit) {
+        if ((bits & 0x01U) != 0U) {
+          video_put_pixel(
+              pixels, tile_y, tile_h, static_cast<uint16_t>(x + column),
+              static_cast<uint16_t>(y + pixel / font->Width), color);
+        }
+        ++pixel;
+        ++column;
+        if (column == font->Width) {
+          column = 0U;
+          break;
+        }
+        bits >>= 1U;
+      }
+    }
+  }
+}
+
+void draw_dashboard(uint16_t *pixels, uint16_t tile_y, uint16_t tile_h) {
+  if (!SM_Debug_Dashboard())
+    return;
+  const uint16_t y0 = LCD_HEIGHT - 29U;
+  if (tile_y + tile_h <= y0 || tile_y >= LCD_HEIGHT)
+    return;
+
+  const uint16_t perf_width = ascii12_string_width(dashboardPerf);
+  const uint16_t mem_width = ascii12_string_width(dashboardMemory);
+  const uint16_t width =
+      static_cast<uint16_t>((perf_width > mem_width ? perf_width : mem_width) +
+                            8U);
+  const uint16_t x0 = static_cast<uint16_t>(LCD_WIDTH - width);
+  for (uint16_t y = y0; y < LCD_HEIGHT; ++y) {
+    uint16_t *span =
+        pixels + static_cast<uint32_t>(y - tile_y) * LCD_WIDTH + x0;
+    memset(span, 0, static_cast<size_t>(width) * sizeof(uint16_t));
+  }
+  draw_ascii12(pixels, tile_y, tile_h, x0 + 4U, y0 + 2U, dashboardPerf,
+               0x07E0U);
+  draw_ascii12(pixels, tile_y, tile_h, x0 + 4U, y0 + 15U, dashboardMemory,
+               0xFFE0U);
+}
 
 #pragma pack(push, 1)
 struct FileHeader {
@@ -83,6 +180,7 @@ LibVideoResult render_raw(FIL *file, const FrameHeader &frame,
     for (uint32_t i = 0U; i < count; ++i)
       pixels[i] = wire_to_native(raw[i * 2U], raw[i * 2U + 1U]);
 
+    draw_dashboard(pixels, y, h);
     LCD_EndTileRender();
     if (pumped(pump, user))
       return LIBVIDEO_ABORTED;
@@ -139,6 +237,7 @@ LibVideoResult render_rle(FIL *file, const FrameHeader &frame,
       pixels_done += take;
     }
 
+    draw_dashboard(pixels, y, h);
     LCD_EndTileRender();
     if (pumped(pump, user))
       return LIBVIDEO_ABORTED;
@@ -195,12 +294,16 @@ extern "C" LibVideoResult LibVideo_Play(const char *path, LibVideoPumpFn pump,
   }
 
   const FSIZE_t first_frame = header.header_size;
+  measuredFps = 0U;
+  sample_dashboard();
   do {
     if (f_lseek(&file, first_frame) != FR_OK) {
       f_close(&file);
       return LIBVIDEO_IO_ERROR;
     }
     const uint32_t loop_start = HAL_GetTick();
+    uint32_t fps_sample_start = loop_start;
+    uint32_t fps_frames = 0U;
     for (uint32_t index = 0U; index < header.frame_count; ++index) {
       FrameHeader frame{};
       if (!read_exact(&file, &frame, sizeof(frame))) {
@@ -237,6 +340,16 @@ extern "C" LibVideoResult LibVideo_Play(const char *path, LibVideoPumpFn pump,
       if (pumped(pump, user)) {
         f_close(&file);
         return LIBVIDEO_ABORTED;
+      }
+      ++fps_frames;
+      const uint32_t fps_now = HAL_GetTick();
+      const uint32_t fps_elapsed = fps_now - fps_sample_start;
+      if (fps_elapsed >= 500U) {
+        measuredFps = static_cast<uint16_t>(
+            (fps_frames * 1000U + fps_elapsed / 2U) / fps_elapsed);
+        sample_dashboard();
+        fps_frames = 0U;
+        fps_sample_start = fps_now;
       }
 
       result = frame.codec == kCodecRaw
