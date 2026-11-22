@@ -90,34 +90,6 @@
       }
     },
     {
-      "label": "Install",
-      "detail": "安装工具并更新启动项",
-      "type": "shell",
-      "icon": {
-        "id": "rocket",
-        "tooltip": "安装工具并更新启动项"
-      },
-      "command": "bash",
-      "args": [
-        "${workspaceFolder}/scripts/pc.sh",
-        "install"
-      ],
-      "windows": {
-        "command": "${workspaceFolder}\\scripts\\pc.cmd",
-        "args": [
-          "install"
-        ]
-      },
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-    {
       "label": "Clean",
       "detail": "清理缓存，保留产物和安装",
       "type": "shell",

@@ -13,9 +13,6 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-from tos_common.platform_support import WINDOW_CLASS
-
 TOOLS = ("tos_helper", "tvidtool", "sbltool", "tdb")
 ENV_NAME = "tos"
 INSTALL_MARKER = ".tos-pc-install.json"
@@ -174,7 +171,7 @@ def build() -> None:
             if tool != "tos_helper":
                 (output / destination.name).rename(destination)
         validate_artifacts(output)
-        # Resources used by launchers must survive cleaning and moving the checkout.
+        # External icons are included with the installed application.
         shutil.copytree(ROOT / "src" / "tos_helper" / "assets", output / "assets")
         (output / ".tos-build.json").write_text(json.dumps({"platform": host(),
             "versions": {tool: metadata(tool)["version"] for tool in TOOLS}}, indent=2))
@@ -209,73 +206,15 @@ def validate_install_dir(target: Path) -> None:
             raise RuntimeError(f"Invalid TOS installation marker: {marker}")
 
 
-def desktop_entry(target: Path) -> str:
-    binary = artifacts(target)["tos_helper"]
-    # Desktop Exec uses its own quoting rules, not shell quoting.
-    escaped = str(binary).replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
-    escaped = escaped.replace("%", "%%")
-    if any(c in str(target) for c in "\r\n"):
-        raise RuntimeError("Newlines are not supported in desktop launcher paths.")
-    return ("[Desktop Entry]\nType=Application\nName=TOS Helper\n"
-            "Comment=TOS HID diagnostics and desktop tools\n"
-            f'Exec="{escaped}"\nIcon={target / "assets" / "typheye_rounded.png"}\n'
-            f"Terminal=false\nStartupNotify=false\nStartupWMClass={WINDOW_CLASS}\n"
-            "Categories=Development;\n")
-
-
-def write_launcher(path: Path, content: str) -> None:
-    if path.is_symlink():
-        raise RuntimeError(f"Refusing launcher symbolic link: {path}")
-    if path.exists():
-        old = path.read_text(encoding="utf-8")
-        if "Name=TOS Helper\n" not in old:
-            raise RuntimeError(f"Refusing to replace another application's launcher: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(path.name + ".tmp")
-    if temp.exists() or temp.is_symlink():
-        raise RuntimeError(f"Temporary launcher already exists: {temp}")
-    try:
-        temp.write_text(content, encoding="utf-8")
-        temp.replace(path)
-    finally:
-        temp.unlink(missing_ok=True)
-
-
-def register_launchers(target: Path, desktop: bool) -> None:
-    if host() == "linux":
-        applications = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "applications"
-        content = desktop_entry(target)
-        write_launcher(applications / "tos-helper.desktop", content)
-        # Migrate existing launchers for this application, including old source paths.
-        for path in applications.glob("*.desktop"):
-            if path.is_symlink():
-                continue
-            old = path.read_text(encoding="utf-8", errors="replace")
-            if "Name=TOS Helper\n" in old and ("linux-pc/" in old or "win-pc/" in old):
-                write_launcher(path, content)
-        desktop_dir = Path.home() / "Desktop"
-        xdg_user_dir = shutil.which("xdg-user-dir")
-        if xdg_user_dir:
-            result = run([xdg_user_dir, "DESKTOP"], capture_output=True, text=True)
-            if result.stdout.strip():
-                desktop_dir = Path(result.stdout.strip())
-        desktop_path = desktop_dir / "tos-helper.desktop"
-        if desktop or desktop_path.exists():
-            write_launcher(desktop_path, content)
-            desktop_path.chmod(0o755)
-        update = shutil.which("update-desktop-database")
-        if update:
-            run([update, str(applications)])
-        print(f"Application menu: {applications / 'tos-helper.desktop'}")
-    else:
-        # Pass data through JSON; paths never become executable PowerShell source.
-        with tempfile.TemporaryDirectory(prefix="tos-shortcut-") as temp:
-            config = Path(temp) / "shortcut.json"
-            config.write_text(json.dumps({"target": str(artifacts(target)["tos_helper"]),
-                "directory": str(target), "icon": str(target / "assets" / "typheye_rounded.ico"),
-                "desktop": desktop}), encoding="utf-8")
-            run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                 "-File", str(ROOT / "scripts" / "shortcuts.ps1"), str(config)])
+def register_windows_shortcuts(target: Path, desktop: bool) -> None:
+    # Pass data through JSON; paths never become executable PowerShell source.
+    with tempfile.TemporaryDirectory(prefix="tos-shortcut-") as temp:
+        config = Path(temp) / "shortcut.json"
+        config.write_text(json.dumps({"target": str(artifacts(target)["tos_helper"]),
+            "directory": str(target), "icon": str(target / "assets" / "typheye_rounded.ico"),
+            "desktop": desktop}), encoding="utf-8")
+        run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+             "-File", str(ROOT / "scripts" / "shortcuts.ps1"), str(config)])
 
 
 def install(directory: Path | None, desktop: bool) -> None:
@@ -298,7 +237,8 @@ def install(directory: Path | None, desktop: bool) -> None:
             "platform": host(), "versions": manifest["versions"]}, indent=2), encoding="utf-8")
         validate_artifacts(staged)
         replace_directory(staged, target)
-    register_launchers(target, desktop)
+    if host() == "win32":
+        register_windows_shortcuts(target, desktop)
     print(f"Installed: {target}\nCLI tools: {target / 'platform-tools'}")
 
 
@@ -356,7 +296,8 @@ def main(argv: list[str] | None = None) -> int:
     launch.add_argument("arguments", nargs=argparse.REMAINDER, help="arguments forwarded after --")
     installation = sub.add_parser("install")
     installation.add_argument("--install-dir", type=Path)
-    installation.add_argument("--desktop", action="store_true", help="also create a desktop shortcut")
+    if sys.platform == "win32":
+        installation.add_argument("--desktop", action="store_true", help="also create a desktop shortcut")
     cleanup = sub.add_parser("clean")
     cleanup.add_argument("--all", action="store_true", help="also remove dist; keep installed app")
     args = parser.parse_args(parsed_argv)
@@ -375,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.action == "build":
         build()
     elif args.action == "install":
-        install(args.install_dir, args.desktop)
+        install(args.install_dir, getattr(args, "desktop", False))
     elif args.action == "clean":
         clean(args.all)
     elif args.action == "test":

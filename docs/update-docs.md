@@ -3,6 +3,12 @@
 > 按时间倒序
 
 ---
+## 移除 Ubuntu 启动项（2026-11-22）
+
+- 删除 TOS Helper 的 Ubuntu 应用菜单项和 Linux 启动项生成/注册代码。
+- 移除 VS Code Install 按钮；Linux 手动 install 仅复制文件，Windows 快捷方式逻辑保留。
+- 更新文档与 CI，Linux 安装后检查不生成启动项。
+
 ## 桌面端统一迁移（2026-11-22）
 
 - Linux 最新业务和未提交的 HID 修复迁入 pc-app，版本保持原样。

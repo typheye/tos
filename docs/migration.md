@@ -2,6 +2,14 @@
 
 日期：2026-11-22。正式项目：`/home/typheye/Code/tos/pc-app`。
 
+## 后续调整：移除 Ubuntu 启动项（2026-11-22）
+
+按用户要求删除 Ubuntu 的 TOS Helper 应用菜单项，并移除 VS Code Install 按钮、
+Linux `.desktop` 内容生成、写入、桌面路径查找和应用菜单注册逻辑。
+Linux `install` 仅复制程序和资源，`--desktop` 仅用于 Windows。
+CI 改为检查 Linux 安装后没有生成启动项。以下表格记录迁移当时的验证，
+其中 Ubuntu 启动项状态已由本节更新。
+
 ## Git 与源码来源
 
 工作区顶层不是 Git 仓库，两端原来是独立 checkout，远端均为
@@ -35,7 +43,7 @@ pc-app 工作区，以及 main 总说明的修改。新文件目前为正常未�
 - 版本只从各工具 metadata.json 读取；删除新项目内各平台独立 spec 和手工版本资源，
   用 packaging/tos.spec 构建四个程序，冻结包包含元数据、图标和实际依赖。
 - TDB 配置标识和结构不变：用户主目录下 `.tdb_device.json`。没有读取真实设备或改写用户配置。
-- Setup/Play/Build/Install/Clean/Test/Doctor 任务均保留 label、icon.id、tooltip 和平台入口，
+- 迁移时 Setup/Play/Build/Install/Clean/Test/Doctor 任务均保留 label、icon.id、tooltip 和平台入口，
   保留默认 Build 与 quzhen.tasks-button 推荐，没有安装编辑器扩展。
 
 ## 本机验证结果
@@ -60,7 +68,7 @@ opencv-python 4.14.0.94；Linux 不安装 pyreadline3。
 | 原仓库保护 | 两端原文件哈希比对通过，仅 README 新增迁移提示 |
 | 静态检查 | Shell 语法、Git diff --check、任务 JSON 通过 |
 
-应用菜单使用安装目录内图标和程序，Terminal=false、StartupNotify=false、
+迁移时应用菜单使用安装目录内图标和程序，Terminal=false、StartupNotify=false、
 StartupWMClass=Toshelper，与真实 Tk 窗口类一致。没有创建额外桌面快捷方式。
 CLI 位于安装目录下的 platform-tools，未修改系统 PATH。
 

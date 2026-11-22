@@ -44,7 +44,7 @@ jobs:
           python scripts/manage.py clean --current-env
           "$XDG_DATA_HOME/tos-pc/platform-tools/tdb" --version
           xvfb-run -a "$XDG_DATA_HOME/tos-pc/TOS Helper" --smoke-test
-          test -f "$XDG_DATA_HOME/applications/tos-helper.desktop"
+          test ! -e "$XDG_DATA_HOME/applications/tos-helper.desktop"
       - name: Install and verify after cleaning (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

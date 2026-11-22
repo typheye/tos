@@ -306,29 +306,10 @@ class ManagementTests(unittest.TestCase):
             manage.validate_install_dir(existing)
         self.assertEqual((existing / "important").read_text(), "keep")
 
-    def test_install_paths_do_not_depend_on_source(self):
-        target = self.base / "安装 files"
-        text = manage.desktop_entry(target)
-        self.assertIn('Exec="', text)
-        self.assertIn(str(target / "assets"), text)
-        self.assertIn("StartupWMClass=Toshelper", text)
-        self.assertIn("Terminal=false", text)
-        self.assertIn("StartupNotify=false", text)
-        self.assertNotIn(str(self.root), text)
-
-    def test_launcher_protects_other_apps_and_updates_tos(self):
-        path = self.base / "tos-helper.desktop"
-        path.write_text("[Desktop Entry]\nName=Other app\n")
-        with self.assertRaises(RuntimeError):
-            manage.write_launcher(path, manage.desktop_entry(self.base / "installed"))
-        path.write_text("[Desktop Entry]\nName=TOS Helper\nExec=/old/linux-pc/app\n")
-        manage.write_launcher(path, manage.desktop_entry(self.base / "installed"))
-        self.assertNotIn("linux-pc", path.read_text())
-
     def test_vscode_buttons_have_icons_and_platform_commands(self):
         tasks = json.loads((ROOT / ".vscode/tasks.json").read_text())["tasks"]
         self.assertEqual({t["label"] for t in tasks},
-                         {"Setup", "Play", "Build", "Install", "Clean", "Test", "Doctor"})
+                         {"Setup", "Play", "Build", "Clean", "Test", "Doctor"})
         for task in tasks:
             self.assertTrue(task["icon"]["id"])
             self.assertTrue(task["icon"]["tooltip"])

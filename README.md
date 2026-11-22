@@ -56,7 +56,7 @@ Shell/CMD 包装入口也接受 `--current-env`。可用 `TOS_PYTHON` 指定启�
 | `setup` | 显式安装依赖 / 更新 tos Conda 环境 |
 | `run` | 默认启动 TOS Helper，`--tool` 选择其他工具 |
 | `build` | 原生构建四个工具，通过版本检查后替换 dist |
-| `install` | 安装到独立用户目录，创建应用菜单 / 开始菜单快捷方式 |
+| `install` | 安装到独立用户目录；仅 Windows 创建快捷方式 |
 | `clean` | 删除 build 和 Python 缓存，保留 dist 和安装 |
 | `clean --all` | 额外删除 dist，仍保留安装和用户配置 |
 | `test` | 运行无需设备的 unittest 回归检查 |
@@ -82,7 +82,7 @@ Windows 提示检查 COM 占用与设备管理器，公共模块不会调用另�
 ```text
 dist/
 ├── TOS Helper[.exe]
-├── assets/                       # 安装启动项所需外部图标
+├── assets/                       # 安装附带的外部图标
 └── platform-tools/
     ├── tvidtool[.exe]
     ├── sbltool[.exe]
@@ -104,16 +104,16 @@ TDB 支持 `devices`、`connect`、`disconnect`、`shell`、`push`、`pull`。
 构建先写入临时目录，四个程序通过 `--version` 检查后才替换 `dist`；失败保留上一版。
 安装从已有 `dist` 复制，不自动构建：
 
-- Linux：`${XDG_DATA_HOME:-~/.local/share}/tos-pc`，应用菜单 `applications/tos-helper.desktop`。
+- Linux：`${XDG_DATA_HOME:-~/.local/share}/tos-pc`，仅复制程序和资源，不创建应用菜单或桌面启动项。
 - Windows：`%LOCALAPPDATA%\Programs\TOS PC Tools`，开始菜单 `TOS Helper.lnk`。
-- `install --desktop` 同时创建桌面快捷方式；已有本应用桌面快捷方式会更新。
+- 仅 Windows 支持 `install --desktop` 创建桌面快捷方式，已有本应用桌面快捷方式会更新。
 - `install --install-dir <绝对路径>` 可指定独立目录，禁止安装进源码或其父目录。
-- 不覆盖未标记为本应用安装的已有目录；启动项只更新本应用，不改变其他应用。
+- 不覆盖未标记为本应用安装的已有目录；Windows 快捷方式只更新本应用。
 - 安装内含四个程序和图标，不依赖源码、Conda、build 或 dist。CLI 可从安装目录的
   `platform-tools` 直接运行；如需全局命令，请自行将该目录加入 PATH。
 
 TDB 配置仍使用 `~/.tdb_device.json`，字段保持原样。迁移、安装和清理不会改写它。
-VS Code 保留 `quzhen.tasks-button` 推荐，Setup/Play/Build/Install/Clean/Test/Doctor
+VS Code 保留 `quzhen.tasks-button` 推荐，Setup/Play/Build/Clean/Test/Doctor
 按钮均有 `label`、`icon.id` 和提示，Build 仍为默认构建任务。
 
 ## 迁移与验证

@@ -114,7 +114,8 @@ Linux 使用 `bash scripts/pc.sh <操作>`，Windows 使用 `./scripts/pc.cmd <�
 运行时会使用临时解包目录。版本检查通过后才发布 dist，构建失败保留旧版。
 Windows 文件属性从元数据动态生成，Helper 保留图标和 DPI manifest。
 
-安装位于用户独立目录，图标及快捷方式均不依赖源码。clean 默认只清理缓存，
+安装位于用户独立目录，Windows 快捷方式使用安装内图标；Linux 不创建启动项。
+clean 默认只清理缓存，
 clean --all 才额外删除 dist，均不删除安装或 ~/.tdb_device.json。
 
 ## 5. 平台约束

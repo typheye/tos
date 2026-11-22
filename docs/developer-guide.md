@@ -29,8 +29,9 @@ PyInstaller 单文件运行时使用临时解包目录，资源通过 tos_common
 发布重命名失败恢复旧目录；异常中断残留 `dist.previous` 时应先人工检查再处理。
 不允许默认删除旧 dist。安装同样先复制、校验后替换，安装标记为 `.tos-pc-install.json`。
 
-安装启动项使用安装内资源。Linux 窗口类为 `Toshelper`，与 StartupWMClass 一致；
-Windows DPI API 显式声明指针参数和返回类型，并设置 `Typheye.TOSHelper` 任务栏标识。
+Linux 安装仅复制程序和资源，不生成或注册 `.desktop` 启动项，VS Code 无 Install 按钮。
+Linux 窗口类为 `Toshelper`。Windows DPI API 显式声明指针参数和返回类型，
+并设置 `Typheye.TOSHelper` 任务栏标识。
 Windows 快捷方式通过 PowerShell / WScript 创建，配置用 JSON 传递以避免路径作为脚本执行。
 
 `clean` 预检删除范围，拒绝符号链接，不清理用户配置和安装。`--all` 仅增加 dist。
