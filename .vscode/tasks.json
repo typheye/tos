@@ -1,0 +1,206 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Setup",
+      "detail": "创建或更新 tos 环境",
+      "type": "shell",
+      "icon": {
+        "id": "gear",
+        "tooltip": "创建或更新 tos 环境"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "setup"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "setup"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Play",
+      "detail": "运行 TOS Helper",
+      "type": "shell",
+      "icon": {
+        "id": "play",
+        "tooltip": "运行 TOS Helper"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "run"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "run"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build",
+      "detail": "构建全部原生工具",
+      "type": "shell",
+      "icon": {
+        "id": "tools",
+        "tooltip": "构建全部原生工具"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "build"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "build"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Install",
+      "detail": "安装工具并更新启动项",
+      "type": "shell",
+      "icon": {
+        "id": "rocket",
+        "tooltip": "安装工具并更新启动项"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "install"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "install"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean",
+      "detail": "清理缓存，保留产物和安装",
+      "type": "shell",
+      "icon": {
+        "id": "trash",
+        "tooltip": "清理缓存，保留产物和安装"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "clean"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "clean"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test",
+      "detail": "运行回归检查",
+      "type": "shell",
+      "icon": {
+        "id": "beaker",
+        "tooltip": "运行回归检查"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "test"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "test"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Doctor",
+      "detail": "检查环境与产物",
+      "type": "shell",
+      "icon": {
+        "id": "pulse",
+        "tooltip": "检查环境与产物"
+      },
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/pc.sh",
+        "doctor"
+      ],
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\pc.cmd",
+        "args": [
+          "doctor"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
